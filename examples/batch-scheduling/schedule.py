@@ -89,6 +89,7 @@ class Job:
         self.random_id = self.submit_time
 
         self.scheduled_time = -1
+        self.scheduled_by_rl = False
 
         self.allocated_machines = None
 
@@ -525,17 +526,40 @@ class BatchSchedSim():
                         self.cluster.release(next_resource_release_machines)
                         self.running_jobs.pop(0)  # remove the first running job
 
-
-            # this job should never be scheduled before.
+            # now we can schedule job_for_scheduling
             assert job_for_scheduling.scheduled_time == -1
             job_for_scheduling.scheduled_time = self.current_timestamp
             job_for_scheduling.allocated_machines = self.cluster.allocate(job_for_scheduling.job_id,job_for_scheduling.request_number_of_processors)
             self.running_jobs.append(job_for_scheduling)
             self.job_queue.remove(job_for_scheduling)
 
-            not_empty = self.moveforward_for_job()
-            if not not_empty:
-                break
+            # after scheduling, move forward the timeline
+            if self.job_queue:  # if job queue is not empty, just go back to schedule agin
+                continue
+            else: # if self.job_queue is empty now
+                if self.next_arriving_job_idx >= self.last_job_in_batch:
+                    # no more job to add, break the while loop
+                    break
+                
+                # if there are more jobs to add
+                while not self.job_queue:   # while there are no job in the job queue
+                    if not self.running_jobs: # there are no running jobs
+                        next_resource_release_time = sys.maxsize
+                        next_resource_release_machines = []
+                    else:
+                        self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
+                        next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
+                        next_resource_release_machines = self.running_jobs[0].allocated_machines
+                    
+                    if self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
+                        self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
+                        self.job_queue.append(self.loads[self.next_arriving_job_idx])
+                        self.next_arriving_job_idx += 1
+                    else:
+                        self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
+                        self.cluster.release(next_resource_release_machines)
+                        self.running_jobs.pop(0)
+            
 
 
     def calculate_scheduling_score(self, scheduled_jobs):
@@ -766,41 +790,6 @@ class BatchSchedSim():
             vector[i*JOB_FEATURES:(i+1)*JOB_FEATURES] = self.pairs[i][1:]
 
         return vector
-
-    # @profile
-    def moveforward_for_job(self):
-        if self.job_queue:
-            return True
-
-        # if we need to add job, but can not add any more, return False indicating the job_queue is for sure empty now.
-        if self.next_arriving_job_idx >= self.last_job_in_batch:
-            assert not self.job_queue
-            return False
-
-        # move forward to add jobs into job queue.
-        while not self.job_queue:
-            if not self.running_jobs:  # there are no running jobs
-                # always add jobs if no resource can be released.
-                next_resource_release_time = sys.maxsize
-                next_resource_release_machines = []
-            else:
-                self.running_jobs.sort(key=lambda running_job: (
-                    running_job.scheduled_time + running_job.run_time))
-                next_resource_release_time = (
-                    self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
-                next_resource_release_machines = self.running_jobs[0].allocated_machines
-
-            if self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
-                self.current_timestamp = max(
-                    self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
-                self.job_queue.append(self.loads[self.next_arriving_job_idx])
-                self.next_arriving_job_idx += 1
-                return True     # job added
-            else:
-                self.current_timestamp = max(
-                    self.current_timestamp, next_resource_release_time)
-                self.cluster.release(next_resource_release_machines)
-                self.running_jobs.pop(0)  # remove the first running job.
 
     def job_score(self, job_for_scheduling):
         # 0: Average bounded slowdown, 1: Average waiting time
