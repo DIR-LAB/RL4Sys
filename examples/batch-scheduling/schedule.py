@@ -324,21 +324,13 @@ class BatchSchedSim():
         self.current_timestamp = 0
         self.start = 0
         self.next_arriving_job_idx = 0
-        self.last_job_in_batch = 0
-        self.num_job_in_batch = 0
-        self.start_idx_last_reset = 0
+        # just avoid hitting the end of the workloads. 
+        self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
+        self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
 
         self.loads = Workloads(workload_file)
         self.cluster = Cluster(
             "Cluster", self.loads.max_nodes, self.loads.max_procs/self.loads.max_nodes)
-
-        self.bsld_algo_dict = {}
-        self.scheduled_rl = {}
-        self.penalty = 0
-        self.pivot_job = False
-        self.scheduled_scores = []
-        self.enable_preworkloads = False
-        self.pre_workloads = []
 
         # 0: Average bounded slowdown, 1: Average waiting time
         # 2: Average turnaround time, 3: Resource utilization
@@ -348,7 +340,6 @@ class BatchSchedSim():
             print(f"Seed must be a non-negative integer or omitted, not {seed}")
         
         seed_seq = np.random.SeedSequence(seed)
-        np_seed = seed_seq.entropy
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
         self.rlagent = RL4SysAgent()
@@ -429,18 +420,12 @@ class BatchSchedSim():
         self.current_timestamp = 0
         self.start = 0
         self.next_arriving_job_idx = 0
-        self.last_job_in_batch = self.start + self.loads.size()
-        self.num_job_in_batch = self.loads.size()
-        self.scheduled_rl = {}
-        self.penalty = 0
-        self.pivot_job = False
-        self.scheduled_scores = []
-        self.pre_workloads = []
+        self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
+        self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
 
     def schedule_whole_trace(self):
         # start from the beginning of the trace
         self.start = 0
-        self.start_idx_last_reset = self.start
         self.current_timestamp = self.loads[self.start].submit_time
         self.job_queue.append(self.loads[self.start])
         self.next_arriving_job_idx = self.start + 1
@@ -456,18 +441,29 @@ class BatchSchedSim():
         # main scheduling loop
         while True:
             job_for_scheduling = None
-
+            need_skip = True
             # added for enabling RL
             if rl_working or random.random() < 0.01:
                 rl_working = True
-                rl_runs += 1
-                flatten_obs_old = self.build_observation()
-                rl4sys_action = self.rlagent.request_for_action(flatten_obs_old, rew)
-                assert rl4sys_action != None
-                job_id_in_queue = rl4sys_action.act[0]
-                job_for_scheduling = self.pairs[job_id_in_queue][0]
+
+                while need_skip:
+                    flatten_obs_old = self.build_observation()
+                    # mask jobs that do not exist
+                    mask = np.zeros(MAX_QUEUE_SIZE, dtype=float)
+                    mask[:len(self.job_queue)] = 1
+
+                    # get RL action
+                    rl4sys_action = self.rlagent.request_for_action(flatten_obs_old, mask, rew)
+                    job_id_in_queue = rl4sys_action.act[0]
+                    job_for_scheduling = self.pairs[job_id_in_queue][0]
+                    if job_for_scheduling is None:
+                        self.skip_and_retry()
+                    else:
+                        rl_runs += 1
+                        need_skip = False
 
                 self.rl_scheduled_jobs.append(job_for_scheduling)
+
                 if rl_runs > MAX_RL_RUNS:
                     rl_runs = 0
                     rl_working = False
@@ -484,7 +480,6 @@ class BatchSchedSim():
 
             # ready to schedule "job_for_scheduling" job
             if not self.cluster.can_allocated(job_for_scheduling):
-                
                 earliest_start_time = self.current_timestamp
 
                 if self.backfil:  # recalculate the earliest start time of this job
@@ -560,7 +555,37 @@ class BatchSchedSim():
                         self.cluster.release(next_resource_release_machines)
                         self.running_jobs.pop(0)
             
+    def skip_and_retry(self):
+        # schedule nothing, just move forward to next timestamp. It should 1) add a new job; 2) finish a running job; 3) reach skip time
+        next_time_after_skip = self.current_timestamp + SKIP_TIME
 
+        # always add jobs if no resource can be released.
+        next_resource_release_time = sys.maxsize
+        next_resource_release_machines = []
+        if self.running_jobs:  # there are running jobs
+            self.running_jobs.sort(key=lambda running_job: (
+                running_job.scheduled_time + running_job.run_time))
+            next_resource_release_time = (
+                self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
+            next_resource_release_machines = self.running_jobs[0].allocated_machines
+
+        # all jobs have been put in and no running jobs. Only some queuing jobs. Just return and try again. Should not have bad luck next time.
+        if self.next_arriving_job_idx >= self.last_job_in_batch and not self.running_jobs:
+            return
+
+        if next_time_after_skip < min(self.loads[self.next_arriving_job_idx].submit_time, next_resource_release_time):
+            self.current_timestamp = next_time_after_skip
+            return
+
+        if self.next_arriving_job_idx < self.last_job_in_batch and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
+            self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
+            self.job_queue.append(self.loads[self.next_arriving_job_idx])
+            self.next_arriving_job_idx += 1
+        else:
+            self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
+            self.cluster.release(next_resource_release_machines)
+            self.running_jobs.pop(0)  # remove the first running job.
+        return
 
     def calculate_scheduling_score(self, scheduled_jobs):
         sum = 0
@@ -595,47 +620,12 @@ class BatchSchedSim():
             raise NotImplementedError
 
 
-    def build_critic_observation(self):
-        vector = np.zeros(JOB_SEQUENCE_SIZE * 3, dtype=float)
-        earlist_job = self.loads[self.start_idx_last_reset]
-        earlist_submit_time = earlist_job.submit_time
-        pairs = []
-        for i in range(self.start_idx_last_reset, self.last_job_in_batch+1):
-            job = self.loads[i]
-            submit_time = job.submit_time - earlist_submit_time
-            request_processors = job.request_number_of_processors
-            request_time = job.request_time
-
-            normalized_submit_time = min(
-                float(submit_time) / float(MAX_WAIT_TIME), 1.0 - 1e-5)
-            normalized_run_time = min(
-                float(request_time) / float(self.loads.max_exec_time), 1.0 - 1e-5)
-            normalized_request_nodes = min(
-                float(request_processors) / float(self.loads.max_procs), 1.0 - 1e-5)
-
-            pairs.append(
-                [normalized_submit_time, normalized_run_time, normalized_request_nodes])
-
-        for i in range(JOB_SEQUENCE_SIZE):
-            vector[i*3:(i+1)*3] = pairs[i]
-
-        return vector
-
     def build_observation(self):
         vector = np.zeros((MAX_QUEUE_SIZE) * JOB_FEATURES, dtype=float)
         self.job_queue.sort(key=lambda job: self.fcfs_score(job))
         self.visible_jobs = []
-        for i in range(0, MAX_QUEUE_SIZE):
-            if i < len(self.job_queue):
-                self.visible_jobs.append(self.job_queue[i])
-            else:
-                break
-        self.visible_jobs.sort(key=lambda j: self.fcfs_score(j))
-        if self.shuffle:
-            random.shuffle(self.visible_jobs)
 
-        # @ddai: optimize the observable jobs
-        self.visible_jobs = []
+        # build the best visible jobs, espcially when the job queue is too long
         if len(self.job_queue) <= MAX_QUEUE_SIZE:
             for i in range(0, len(self.job_queue)):
                 self.visible_jobs.append(self.job_queue[i])
@@ -700,24 +690,7 @@ class BatchSchedSim():
                     self.visible_jobs.append(random_job)
                     index += 1
 
-        '''
-        @ddai: OPTIMIZE_OBSV. This time, we calculate the earliest start time of each job and expose that to the RL agent.
-        if it is 0, then the job can start now, if it is near 1, that means it will have to wait for a really long time to start.
-        The earliest start time is calculated based on current resources and the running jobs. It assumes no more jobs will be scheduled.
-
-        # calculate the free resources at each outstanding ts
-        free_processors_pair = []
-        free_processors = (self.cluster.free_node * self.cluster.num_procs_per_node)
-        free_processors_pair.append((free_processors, 0))
-
-        self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
-        for rj in self.running_jobs:
-            free_processors += rj.request_number_of_processors
-            free_processors_pair.append((free_processors, (rj.scheduled_time + rj.run_time - self.current_timestamp)))
-        '''
-
         self.pairs = []
-        add_skip = False
         for i in range(0, MAX_QUEUE_SIZE):
             if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE):
                 job = self.visible_jobs[i]
@@ -774,15 +747,8 @@ class BatchSchedSim():
                     can_schedule_now = 1.0 - 1e-5
                 else:
                     can_schedule_now = 1e-5
-                self.pairs.append([job, normalized_wait_time, normalized_run_time, normalized_request_nodes,
-                                  normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now])
+                self.pairs.append([job, normalized_wait_time, normalized_run_time,normalized_request_nodes, normalized_request_memory, normalized_user_id, normalized_group_id, normalized_executable_id, can_schedule_now])
 
-            elif self.skip and not add_skip:  # the next job is skip
-                add_skip = True
-                if self.pivot_job:
-                    self.pairs.append([None, 1, 1, 1, 1, 1, 1, 1, 1])
-                else:
-                    self.pairs.append([None, 1, 1, 1, 1, 1, 1, 1, 0])
             else:
                 self.pairs.append([None, 0, 1, 1, 1, 1, 1, 1, 0])
 

@@ -34,17 +34,15 @@ class RL4SysAgent:
             time.sleep(0.5)
         
     # the reward r here is the reward from last action. 
-    def request_for_action(self, obs, r) -> RL4SysAction:
+    def request_for_action(self, obs, mask, r) -> RL4SysAction:
         with self.lock:
-            if self.model is not None:
-                a, v_t, logp_t = self.model.step(torch.as_tensor(obs, dtype=torch.float32), None)  # mask = NULL
+            assert self.model is not None
+            a, v_t, logp_t = self.model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
 
-                r4sa = RL4SysAction(obs, None, a, None, r, v_t, logp_t, False)
-                self.current_traj.add_action(r4sa)
+            r4sa = RL4SysAction(obs, None, a, None, r, v_t, logp_t, False)
+            self.current_traj.add_action(r4sa)
 
-                return r4sa
-            else:
-                return None
+            return r4sa
         
     def flag_last_action(self, r):
         r4sa = RL4SysAction(None, None, None, None, r, None, None, True)
