@@ -1,4 +1,6 @@
 import os
+import pickle
+import threading
 import numpy as np
 
 import torch
@@ -10,14 +12,12 @@ from models.kernel_ac import RLActorCritic
 
 from reply_buffer import ReplayBuffer
 import zmq
-import json
-from trajectory import RL4SysTrajectory
 from utils.logger import EpochLogger, setup_logger_kwargs  # Assuming Trajectory class is defined
 
 class TrainingServer:
     def __init__(self, flatten_obs_dim, kernel_size, kernel_dim,
                  obs_dim, act_dim, mask_dim, size, seed=0,
-                 traj_per_epoch=100, epochs=100,
+                 traj_per_epoch=10, epochs=100,
                  clip_ratio=0.2, pi_lr=3e-4,
                  vf_lr=1e-3, train_pi_iters=80, 
                  train_v_iters=80, lam=0.97, max_ep_len=1000,
@@ -55,11 +55,23 @@ class TrainingServer:
         self.vf_optimizer = Adam(self.model.v.parameters(), lr=self.vf_lr)
 
         self.logger.setup_pytorch_saver(self.model)
-        # send the initial model
-        self.send_model()
+        
+        # send the initial model in a different thread
+        print("[TraingServer] Finish Initilizating, Sending the model...")
+        self.initial_send_thread = threading.Thread(target=self.send_model)
+        self.initial_send_thread.start()
+
+        self.loop_thread = threading.Thread(target=self.start_loop)
+        self.loop_thread.start()
+
+    def joins(self):
+        self.initial_send_thread.join()
+        self.loop_thread.join()
 
     # server sends the updated model to client 
     def send_model(self):
+        print("[TraingServer - send_model] Send a model to RL4SysAgent")
+        
         torch.save(self.model, 'model.pth')
 
         context = zmq.Context()
@@ -108,9 +120,10 @@ class TrainingServer:
         epoch = 0
 
         while True:
-            trajectory_data = socket.recv_string()
+            print("[training_server.py - start_loop - blocking for new trajectory]")
+            trajectory_data = socket.recv()
             traj += 1
-            trajectory = self.from_json(trajectory_data)
+            trajectory = pickle.loads(trajectory_data)
             ep_ret, ep_len = 0, 0
             
             for r4a in trajectory.actions:
@@ -124,8 +137,10 @@ class TrainingServer:
                     self.replay_buffer.finish_path(r4a.rew)
                     self.logger.store(EpRet=ep_ret, EpLen=ep_len)
             
+            print("[training_server.py - start_loop - received traj: ]", traj)
+
             # get enough trajectories for training the model
-            if traj >= self.traj_per_epoch:  
+            if traj >= self.traj_per_epoch:
                 epoch += 1              
                 self.train_model()
                 # Log info about epoch
@@ -148,19 +163,6 @@ class TrainingServer:
 
         socket.close()
         context.term()
-
-    def from_json(self, json_data):
-        # Deserialize the JSON data into a dictionary
-        data = json.loads(json_data)
-
-        # Create a new RL4SysTrajectory instance
-        trajectory = RL4SysTrajectory()
-
-        # Set the max_length and actions attributes
-        trajectory.max_length = data['max_length']
-        trajectory.actions = [RL4SysAction.from_dict(action) for action in data['actions']]
-
-        return trajectory
 
     def train_model(self):
         data = self.replay_buffer.get()

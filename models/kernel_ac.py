@@ -16,7 +16,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
 
 
 class RLActor(nn.Module):
-    def __init__(self, kernel_size, kernel_dim):
+    def __init__(self, flatten_obs_dim, kernel_size, kernel_dim):
         super().__init__()
         self.dense1 = nn.Linear(kernel_dim, 32)
         self.dense2 = nn.Linear(32, 16)

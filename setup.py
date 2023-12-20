@@ -14,6 +14,8 @@ setup(
     packages=find_packages(),
     install_requires=[
         'numpy',
+        'pyzmq',
+        'pickle',
         # Add other dependencies required by your package
     ],
     classifiers=[

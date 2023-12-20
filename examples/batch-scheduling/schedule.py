@@ -9,6 +9,9 @@ import sys
 
 import re
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+
 from agent import RL4SysAgent
 from training_server import TrainingServer
 
@@ -316,6 +319,9 @@ class BatchSchedSim():
     def __init__(self, workload_file, seed):
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
+        self.loads = Workloads(workload_file)
+        self.cluster = Cluster("Cluster", self.loads.max_nodes, self.loads.max_procs/self.loads.max_nodes)
+
         self.job_queue = []
         self.running_jobs = []
         self.visible_jobs = []
@@ -328,15 +334,12 @@ class BatchSchedSim():
         self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
         self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
 
-        self.loads = Workloads(workload_file)
-        self.cluster = Cluster(
-            "Cluster", self.loads.max_nodes, self.loads.max_procs/self.loads.max_nodes)
-
         # 0: Average bounded slowdown, 1: Average waiting time
         # 2: Average turnaround time, 3: Resource utilization
         self.job_score_type = 0
+        self.backfil = False
     
-        if seed <= 0:
+        if seed < 0:
             print(f"Seed must be a non-negative integer or omitted, not {seed}")
         
         seed_seq = np.random.SeedSequence(seed)
@@ -422,6 +425,7 @@ class BatchSchedSim():
         self.next_arriving_job_idx = 0
         self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
         self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
+        print("[schedule.py - reset()]")
 
     def schedule_whole_trace(self):
         # start from the beginning of the trace
@@ -434,7 +438,6 @@ class BatchSchedSim():
         self.scheduled_logs = {}
         self.rl_scheduled_jobs = []
         rl_working = False
-        MAX_RL_RUNS = 128
         rl_runs = 0
         rew = 0
 
@@ -442,8 +445,10 @@ class BatchSchedSim():
         while True:
             job_for_scheduling = None
             need_skip = True
+
             # added for enabling RL
             if rl_working or random.random() < 0.01:
+                #print("[schedule.py - schedule_whole_trace()] === Reinforcement Learning Agent: ")
                 rl_working = True
 
                 while need_skip:
@@ -452,7 +457,7 @@ class BatchSchedSim():
                     mask = np.zeros(MAX_QUEUE_SIZE, dtype=float)
                     mask[:len(self.job_queue)] = 1
 
-                    # get RL action
+                    # get a new RL action
                     rl4sys_action = self.rlagent.request_for_action(flatten_obs_old, mask, rew)
                     job_id_in_queue = rl4sys_action.act[0]
                     job_for_scheduling = self.pairs[job_id_in_queue][0]
@@ -463,20 +468,19 @@ class BatchSchedSim():
                         need_skip = False
 
                 self.rl_scheduled_jobs.append(job_for_scheduling)
+                # print("[schedule.py - schedule_whole_trace()]: ",job_for_scheduling)
 
-                if rl_runs > MAX_RL_RUNS:
+                if rl_runs > JOB_SEQUENCE_SIZE:
                     rl_runs = 0
                     rl_working = False
                     rl_total = self.calculate_scheduling_score(self.rl_scheduled_jobs)
                     rew = -rl_total
-                    rl4sys_action.flag_last_action(rew)
+                    self.rlagent.flag_last_action(rew)
                 rew = 0
-
             else:
                 # greedy scheduler
                 self.job_queue.sort(key=lambda j: self.sjf_score(j))
                 job_for_scheduling = self.job_queue[0]
-
 
             # ready to schedule "job_for_scheduling" job
             if not self.cluster.can_allocated(job_for_scheduling):
@@ -797,11 +801,15 @@ if __name__ == "__main__":
     current_dir = os.getcwd()
     workload_file = os.path.join(current_dir, args.workload)
 
-    sim = BatchSchedSim(workload_file=workload_file, seed=0)
+    obs_dim = tuple((JOB_FEATURES * MAX_QUEUE_SIZE,))
+
+    rl_training_server = TrainingServer(
+        MAX_QUEUE_SIZE * JOB_FEATURES, MAX_QUEUE_SIZE, JOB_FEATURES, MAX_QUEUE_SIZE * JOB_FEATURES, MAX_QUEUE_SIZE, MAX_QUEUE_SIZE, JOB_SEQUENCE_SIZE*100)
     
-    rl_training_server = TrainingServer()
-    rl_training_server.start_loop()
-        
+    print("[schedule.py] Finish creating Training Server")
+
+    sim = BatchSchedSim(workload_file=workload_file, seed=0)
+            
     iter = 0
     # iterate multiple rounds to train the models
     while iter < 100:

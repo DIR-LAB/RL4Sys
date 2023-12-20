@@ -5,8 +5,8 @@ import torch
 
 from models.kernel_ac import RLActorCritic
 from trajectory import RL4SysTrajectory
-from .action import RL4SysAction
-from .observation import RL4SysObservation
+from action import RL4SysAction
+from observation import RL4SysObservation
 
 import zmq
 import threading
@@ -25,13 +25,13 @@ class RL4SysAgent:
         self.current_traj = RL4SysTrajectory()
 
         # make sure we received one model first
-        self.condition = threading.Condition()
         while True:
-            with self.condition:
-                if self.model is None:
-                    self.condition.wait()
+            if self.model is None:
+                time.sleep(1)
+            else:
                 break
-            time.sleep(0.5)
+        
+        print("[RLSysAgent] Model Initialized")
         
     # the reward r here is the reward from last action. 
     def request_for_action(self, obs, mask, r) -> RL4SysAction:
@@ -56,12 +56,15 @@ class RL4SysAgent:
         while True:
             # Receive the bytes and write to a file
             model_bytes = socket.recv()
+            print("[RLSysAgent - loop_for_updated_model] receives the model")
 
             with open('model.pth', 'wb') as f:
                 f.write(model_bytes)
             
             with self.lock:
                 self.model = torch.load('model.pth', map_location=torch.device('cpu'))
+
+            print("[RLSysAgent - loop_for_updated_model] load the new model")
 
         socket.close()
         context.term()
