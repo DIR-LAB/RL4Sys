@@ -65,7 +65,7 @@ class ReplayBuffer:
     def __init__(self, obs_dim, act_dim, mask_dim, size, gamma=0.99, lam=0.95):
         self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
         self.cobs_buf = None
-        self.act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
+        self.act_buf = np.zeros(combined_shape(size), dtype=np.float32)
         self.mask_buf = np.zeros(combined_shape(size, mask_dim), dtype=np.float32)
         self.adv_buf = np.zeros(size, dtype=np.float32)
         self.rew_buf = np.zeros(size, dtype=np.float32)

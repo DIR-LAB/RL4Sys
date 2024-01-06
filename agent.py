@@ -39,7 +39,7 @@ class RL4SysAgent:
             assert self.model is not None
             a, v_t, logp_t = self.model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
 
-            r4sa = RL4SysAction(obs, None, a, None, r, v_t, logp_t, False)
+            r4sa = RL4SysAction(obs, None, a, mask, r, v_t, logp_t, False)
             self.current_traj.add_action(r4sa)
 
             return r4sa

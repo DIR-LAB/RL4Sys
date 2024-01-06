@@ -17,7 +17,7 @@ from utils.logger import EpochLogger, setup_logger_kwargs  # Assuming Trajectory
 class TrainingServer:
     def __init__(self, flatten_obs_dim, kernel_size, kernel_dim,
                  obs_dim, act_dim, mask_dim, size, seed=0,
-                 traj_per_epoch=10, epochs=100,
+                 traj_per_epoch=3, epochs=100,
                  clip_ratio=0.2, pi_lr=3e-4,
                  vf_lr=1e-3, train_pi_iters=80, 
                  train_v_iters=80, lam=0.97, max_ep_len=1000,
