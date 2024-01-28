@@ -299,7 +299,6 @@ class Cluster:
         for m in self.all_nodes:
             m.reset()
 
-
 # HPC Env
 MAX_QUEUE_SIZE = 128
 MLP_SIZE = 256
