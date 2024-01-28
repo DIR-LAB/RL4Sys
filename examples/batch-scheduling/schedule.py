@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 
 from agent import RL4SysAgent
-from training_server import TrainingServer
+from training_server import PPOTrainingServer
 
 
 class Job:
@@ -803,7 +803,7 @@ if __name__ == "__main__":
 
     obs_dim = tuple((JOB_FEATURES * MAX_QUEUE_SIZE,))
 
-    rl_training_server = TrainingServer(
+    rl_training_server = PPOTrainingServer(
         MAX_QUEUE_SIZE * JOB_FEATURES, MAX_QUEUE_SIZE, JOB_FEATURES, MAX_QUEUE_SIZE * JOB_FEATURES, MAX_QUEUE_SIZE, MAX_QUEUE_SIZE, JOB_SEQUENCE_SIZE*100)
     
     print("[schedule.py] Finish creating Training Server")

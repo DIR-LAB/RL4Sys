@@ -10,8 +10,6 @@ from observation import RL4SysObservation
 
 import zmq
 import threading
-from io import BytesIO
-
 
 class RL4SysAgent:
     def __init__(self, port=5556):
@@ -34,7 +32,7 @@ class RL4SysAgent:
         print("[RLSysAgent] Model Initialized")
         
     # the reward r here is the reward from last action. 
-    def request_for_action(self, obs, mask, r) -> RL4SysAction:
+    def request_for_action(self, obs, mask, r):
         with self.lock:
             assert self.model is not None
             a, v_t, logp_t = self.model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))

@@ -14,7 +14,7 @@ from reply_buffer import ReplayBuffer
 import zmq
 from utils.logger import EpochLogger, setup_logger_kwargs  # Assuming Trajectory class is defined
 
-class TrainingServer:
+class PPOTrainingServer:
     def __init__(self, flatten_obs_dim, kernel_size, kernel_dim,
                  obs_dim, act_dim, mask_dim, size, seed=0,
                  traj_per_epoch=3, epochs=100,
