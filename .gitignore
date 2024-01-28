@@ -1,3 +1,7 @@
+.DS_Store
+__pycache__/*
+utils/__pycache__/*
+models/__pycache__/*
 # Prerequisites
 *.d
 
