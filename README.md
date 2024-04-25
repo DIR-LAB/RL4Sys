@@ -1,3 +1,20 @@
+TODO: bring over plot.py, DQN, DQN soft updates, all #TODO comments, make sure all parameters can be changed (e.g. gamma, lambda for replay buffer), PEP 8 line width, check docstrings for consistency (capitalization, punctuation)
+
+user-definables:
+* environment script, using RL4SysAgent
+    * should build observations, then interact with trajectory and model through RL4SysAgent
+    * option to start instance of training_server if __name__==main
+    * should specify parameters for training server
+* algorithm
+    * kernel(kernel_dim: int, kernel_size: int):
+        step(flattened_obs: Tensor, mask: Tensor) -> ndarray, dict
+        act(flattened_obs: Tensor, mask: Tensor) -> ndarray, dict
+    * algorithm(kernel_dim: int, kernel_size: int, seed: int, *hyperparams):
+        traj, epoch: int
+        save(filename: str) -> None
+        receive_trajectory(trajectory: RL4SysTrajectory) -> None
+* ~~RL4SysObservation~~ removed from implementation for version 0.2.0
+
 # RL4Sys
 
 ## Agent APIs
@@ -31,4 +48,3 @@ if traj is done
 
 if done:
     reset()
-

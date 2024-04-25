@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='RL4Sys',
-    version='0.1.0',
+    version='0.2.0',
     author='DIRLab',
     author_email='ddai@uncc.edu',
     description='A system-oriented reinforcement learning framework using Python',
@@ -14,6 +14,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'numpy',
+        'torch',
         'pyzmq',
         'pickle',
         # Add other dependencies required by your package
@@ -27,6 +28,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
     ],
     # Add some relevant keywords
     keywords='reinforcement learning, RL, system integration',

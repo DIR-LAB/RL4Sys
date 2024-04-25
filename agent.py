@@ -1,52 +1,95 @@
-import random
+from typing import NoReturn as Never
+
 import time
-import numpy as np
 import torch
 
-from models.kernel_ac import RLActorCritic
 from trajectory import RL4SysTrajectory
 from action import RL4SysAction
-from observation import RL4SysObservation
 
 import zmq
 import threading
 
 class RL4SysAgent:
-    def __init__(self, port=5556):
-        self.lock = threading.Lock()
+    """RL model for use in environment scripts.
+
+    Listens for updated models on the network asynchronously.
+    Updated models are saved to ./model.pth and then loaded for use.
+
+    Initialization will not complete until a model is received over the network.
+
+    Attributes:
+        _lock (threading.Lock): to be acquired anytime self._model is accessed.
+        port (int): TCP port on which to listen for updated models from training server.
+
+    """
+    def __init__(self, port: int = 5556):
+        self._lock = threading.Lock()
         self.port = port
 
-        self.listen_thread = threading.Thread(target=self.loop_for_updated_model)
-        self.listen_thread.start()
+        self._listen_thread = threading.Thread(target=self._loop_for_updated_model)
+        self._listen_thread.daemon = True
+        self._listen_thread.start()
 
-        self.model = None
-        self.current_traj = RL4SysTrajectory()
+        self._model = None # TODO type hint _model? because of _model.step, we would need all kernels to inherit from class myClass(nn.Module) with a .step() function
+        self._current_traj = RL4SysTrajectory()
 
-        # make sure we received one model first
+        # Receive one model to initialize
         while True:
-            if self.model is None:
+            if self._model is None:
                 time.sleep(1)
             else:
                 break
         
         print("[RLSysAgent] Model Initialized")
         
-    # the reward r here is the reward from last action. 
-    def request_for_action(self, obs, mask, r):
-        with self.lock:
-            assert self.model is not None
-            a, v_t, logp_t = self.model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+    
+    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward) -> RL4SysAction:
+        """Produce action based on trained model and given observation.
 
-            r4sa = RL4SysAction(obs, None, a, mask, r, v_t, logp_t, False)
-            self.current_traj.add_action(r4sa)
+        Automatically records action to trajectory.
+
+        Mask should contain 1 for all actions which are able to be chosen, and 0 for disabled.
+        For example, if kernel_size is 6 but only 4 actions are available in this observation, mask unused spots:
+            [1, 1, 1, 1, 0, 0]
+
+        Args:
+            obs: flattened observation. Should have shape (kernel_size, kernel_dim).
+            mask: observation mask. Should have shape (kernel_size).
+            reward: reward of the previous action (action which led to state corresponding to obs).
+        Returns:
+            Selected action in an RL4SysAction object.
+
+        """
+        with self._lock:
+            assert self._model is not None
+
+            a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+
+            r4sa = RL4SysAction(obs, a, mask, reward, data, done=False)
+            self._current_traj.add_action(r4sa)
 
             return r4sa
         
-    def flag_last_action(self, r):
-        r4sa = RL4SysAction(None, None, None, None, r, None, None, True)
-        self.current_traj.add_action(r4sa)
+    def flag_last_action(self, reward: int) -> None:
+        """Mark end of trajectory.
 
-    def loop_for_updated_model(self):
+        Triggers sending trajectory to training server.
+
+        Args:
+            reward: reward of the previous (and final) action.
+        Returns:
+            Selected action in an RL4SysAction object.
+
+        """
+        r4sa = RL4SysAction(None, None, None, reward, None, True)
+        self._current_traj.add_action(r4sa) # triggers send to training server, clear local trajectory
+
+    def _loop_for_updated_model(self) -> Never:
+        """Listen on network for new model.
+
+        Asynchronous from rest of agent by running in a seperate thread.
+
+        """
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
         socket.bind(f"tcp://*:{self.port}")
@@ -59,10 +102,10 @@ class RL4SysAgent:
             with open('model.pth', 'wb') as f:
                 f.write(model_bytes)
             
-            with self.lock:
-                self.model = torch.load('model.pth', map_location=torch.device('cpu'))
+            with self._lock:
+                self._model = torch.load('model.pth', map_location=torch.device('cpu'))
 
-            print("[RLSysAgent - loop_for_updated_model] load the new model")
+            print("[RLSysAgent - loop_for_updated_model] loaded the new model")
 
         socket.close()
         context.term()
