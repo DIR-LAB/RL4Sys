@@ -1,0 +1,44 @@
+{
+    "server": {
+        "training_server": {
+            "prefix": "tcp://",
+            "host": "localhost",
+            "port": 5556
+        },
+        "trajectory_server": {
+            "prefix": "tcp://",
+            "host": "localhost",
+            "port": 5555
+        }
+    },
+    "model_paths": {
+       "save_models": "/models",
+        "load_models": "/models"
+    },
+    "algorithms": {
+        "DQN": {
+            "_comment": "DQN yet to be implemented"
+        },
+        "PPO": {
+            "seed": 0,
+            "traj_per_epoch": 3,
+            "clip_ratio": 0.2,
+            "gamma": 0.99,
+            "lam": 0.97,
+            "pi_lr": 3e-4,
+            "vf_lr": 1e-3,
+            "train_pi_iters": 80,
+            "train_v_iters": 80,
+            "target_kl": 0.01
+        }
+    },
+    "max_traj_length": 1000,
+    "examples": {
+        "job_scheduling": {
+            "workload_file": "data/lublin_256.swf",
+            "seed": 0,
+            "iterations": 100,
+            "algorithm": "PPO"
+        }
+    }
+}

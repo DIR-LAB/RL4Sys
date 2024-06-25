@@ -2,7 +2,18 @@ from action import RL4SysAction
 import zmq
 import pickle
 
-DEFAULT_MAX_LENGTH = 1000
+import os
+
+import json
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+max_traj_length = None
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        max_traj_length = json.load(f)
+        max_traj_length = max_traj_length['max_traj_length']
+except (FileNotFoundError, KeyError):
+    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    max_traj_length = 1000
 
 class RL4SysTrajectory:
     """Container for trajectories in RL4Sys environments.
@@ -16,12 +27,12 @@ class RL4SysTrajectory:
 
     """
 
-    def __init__(self, max_length: int = DEFAULT_MAX_LENGTH):
+    def __init__(self, max_length: int = max_traj_length):
 
         if max_length:
             self.max_length = max_length
         else:
-            self.max_length = DEFAULT_MAX_LENGTH
+            self.max_length = max_traj_length
 
         self.actions: list[RL4SysAction] = []
 

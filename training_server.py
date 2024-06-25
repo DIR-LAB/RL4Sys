@@ -10,6 +10,30 @@ from typing import NoReturn as Never
 
 ALGORITHMS_PATH = 'algorithms'
 
+import os, json
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+train_server = None
+traj_server = None
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        train_server = json.load(f)
+        train_server, traj_server = train_server['server'], train_server['server']
+        train_server, traj_server = train_server['training_server'], traj_server['trajectory_server']
+except (FileNotFoundError, KeyError):
+    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    if train_server is None:
+        train_server = {
+            'prefix': 'tcp://',
+            'host': '*',
+            'port': 5556
+        }
+    if traj_server is None:
+        traj_server = {
+            'prefix': 'tcp://',
+            'host': '*',
+            'port': 5555
+        }
+
 class TrainingServer:
     """Train a model for a remote agent.
 
@@ -92,8 +116,8 @@ class TrainingServer:
 
         context = zmq.Context()
         socket = context.socket(zmq.PUSH)
-        # TODO allow to replace with actual address and port
-        socket.connect("tcp://localhost:5556")
+        address = f"{train_server['prefix']}{train_server['host']}:{train_server['port']}"
+        socket.connect(address)
 
         with open('model.pth', 'rb') as f:
             b = f.read()
@@ -109,7 +133,8 @@ class TrainingServer:
         """
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
-        socket.bind("tcp://*:5555")
+        address = f"{traj_server['prefix']}{traj_server['host']}:{traj_server['port']}"
+        socket.bind(address)
 
         while True:
             print("[training_server.py - start_loop - blocking for new trajectory]")

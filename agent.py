@@ -9,6 +9,23 @@ from action import RL4SysAction
 import zmq
 import threading
 
+import os
+import json
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+train_server = None
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        train_server = json.load(f)
+        train_server = train_server['server']
+        train_server = train_server['training_server']
+except (FileNotFoundError, KeyError):
+    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    train_server = {
+        'prefix': 'tcp://',
+        'host': '*',
+        'port': 5556
+    }
+
 class RL4SysAgent:
     """RL model for use in environment scripts.
 
@@ -22,7 +39,7 @@ class RL4SysAgent:
         port (int): TCP port on which to listen for updated models from training server.
 
     """
-    def __init__(self, port: int = 5556):
+    def __init__(self, port: int = train_server['port']):
         self._lock = threading.Lock()
         self.port = port
 
@@ -92,7 +109,7 @@ class RL4SysAgent:
         """
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
-        socket.bind(f"tcp://*:{self.port}")
+        socket.bind(f"{train_server['prefix']}{train_server['host']}:{self.port}")
 
         while True:
             # Receive the bytes and write to a file

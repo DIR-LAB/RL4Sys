@@ -10,6 +10,29 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
+import json
+top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+CONFIG_PATH = os.path.join(top_dir, 'config.json')
+hyperparams = {}
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+        hyperparams = config['algorithms']['PPO']
+except (FileNotFoundError, KeyError):
+    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    hyperparams = {
+        "seed": 0,
+        "traj_per_epoch": 3,
+        "clip_ratio": 0.2,
+        "gamma": 0.99,
+        "lam": 0.97,
+        "pi_lr": 3e-4,
+        "vf_lr": 1e-3,
+        "train_pi_iters": 80,
+        "train_v_iters": 80,
+        "target_kl": 0.01,
+    }
+
 class PPO:
     """Algorithm class for PPO.
 
@@ -58,13 +81,13 @@ class PPO:
     """
     def __init__(self, kernel_size: int, kernel_dim: int,
                  buf_size: int,
-                 seed: int = 0,
-                 traj_per_epoch: int = 3,
-                 clip_ratio: float = 0.2,
-                 gamma: float = 0.99, lam: float = 0.97,
-                 pi_lr: float = 3e-4, vf_lr: float = 1e-3,
-                 train_pi_iters: int = 80, train_v_iters: int = 80,
-                 target_kl: float = 0.01):
+                 seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
+                 clip_ratio: float = hyperparams['clip_ratio'],
+                 gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
+                 pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
+                 train_pi_iters: int = hyperparams['train_pi_iters'], train_v_iters: int = hyperparams['train_v_iters'],
+                 target_kl: float = hyperparams['target_kl']):
 
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
