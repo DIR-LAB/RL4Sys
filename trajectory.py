@@ -5,6 +5,11 @@ import pickle
 import os
 
 import json
+"""Import and load RL4Sys/config.json trajectory & server configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 max_traj_length = None
 traj_server = None
@@ -20,7 +25,7 @@ except (FileNotFoundError, KeyError):
     traj_server = {
         'prefix': 'tcp://',
         'host': 'localhost',
-        'port': 5555
+        'port': ":5555"
     }
 
 class RL4SysTrajectory:
@@ -94,7 +99,8 @@ def send_trajectory(trajectory: RL4SysTrajectory) -> None:
     context = zmq.Context()
     socket = context.socket(zmq.PUSH)
     # Assuming the server is on localhost, port 5555
-    socket.connect(f"{traj_server['prefix']}{traj_server['host']}:{traj_server['port']}")
+    address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
+    socket.connect(address)
 
     # Send the trajectory data
     socket.send(serialized_trajectory)

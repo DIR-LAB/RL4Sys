@@ -3,21 +3,32 @@
         "training_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": 5556
+            "port": ":5556"
         },
         "trajectory_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": 5555
+            "port": ":5555"
         }
     },
     "model_paths": {
-       "save_models": "/models",
-        "load_models": "/models"
+        "_comment1": "Model paths are relative to root directory.",
+        "_comment2": "save and load share the same path (in all likelihood).",
+        "save_model": "models/model.pth",
+        "load_model": "models/model.pth"
     },
     "algorithms": {
         "DQN": {
-            "_comment": "DQN yet to be implemented"
+            "seed": 0,
+            "traj_per_epoch": 3,
+            "gamma": 0.95,
+            "epsilon": 1.0,
+            "epsilon_min": 0.01,
+            "epsilon_decay": 0.995,
+            "q_update_freq": 0.005,
+            "q_lr": 1e-3,
+            "train_q_iters": 80
+
         },
         "PPO": {
             "seed": 0,

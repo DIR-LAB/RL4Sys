@@ -11,15 +11,24 @@ from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
 import json
+"""Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
 top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 CONFIG_PATH = os.path.join(top_dir, 'config.json')
 hyperparams = {}
+save_model_path = {}
 try:
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
-        hyperparams = config['algorithms']['PPO']
+        hyperparams = config['algorithms']
+        hyperparams = hyperparams['PPO']
+        save_model_path = config['model_paths']
+        save_model_path = os.path.join(save_model_path['save_model'])
 except (FileNotFoundError, KeyError):
-    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    print(f"[PPO: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
     hyperparams = {
         "seed": 0,
         "traj_per_epoch": 3,
@@ -32,6 +41,8 @@ except (FileNotFoundError, KeyError):
         "train_v_iters": 80,
         "target_kl": 0.01,
     }
+    save_model_path = os.path.join(top_dir, 'models/model.pth')
+
 
 class PPO:
     """Algorithm class for PPO.

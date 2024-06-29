@@ -11,20 +11,29 @@ import threading
 
 import os
 import json
+"""Import and load RL4Sys/config.json server configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
-train_server = None
+train_server = {}
+load_model_path = {}
 try:
     with open(CONFIG_PATH, 'r') as f:
-        train_server = json.load(f)
-        train_server = train_server['server']
+        config = json.load(f)
+        train_server = config['server']
         train_server = train_server['training_server']
+        load_model_path = config['model_paths']
+        load_model_path = os.path.join(os.path.dirname(__file__), load_model_path['load_model'])
 except (FileNotFoundError, KeyError):
-    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    print(f"[RL4SysAgent: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
     train_server = {
         'prefix': 'tcp://',
         'host': '*',
-        'port': 5556
+        'port': ":5556"
     }
+    load_model_path = os.path.join(os.path.dirname(__file__), 'models/model.pth')
 
 class RL4SysAgent:
     """RL model for use in environment scripts.
@@ -109,18 +118,19 @@ class RL4SysAgent:
         """
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
-        socket.bind(f"{train_server['prefix']}{train_server['host']}:{self.port}")
+        address = f"{train_server['prefix']}{train_server['host']}{self.port}"
+        socket.bind(address)
 
         while True:
             # Receive the bytes and write to a file
             model_bytes = socket.recv()
             print("[RLSysAgent - loop_for_updated_model] receives the model")
 
-            with open('model.pth', 'wb') as f:
+            with open(load_model_path, 'wb') as f:
                 f.write(model_bytes)
             
             with self._lock:
-                self._model = torch.load('model.pth', map_location=torch.device('cpu'))
+                self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'))
 
             print("[RLSysAgent - loop_for_updated_model] loaded the new model")
 
