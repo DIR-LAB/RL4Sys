@@ -2,7 +2,31 @@ from action import RL4SysAction
 import zmq
 import pickle
 
-DEFAULT_MAX_LENGTH = 1000
+import os
+
+import json
+"""Import and load RL4Sys/config.json trajectory & server configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+max_traj_length = None
+traj_server = None
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+        max_traj_length = config['max_traj_length']
+        traj_server = config['server']
+        traj_server = traj_server['trajectory_server']
+except (FileNotFoundError, KeyError):
+    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
+    max_traj_length = 1000
+    traj_server = {
+        'prefix': 'tcp://',
+        'host': 'localhost',
+        'port': ":5555"
+    }
 
 class RL4SysTrajectory:
     """Container for trajectories in RL4Sys environments.
@@ -16,12 +40,12 @@ class RL4SysTrajectory:
 
     """
 
-    def __init__(self, max_length: int = DEFAULT_MAX_LENGTH):
+    def __init__(self, max_length: int = max_traj_length):
 
         if max_length:
             self.max_length = max_length
         else:
-            self.max_length = DEFAULT_MAX_LENGTH
+            self.max_length = max_traj_length
 
         self.actions: list[RL4SysAction] = []
 
@@ -75,7 +99,8 @@ def send_trajectory(trajectory: RL4SysTrajectory) -> None:
     context = zmq.Context()
     socket = context.socket(zmq.PUSH)
     # Assuming the server is on localhost, port 5555
-    socket.connect("tcp://localhost:5555")
+    address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
+    socket.connect(address)
 
     # Send the trajectory data
     socket.send(serialized_trajectory)

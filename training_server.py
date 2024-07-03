@@ -10,6 +10,37 @@ from typing import NoReturn as Never
 
 ALGORITHMS_PATH = 'algorithms'
 
+import os, json
+"""Import and load RL4Sys/config.json server configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+train_server = {}
+traj_server = {}
+save_model_path = {}
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+        train_server, traj_server = config['server'], config['server']
+        train_server, traj_server = train_server['training_server'], traj_server['trajectory_server']
+        save_model_path = config['model_paths']
+        save_model_path = os.path.join(os.path.dirname(__file__), save_model_path['save_model'])
+except (FileNotFoundError, KeyError):
+    print(f"[TrainingServer: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
+    train_server = {
+        'prefix': 'tcp://',
+        'host': '*',
+        'port': ":5556"
+    }
+    traj_server = {
+        'prefix': 'tcp://',
+        'host': '*',
+        'port': ":5555"
+    }
+    save_model_path = os.path.join(os.path.dirname(__file__), 'models/model.pth')
+
 class TrainingServer:
     """Train a model for a remote agent.
 
@@ -88,14 +119,14 @@ class TrainingServer:
         print("[TrainingServer - send_model] Send a model to RL4SysAgent")
         
         # TODO allow a change in name for saving model
-        self._algorithm.save('model.pth')
+        self._algorithm.save(save_model_path)
 
         context = zmq.Context()
         socket = context.socket(zmq.PUSH)
-        # TODO allow to replace with actual address and port
-        socket.connect("tcp://localhost:5556")
+        address = f"{train_server['prefix']}{train_server['host']}{train_server['port']}"
+        socket.connect(address)
 
-        with open('model.pth', 'rb') as f:
+        with open(save_model_path, 'rb') as f:
             b = f.read()
             socket.send(b)
         
@@ -109,7 +140,8 @@ class TrainingServer:
         """
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
-        socket.bind("tcp://*:5555")
+        address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
+        socket.bind(address)
 
         while True:
             print("[training_server.py - start_loop - blocking for new trajectory]")
