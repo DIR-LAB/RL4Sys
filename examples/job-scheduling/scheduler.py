@@ -21,6 +21,29 @@ Training server parameters:
     buf_size    | JOB_SEQUENCE_SIZE * 100 = 26500
 """
 
+import json
+"""Import and load RL4Sys/config.json scheduler configurations and applies them to
+the current instance.
+
+Loads defaults if config.json is unavailable or key error thrown.
+"""
+top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../...'))
+CONFIG_PATH = os.path.join(top_dir, 'config.json')
+sim_params = {}
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+        sim_params = config['examples']
+        sim_params = sim_params['job_scheduling']
+except (FileNotFoundError, KeyError):
+    print(f"[Scheduler: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
+    sim_params = {
+        "workload_file": "data/lublin_256.swf",
+        "seed": 0,
+        "iterations": 100,
+        "algorithm": "No Server"
+    }
+
 class Job:
     """
     1. Job Number -- a counter field, starting from 1.
@@ -818,13 +841,13 @@ if __name__ == "__main__":
                                      epilog="Pass algorithm-specific parameters according to class attribute names:" + "\n" +
                                                 "  e.g. --gamma=.85, --lam=.65",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--workload', type=str, default='DEFAULT', # RICC-2010-2
+    parser.add_argument('--workload', type=str, default=sim_params['workload_file'], # RICC-2010-2
                         help="workload file, with SWF format") 
-    parser.add_argument('--seed', type=int, default=0,
+    parser.add_argument('--seed', type=int, default=sim_params['seed'],
                         help="change seed for random number generators")
-    parser.add_argument('--number-of-iterations', type=int, default=100,
+    parser.add_argument('--number-of-iterations', type=int, default=sim_params['iterations'],
                         help="number of iterations of entire workload to train model on")
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default="No Server",
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default=sim_params['algorithm'],
                         help="run a local training server, using specified algorithm")
     args, extras = parser.parse_known_args()
     
