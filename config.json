@@ -43,14 +43,6 @@
     "ensemble_algorithms": {
 
     },
-    "examples": {
-        "job_scheduling": {
-            "algorithm": "PPO",
-            "iterations": 100,
-            "seed": 0,
-            "workload_file": "data/lublin_256.swf"
-        }
-    },
     "max_traj_length": 1000,
     "model_paths": {
         "_comment1": "Model paths are relative to root directory.",
