@@ -27,7 +27,7 @@ the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../...'))
 CONFIG_PATH = os.path.join(top_dir, 'config.json')
 sim_params = {}
 try:
