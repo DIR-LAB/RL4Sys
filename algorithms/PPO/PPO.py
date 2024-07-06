@@ -159,7 +159,7 @@ class PPO:
             ep_len += 1
             if not r4a.done:
                 self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['v'], r4a.data['logp_a'])
-                self.logger.store(VVals=r4a.val)
+                self.logger.store(VVals=r4a.data['v'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
