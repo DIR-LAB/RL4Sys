@@ -320,7 +320,7 @@ SKIP_TIME = 360  # skip 60 seconds
 
 
 class BatchSchedSim():
-    def __init__(self, workload_file, seed):
+    def __init__(self, workload_file, seed, job_score_type=0, backfil=False):
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
         self.loads = Workloads(workload_file)
@@ -339,8 +339,9 @@ class BatchSchedSim():
         self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
         # 0: Average bounded slowdown, 1: Average waiting time
         # 2: Average turnaround time, 3: Resource utilization
-        self.job_score_type = 0
-        self.backfil = False
+        # 4: Average slowdown
+        self.job_score_type = job_score_type
+        self.backfil = backfil
     
         if seed < 0:
             print(f"Seed must be a non-negative integer or omitted, not {seed}")
@@ -822,6 +823,12 @@ if __name__ == "__main__":
                         help="workload file, with SWF format") 
     parser.add_argument('--seed', type=int, default=0,
                         help="change seed for random number generators")
+    parser.add_argument('--job_score_type', type=int, default=0,
+                        help="0: Average bounded slowdown, 1: Average waiting time\n" +
+                             "2: Average turnaround time, 3: Resource utilization\n" +
+                             "4: Average slowdown")
+    parser.add_argument('--backfil', type=bool, default=False,
+                        help="job backfilling option")
     parser.add_argument('--number-of-iterations', type=int, default=100,
                         help="number of iterations of entire workload to train model on")
     parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default="No Server",
@@ -844,7 +851,8 @@ if __name__ == "__main__":
         print("[schedule.py] Created Training Server")
 
     # create simulation environment
-    sim = BatchSchedSim(workload_file=workload_file, seed=args.seed)
+    sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
+                        backfil=args.backfil)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations
