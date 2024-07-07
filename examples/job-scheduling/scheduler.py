@@ -321,7 +321,7 @@ SKIP_TIME = 360  # skip 60 seconds
 
 
 class BatchSchedSim():
-    def __init__(self, model, workload_file, seed, job_score_type=0, backfil=False):
+    def __init__(self, workload_file, seed, model=None, job_score_type=0, backfil=False):
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
         self.loads = Workloads(workload_file)
