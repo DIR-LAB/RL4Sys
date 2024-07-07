@@ -1,7 +1,9 @@
 from typing import NoReturn as Never
 
 import time
+
 import torch
+from numpy import ndarray
 
 from trajectory import RL4SysTrajectory
 from action import RL4SysAction
@@ -44,11 +46,21 @@ class RL4SysAgent:
     Initialization will not complete until a model is received over the network.
 
     Attributes:
+        _model (torch.nn.Module): Model to be used for inference and training.
         _lock (threading.Lock): to be acquired anytime self._model is accessed.
         port (int): TCP port on which to listen for updated models from training server.
 
     """
-    def __init__(self, port: int = train_server['port']):
+    def __init__(self, model: torch.nn.Module = load_model_path, port: int = train_server['port']):
+        if model is not None:
+            assert hasattr(model, 'step'), "Model must have a step method."
+            result = model.step(None, None)
+            assert isinstance(result, tuple), "Model step method must return a tuple."
+            assert isinstance(result[0], ndarray), ("Model step method must return a tuple with a" +
+                                                    " ndarray as the first element.")
+            assert isinstance(result[1], dict), ("Model step method must return a tuple with a" +
+                                                " dict as the second element.")
+
         self._lock = threading.Lock()
         self.port = port
 
@@ -56,7 +68,7 @@ class RL4SysAgent:
         self._listen_thread.daemon = True
         self._listen_thread.start()
 
-        self._model = None # TODO type hint _model? because of _model.step, we would need all kernels to inherit from class myClass(nn.Module) with a .step() function
+        self._model = model
         self._current_traj = RL4SysTrajectory()
 
         # Receive one model to initialize
