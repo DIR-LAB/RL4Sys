@@ -19,13 +19,15 @@
     },
     "algorithms": {
         "DQN": {
+            "batch_size": 32,
             "seed": 0,
             "traj_per_epoch": 3,
+            "clip_value": 100,
             "gamma": 0.95,
             "epsilon": 1.0,
             "epsilon_min": 0.01,
             "epsilon_decay": 0.995,
-            "q_update_freq": 0.005,
+            "train_update_freq": 0.005,
             "q_lr": 1e-3,
             "train_q_iters": 80
 

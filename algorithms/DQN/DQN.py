@@ -103,8 +103,8 @@ class DQN:
         self._epsilon_decay = epsilon_decay
         self._train_update_freq = train_update_freq
         self._train_q_iters = train_q_iters
-        self._action_space = [i for i in range(act_dim)]
 
+        self._action_space = [i for i in range(act_dim)]
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
         self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim)
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
@@ -172,7 +172,7 @@ class DQN:
         """
         
         """
-        if np.random.random() > self.epsilon:
+        if np.random.random() >= self._epsilon:
             return self._model.step(obs, mask)[0]
         else:
             return np.random.choice(self._action_space)
@@ -216,6 +216,7 @@ class DQN:
 
         Args:
             data: dictionary containing all data from replay buffer
+            batch: batch indices for replay buffer
         Returns:
             Loss for Q function, statistics for logging
 
@@ -227,8 +228,8 @@ class DQN:
         act_batch = act.numpy()[batch]
 
         # Q loss
-        q_val = self._model.forward(obs, mask)[batch_idx, act_batch]
-        next_q_val = self._model.forward(next_obs, mask)
+        q_val = self._model.forward(obs, mask, softmax=True)[batch_idx, act_batch]
+        next_q_val = self._model.forward(next_obs, mask, softmax=True)
         q_target = rew + self._gamma * torch.max(next_q_val.detach(), dim=1)[0]
         # Mean Square Error (MSE) loss
         loss_q = ((q_val - q_target.detach())**2).mean()
