@@ -9,6 +9,11 @@
             "prefix": "tcp://",
             "host": "localhost",
             "port": ":5555"
+        },
+        "monitor_server": {
+            "prefix": "tcp://",
+            "host": "localhost",
+            "port": ":6000"
         }
     },
     "model_paths": {
@@ -50,6 +55,12 @@
             "seed": 0,
             "iterations": 100,
             "algorithm": "PPO"
+        }
+    },
+    "utils": {
+        "monitor": {
+            "logdir": "examples/job-scheduling/tb_logs",
+            "filename_suffix": "_board"
         }
     }
 }

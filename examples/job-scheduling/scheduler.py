@@ -350,7 +350,7 @@ class BatchSchedSim():
         seed_seq = np.random.SeedSequence(seed)
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
-        self.rlagent = RL4SysAgent(model=model)
+        self.rlagent = RL4SysAgent(model=model, monitor=True)
 
     def f1_score(self, job):
         submit_time = job.submit_time

@@ -7,12 +7,14 @@ from numpy import ndarray
 
 from trajectory import RL4SysTrajectory
 from action import RL4SysAction
+from utils.monitor import Monitor
 
 import zmq
 import threading
 
 import os
 import json
+
 """Import and load RL4Sys/config.json server configurations and applies them to
 the current instance.
 
@@ -37,6 +39,7 @@ except (FileNotFoundError, KeyError):
     }
     load_model_path = os.path.join(os.path.dirname(__file__), 'models/model.pth')
 
+
 class RL4SysAgent:
     """RL model for use in environment scripts.
 
@@ -51,7 +54,8 @@ class RL4SysAgent:
         port (int): TCP port on which to listen for updated models from training server.
 
     """
-    def __init__(self, model: torch.nn.Module = load_model_path, port: int = train_server['port']):
+
+    def __init__(self, model: torch.nn.Module = None, port: int = train_server['port'], monitor: bool = False):
         if model is not None:
             assert hasattr(model, 'step'), "Model must have a step method."
             result = model.step(None, None)
@@ -59,7 +63,7 @@ class RL4SysAgent:
             assert isinstance(result[0], ndarray), ("Model step method must return a tuple with a" +
                                                     " ndarray as the first element.")
             assert isinstance(result[1], dict), ("Model step method must return a tuple with a" +
-                                                " dict as the second element.")
+                                                 " dict as the second element.")
 
         self._lock = threading.Lock()
         self.port = port
@@ -77,10 +81,12 @@ class RL4SysAgent:
                 time.sleep(1)
             else:
                 break
-        
+
+        if monitor:
+            self.monitor = Monitor()
+
         print("[RLSysAgent] Model Initialized")
-        
-    
+
     def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward) -> RL4SysAction:
         """Produce action based on trained model and given observation.
 
@@ -107,7 +113,7 @@ class RL4SysAgent:
             self._current_traj.add_action(r4sa)
 
             return r4sa
-        
+
     def flag_last_action(self, reward: int) -> None:
         """Mark end of trajectory.
 
@@ -120,7 +126,7 @@ class RL4SysAgent:
 
         """
         r4sa = RL4SysAction(None, None, None, reward, None, True)
-        self._current_traj.add_action(r4sa) # triggers send to training server, clear local trajectory
+        self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
 
     def _loop_for_updated_model(self) -> Never:
         """Listen on network for new model.
@@ -140,7 +146,7 @@ class RL4SysAgent:
 
             with open(load_model_path, 'wb') as f:
                 f.write(model_bytes)
-            
+
             with self._lock:
                 self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'))
 
