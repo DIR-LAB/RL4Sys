@@ -9,7 +9,6 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
-from utils.monitor import check_for_monitor_server, send_step_to_monitor
 
 import json
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
@@ -211,10 +210,6 @@ class PPO:
                      KL=kl, Entropy=ent, ClipFrac=cf,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
                      DeltaLossV=(loss_v.item() - v_l_old))
-
-        # Send monitor step update
-        if check_for_monitor_server():
-            send_step_to_monitor([('Epoch', self.epoch)])
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch.

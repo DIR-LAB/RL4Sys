@@ -7,7 +7,7 @@ from numpy import ndarray
 
 from trajectory import RL4SysTrajectory
 from action import RL4SysAction
-from utils.monitor import Monitor
+from utils.tensorboard_writer import TensorboardWriter
 
 import zmq
 import threading
@@ -55,7 +55,7 @@ class RL4SysAgent:
 
     """
 
-    def __init__(self, model: torch.nn.Module = None, port: int = train_server['port'], monitor: bool = False):
+    def __init__(self, model: torch.nn.Module = None, port: int = train_server['port'], tensorboard: bool = False):
         if model is not None:
             assert hasattr(model, 'step'), "Model must have a step method."
             result = model.step(None, None)
@@ -82,8 +82,8 @@ class RL4SysAgent:
             else:
                 break
 
-        if monitor:
-            self.monitor = Monitor()
+        if tensorboard:
+            self._tensorboard = TensorboardWriter()
 
         print("[RLSysAgent] Model Initialized")
 

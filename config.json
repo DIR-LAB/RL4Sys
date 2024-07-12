@@ -9,18 +9,13 @@
             "prefix": "tcp://",
             "host": "localhost",
             "port": ":5555"
-        },
-        "monitor_server": {
-            "prefix": "tcp://",
-            "host": "localhost",
-            "port": ":6000"
         }
     },
     "model_paths": {
         "_comment1": "Model paths are relative to root directory.",
         "_comment2": "save and load share the same path (in all likelihood).",
-        "save_model": "models/model.pth",
-        "load_model": "models/model.pth"
+        "save_model": "examples/job-scheduling/model.pth",
+        "load_model": "examples/job-scheduling/model.pth"
     },
     "algorithms": {
         "DQN": {
@@ -58,9 +53,16 @@
         }
     },
     "utils": {
-        "monitor": {
-            "logdir": "examples/job-scheduling/tb_logs",
-            "filename_suffix": "_board"
+        "tensorboard_writer": {
+            "tb_log_dir": "examples/job-scheduling/tb_logs",
+            "filename_suffix": "_tb",
+
+            "data_log_dir": "examples/job-scheduling/logs",
+            "data_refresh_rate": 5000,
+
+            "scalar_tags": "AverageEpRet;StdEpRet",
+            "max_count_per_scalar": 100,
+            "global_step_tag": "Epoch"
         }
     }
 }
