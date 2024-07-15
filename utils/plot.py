@@ -5,6 +5,7 @@ import json
 import os
 import os.path as osp
 import numpy as np
+from packaging import version
 
 DIV_LINE_WIDTH = 50
 
@@ -44,12 +45,13 @@ def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1",
     # blue = (0.2980392156862745, 0.4470588235294118, 0.6901960784313725)
     # red = (0.7686274509803922, 0.3058823529411765, 0.3215686274509804)
     # sns.set_palette([blue, red])
-    sns.tsplot(data=data, time=xaxis, value=value, unit="Unit", condition=condition, ci='sd', **kwargs)
+    if version.parse(sns.__version__) <= version.parse("0.8.1"):
+        sns.tsplot(data=data, time=xaxis, value=value, unit="Unit", condition=condition, ci='sd', **kwargs)
+    else:
+        sns.lineplot(data=data, x=xaxis, y=value, hue=condition, errorbar='sd', **kwargs)
     """
     If you upgrade to any version of Seaborn greater than 0.8.1, switch from 
-    tsplot to lineplot replacing L29 with:
-
-        sns.lineplot(data=data, x=xaxis, y=value, hue=condition, ci='sd', **kwargs)
+    tsplot to lineplot above
 
     Changes the colorscheme and the default legend style, though.
     """
@@ -73,33 +75,36 @@ def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1",
     plt.tight_layout(pad=0.5)
 
 
-def get_newest_dataset(data_log_dir: str, return_file: bool = False):
+def get_newest_dataset(data_log_dir: str, return_file_root: bool = False):
     """
-    Returns a full directory address to the newest/most recently edited progress file.
-    :param return_file: switch for returning the full path to the file
+    Returns either data or full directory address of newest progress.txt file.
+    :param return_file_root: switch for returning the full path to the file
     :param data_log_dir: directory to search for progress files
     :return: Defaults to dataset, alternatively returns file directory if specified.
     """
     if not osp.exists(data_log_dir):
         return None
 
+    roots = []
     progress_files = []
     for root, dirs, files in os.walk(data_log_dir):
         for file in files:
             if file == 'progress.txt':
                 full_path = os.path.join(root, file)
+                roots.append(root)
                 progress_files.append(full_path)
 
     if not progress_files:
         return None
 
     newest_file = max(progress_files, key=os.path.getctime)
-    dataset = get_datasets(os.path.dirname(newest_file))
+    newest_root = os.path.abspath(os.path.dirname(newest_file))
 
-    if return_file:
-        return newest_file
+    if return_file_root:
+        return newest_root
 
-    return dataset
+    newest_dataset = pd.read_table(newest_file)
+    return newest_dataset
 
 
 def get_datasets(logdir, condition=None, other_algos=False):
