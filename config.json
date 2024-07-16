@@ -62,13 +62,13 @@
             "port": ":5555"
         }
     },
-	"tensorboard": {
-		"tensorboard_writer": {
-			"tb_log_dir": "examples/job-scheduling/tensorboards",
-			"data_log_dir": "examples/job-scheduling/logs",
-			"scalar_tags": "AverageEpRet;StdEpRet;AverageVVals",
-			"max_count_per_scalar": 100,
-			"global_step_tag": "Epoch"
-		}
+	  "tensorboard": {
+        "tensorboard_writer": {
+          "tb_log_dir": "examples/job-scheduling/tensorboards",
+          "data_log_dir": "examples/job-scheduling/logs",
+          "scalar_tags": "AverageEpRet;StdEpRet;AverageVVals",
+          "max_count_per_scalar": 100,
+          "global_step_tag": "Epoch"
+        }
     }
 }
