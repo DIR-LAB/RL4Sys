@@ -54,12 +54,9 @@
     },
     "utils": {
         "tensorboard_writer": {
-            "tb_log_dir": "examples/job-scheduling/tb_logs",
-            "filename_suffix": "_tb",
-
+            "tb_log_dir": "examples/job-scheduling/tensorboards",
             "data_log_dir": "examples/job-scheduling/logs",
-            "data_refresh_rate": 5000,
-
+            "data_retrieval_rate": 5000,
             "scalar_tags": "AverageEpRet;StdEpRet",
             "max_count_per_scalar": 100,
             "global_step_tag": "Epoch"

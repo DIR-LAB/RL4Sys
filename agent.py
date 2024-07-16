@@ -7,7 +7,7 @@ from numpy import ndarray
 
 from trajectory import RL4SysTrajectory
 from action import RL4SysAction
-from utils.tensorboard_writer import TensorboardWriter
+from agent_tensorboard import TensorboardWriter
 
 import zmq
 import threading

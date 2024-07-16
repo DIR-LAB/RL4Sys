@@ -821,9 +821,11 @@ if __name__ == "__main__":
                                                 "  e.g. --gamma=.85, --lam=.65",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--model_path', type=str, default=None,
-                        help="path to model to be loaded by agent")
-    parser.add_argument('--workload', type=str, default='DEFAULT', # RICC-2010-2
-                        help="workload file, with SWF format") 
+                        help="path to pre-existing model to be loaded by agent")
+    parser.add_argument('--tensorboard', type=bool, default=False,
+                        help="enable tensorboard logging for training observations and insights")
+    parser.add_argument('--workload', type=str, default='DEFAULT',  # RICC-2010-2
+                        help="workload file, with SWF format")
     parser.add_argument('--seed', type=int, default=0,
                         help="change seed for random number generators")
     parser.add_argument('--job_score_type', type=int, default=0,
@@ -857,8 +859,8 @@ if __name__ == "__main__":
     model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
 
     # create simulation environment
-    sim = BatchSchedSim(model=model_arg, workload_file=workload_file, seed=args.seed,
-                        job_score_type=args.job_score_type, backfil=args.backfil)
+    sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
+                        backfil=args.backfil, model=model_arg, tensorboard=args.tensorboard)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations
