@@ -22,7 +22,7 @@ tb_params = {}
 try:
     with open(CONFIG_PATH, 'r') as f:
         config = json.load(f)
-        tb_params = config['utils']
+        tb_params = config['tensorboard']
         tb_params = tb_params['tensorboard_writer']
 except (FileNotFoundError, KeyError):
     print(f"[TensorboardWriter] Failed to load configuration from {CONFIG_PATH}, loading defaults.")
