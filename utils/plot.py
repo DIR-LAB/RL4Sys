@@ -14,9 +14,21 @@ exp_idx = 0
 units = dict()
 
 
+def get_simple_dataset_plot(data, x, y, title) -> sns.lineplot:
+    """
+    returns plot of data table with fewer parameters
+    """
+
+    plot = sns.lineplot(data=data, x=x, y=y)
+    plot.set_title(title)
+    plot.set_xlabel('Epoch')
+    plot.set_ylabel('AverageEpRet')
+    return plot
+
+
 def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1", smooth=1, **kwargs):
     if smooth > 1:
-        """
+        """ Requires use of get_dataset or get_all_datasets
         smooth data with moving window average.
         that is,
             smoothed_y[t] = average(y[t-k], y[t-k+1], ..., y[t+k-1], y[t+k])

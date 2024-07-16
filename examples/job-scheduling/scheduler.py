@@ -321,7 +321,7 @@ SKIP_TIME = 360  # skip 60 seconds
 
 
 class BatchSchedSim():
-    def __init__(self, workload_file, seed, model=None, job_score_type=0, backfil=False):
+    def __init__(self, workload_file, seed, job_score_type=0, backfil=False, model=None, tensorboard=False):
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
         self.loads = Workloads(workload_file)
@@ -350,7 +350,7 @@ class BatchSchedSim():
         seed_seq = np.random.SeedSequence(seed)
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
-        self.rlagent = RL4SysAgent(model=model, monitor=True)
+        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
 
     def f1_score(self, job):
         submit_time = job.submit_time

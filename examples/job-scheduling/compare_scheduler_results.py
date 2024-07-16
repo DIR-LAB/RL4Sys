@@ -12,7 +12,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from utils.plot import get_newest_dataset, plot_data, get_datasets
+from utils.plot import get_newest_dataset, get_simple_dataset_plot, get_datasets
+from utils.logger import colorize
 
 """
 This script trains models and recreates the plots from the RLScheduler paper.
@@ -27,14 +28,13 @@ Third, personally compare results to RLScheduler paper: {https://arxiv.org/abs/1
 """
 
 _performance_metrics = ['bsld', 'wt', 'tt', 'ru', 'sld']
-datasets = ['data/lublin_1024.swf', 'data/HPC2N-2002-2.2-cln.swf', 'data/SDSC-SP2-1998-4.2-cln.swf',
+_datasets = ['data/lublin_1024.swf', 'data/HPC2N-2002-2.2-cln.swf', 'data/SDSC-SP2-1998-4.2-cln.swf',
             'data/lublin_256.swf']
 
 
 def train_scheduler_models(max_epochs: int = 100) -> dict:
     """
     Train all models for each performance metric and/or backfilling option from the RLScheduler paper.
-    :return:
     """
 
     def _run_training_subprocess(workload: str, job_score_type: int, backfil: bool, start_server: str = 'PPO',
@@ -59,13 +59,13 @@ def train_scheduler_models(max_epochs: int = 100) -> dict:
             while True:
                 if process is not None:
                     if first_iter:
+                        time.sleep(180)
                         try:
                             newest_file_address = get_newest_dataset(file_dir, return_file_root=True) + '/progress.txt'
                             first_iter = False
                         except Exception as e:
                             print('[compare_scheduler_results.py - CheckForFinalEpoch() - latest_file_dir] '
                                   'Exception: {}'.format(e))
-                        time.sleep(180)
                     else:
                         try:
                             latest_data = pd.read_table(newest_file_address)
@@ -73,14 +73,14 @@ def train_scheduler_models(max_epochs: int = 100) -> dict:
                                 if latest_data['Epoch'].max() >= max_epochs:
                                     print('[compare_scheduler_results.py - CheckForFinalEpoch() - latest_data] '
                                           'Maximum epoch reached.')
+                                    process.terminate()
                                     break
                         except Exception as e:
                             print('[compare_scheduler_results.py - CheckForFinalEpoch() - latest_data] '
                                   'Exception: {}'.format(e))
-                    time.sleep(60)
-            proc.terminate()
+                        time.sleep(60)
 
-        print('Starting subprocess: [{}]'.format(' '.join(command)))
+        print(colorize('Starting subprocess: [{}]'.format(' '.join(command)), 'green'))
         time.sleep(5)
         proc = subprocess.Popen(command, text=True)
         try:
@@ -89,13 +89,10 @@ def train_scheduler_models(max_epochs: int = 100) -> dict:
             _epoch_thread.daemon = True
             _epoch_thread.start()
             _epoch_thread.join()
+
         except Exception as e:
             print('[compare_scheduler_results.py] Exception: {}'.format(e))
         finally:
-            if proc.poll() is None:
-                proc.kill()
-                proc.wait()
-                print('[compare_scheduler_results.py] Subprocess killed.')
             time.sleep(3)
             log_file = get_newest_dataset(file_dir, return_file_root=True) + '/progress.txt'
             if log_file is None:
@@ -108,7 +105,7 @@ def train_scheduler_models(max_epochs: int = 100) -> dict:
     category = 1
     while category <= 2:
         backfil = False if category == 1 else True
-        for dataset in datasets:
+        for dataset in _datasets:
             for metric in _performance_metrics:
                 # train models according to parameters
                 file = _run_training_subprocess(dataset, _performance_metrics.index(metric), backfil)
@@ -119,7 +116,7 @@ def train_scheduler_models(max_epochs: int = 100) -> dict:
     return logs
 
 
-def _train_and_plot_models(max_epochs: int = 100) -> None:
+def _train_and_plot_models(algorithm: str = 'PPO', max_epochs: int = 100) -> None:
     """
     Train and plot models for the RLScheduler paper.
     """
@@ -128,30 +125,33 @@ def _train_and_plot_models(max_epochs: int = 100) -> None:
         Categorize the logs by performance metric and backfill status.
         """
         logs = {}
+        _categorized_logs = {}
         for key, data in logs.items():
             # Determine the category and backfill status from the model_key
             _backfil_status = "nobackfil" if "nobackfil" in model_key else "backfil"
-            for _dataset in datasets:
+            for _dataset in _datasets:
                 if _dataset in key:
                     for _metric in _performance_metrics:
                         if _metric in model_key:
                             # Create a unique key for each category and backfill status
                             unique_key = f"{_metric}_{_backfil_status}_{_dataset}"
-                            if unique_key not in categorized_logs:
-                                categorized_logs[unique_key] = {}
-                            categorized_logs[unique_key][model_key] = data
+                            if unique_key not in _categorized_logs:
+                                _categorized_logs[unique_key] = {}
+                            _categorized_logs[unique_key][model_key] = data
                             break
 
         # Initialize dictionaries for each combination of performance metric and backfill status
         log_categories = {
             f"{metric}_{status}": {} for metric in _performance_metrics for status in ["backfil", "nobackfil"]
         }
-
+        if not _categorized_logs:
+            print('[compare_scheduler_results.py] No categorized logs to plot...')
+            return {}
         # Iterate over categorized logs and populate the corresponding dictionary
-        for key, data in categorized_logs.items():
-            for category in log_categories.keys():
-                if category in key:
-                    log_categories[category][key] = data
+        for key, data in _categorized_logs.items():
+            for _category in log_categories.keys():
+                if _category in key:
+                    log_categories[_category][key] = data
                     break
             else:
                 print(f'[compare_scheduler_results.py] Invalid log key: {key}')
@@ -166,9 +166,10 @@ def _train_and_plot_models(max_epochs: int = 100) -> None:
     categorized_logs = _categorize_logs(model_logs)
 
     # Plotting the data for each backfil and metric category
-    save_address = 'logs/rl4sys-ppo-scheduler/comparative-rlscheduler-results'
+    save_address = 'logs/rl4sys-{}-scheduler/comparative-rlscheduler-results'.format(algorithm)
+    subplot_index = 1
     for category, _logs in categorized_logs.items():
-        plt.figure()
+        plt.subplot(2, 2, subplot_index)
         for model_key, model_data in _logs.items():
             model_data = model_data[['Epoch', 'AverageEpRet']]
             model_data.loc[:, 'Epoch'] = model_data['Epoch'].astype(int)
@@ -179,8 +180,13 @@ def _train_and_plot_models(max_epochs: int = 100) -> None:
         plt.ylabel('AverageEpRet')
 
         plt.savefig(f"{save_address}/{category}.png")
-        plt.show()
-        time.sleep(10)
+        subplot_index += 1
+
+    # display plots
+    plt.tight_layout()
+    plt.show()
+
+    time.sleep(60)
     plt.close('all')
 
     print('[compare_scheduler_results.py] Plotting complete.')
@@ -188,7 +194,7 @@ def _train_and_plot_models(max_epochs: int = 100) -> None:
 
 def _plot_all_directories(algorithm: str = 'PPO', _get_model_folders: bool = False) -> None:
     """
-    Plot results for the RLScheduler paper.
+    Plots all directories containing model data.
     """
     all_logs = []
     found_models = []
@@ -223,13 +229,10 @@ def _plot_all_directories(algorithm: str = 'PPO', _get_model_folders: bool = Fal
     for i, data in enumerate(all_logs):
         data = data[['Epoch', 'AverageEpRet']]
         data.loc[:, 'Epoch'] = data['Epoch'].astype(int)
-        plot = sns.lineplot(data=data, x='Epoch', y='AverageEpRet')
-        plot.set_title(folder_names[i])
-        plot.set_xlabel('Epoch')
-        plot.set_ylabel('AverageEpRet')
+        plot = get_simple_dataset_plot(data, 'Epoch', 'AverageEpRet', folder_names[i])
         plot.figure.savefig(folder_addresses[i] + '/plot.png')
         plt.show()
-        time.sleep(5)
+        time.sleep(1)
     plt.close('all')
     print('[compare_scheduler_results.py] Plotting complete.')
 
@@ -237,7 +240,7 @@ def _plot_all_directories(algorithm: str = 'PPO', _get_model_folders: bool = Fal
 def perform_scheduler_analysis(train_and_plot_models: bool = False, plot_all_directories: bool = False,
                                max_epochs: int = 100, algorithm: str = 'PPO') -> None:
     """
-    Plot results for the RLScheduler paper.
+    Analysis interface for training and/or plotting model data.
     """
     if train_and_plot_models:
         _train_and_plot_models(max_epochs=max_epochs)
@@ -245,10 +248,31 @@ def perform_scheduler_analysis(train_and_plot_models: bool = False, plot_all_dir
     if plot_all_directories:
         _plot_all_directories(algorithm=algorithm)
 
+    if not train_and_plot_models and not plot_all_directories:
+        print('[compare_scheduler_results.py] No action specified.')
+        return
+
+    print('[compare_scheduler_results.py] Analysis complete.')
+
 
 if __name__ == '__main__':
     """
-        
+        The compare_scheduler_results.py script is designed to train models and recreate plots from the RLScheduler 
+        paper, focusing on job scheduling in computing systems. It supports various functionalities, including training 
+        scheduler models for different performance metrics and backfilling options, categorizing and plotting the 
+        training results, and plotting results from all directories containing model data. The script is structured to 
+        allow flexibility in how models are trained and analyzed, with options to train and plot models, plot all 
+        directory results, specify the maximum number of epochs for training, and choose the algorithm used for 
+        training.
+          When running this script from the terminal, you can pass these arguments to customize its behavior:  
+            --train_and_plot_models: A boolean flag that, when set to True, triggers the training of models and plotting
+             of results for scheduler comparison. The default value is False.
+            --plot_all_directories: A boolean flag that, when set to True, triggers the plotting of results from all 
+            directories containing model data. The default value is False.
+            --max_epochs: An integer specifying the maximum number of epochs for which the models should be trained. 
+            The default value is 100.
+            --algorithm: A string specifying the algorithm to be used for training the models. 
+            The default value is 'PPO'.
     """
     import argparse
 

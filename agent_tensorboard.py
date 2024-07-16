@@ -15,7 +15,7 @@ the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))
 CONFIG_PATH = os.path.join(top_dir, 'config.json')
 tb_server = {}
 tb_params = {}
@@ -29,7 +29,6 @@ except (FileNotFoundError, KeyError):
     tb_params = {
         'tb_log_dir': 'utils/tb_runs',
         'data_log_dir': 'data',
-        'data_refresh_rate': 5000,
         'scalar_tags': 'AverageEpRet;StdEpRet',
         'max_count_per_scalar': 100,
         'global_step_tag': 'Epoch'
@@ -51,37 +50,35 @@ class TensorboardWriter:
     """
 
     def __init__(self, tb_log_dir=str(tb_params['tb_log_dir']), data_log_dir=tb_params['data_log_dir'],
-                 data_refresh_rate=tb_params['data_refresh_rate'], scalar_tags=tb_params['scalar_tags'],
-                 max_count_per_scalar=tb_params['max_count_per_scalar'], global_step_tag=tb_params['global_step_tag']):
-        
-        self.writer = SummaryWriter(log_dir=tb_log_dir, max_queue=10,
-                                    flush_secs=120, filename_suffix='_tb')
-        self.data = queue.Queue()
+                 scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
+                 global_step_tag=tb_params['global_step_tag']):
+        self.writer = SummaryWriter(log_dir=tb_log_dir, filename_suffix='_tb')
+
+        self.data_queue = queue.Queue()
         self._data_log_dir = data_log_dir
-        self._data_retrieval_rate = int(data_refresh_rate)
+        self._file_root = get_newest_dataset(self._data_log_dir, return_file_root=True)
+        self._file = self._file_root + '/progress.txt'
 
         self.scalar_tags = scalar_tags.split(';')
-        self._scalar_count_bucket = len(self.scalar_tags) * max_count_per_scalar
+        self._total_scalar_count = len(self.scalar_tags) * max_count_per_scalar
         self._global_step_tag = global_step_tag
         self._recent_global_step = 0
-        
-        self._tb_thread = threading.Thread(target=self._tensorboard_processes)
+
+        self._loop_stop_signal = threading.Event()
+        self._tb_thread = threading.Thread(target=self._tensorboard_writer_processes)
         self._tb_thread.daemon = False
         self._tb_thread.start()
-        self._loop_stop_signal = threading.Event()
-
-        self._tb_thread.join()
 
         print("[TensorboardWriter] Initialized")
 
     def manually_queue_scalar(self, tag: str, scalar_value: float, global_step: int):
-        self.data.put(('scalar', tag, scalar_value, global_step))
+        self.data_queue.put(('scalar', tag, scalar_value, global_step))
 
-    def _tensorboard_processes(self):
+    def _tensorboard_writer_processes(self):
         """
-        :return:
+        Main loop for tensorboard writer thread.
         """
-        def _retrieve_and_queue_data():
+        def _retrieve_and_queue_data(_previous_last_step: int):
             """
             retrieves data from progress.txt and queues it for writing.
 
@@ -89,68 +86,77 @@ class TensorboardWriter:
             i.e. Step 1 -> AverageEpRet, StdEpRet
                  Step 2 -> AverageEpRet, StdEpRet
                  ...
-            :return:
             """
-            print("[TensorboardWriter] Retrieving data from progress.txt...")
+            print("[TensorboardWriter - _retrieve_and_queue_data] Retrieving data from progress.txt...")
 
-            if not os.path.exists(self._data_log_dir):
-                print("[TensorboardWriter] Data directory not found. Tensorboard not started.")
-                return
+            if not os.path.exists(self._file_root):
+                print("[TensorboardWriter - _retrieve_and_queue_data] Data directory not found. Tensorboard not "
+                      "started.")
+                return 0, 0
 
-            if not os.path.exists(os.path.join(self._data_log_dir, 'progress.txt')):
-                print("[TensorboardWriter] progress.txt not found. Tensorboard not started.")
-                return
+            if not os.path.exists(self._file):
+                print("[TensorboardWriter - _retrieve_and_queue_data] progress.txt not found. Tensorboard not started.")
+                return 0, 0
 
-            file_root = None
-            first_iter = True
-            previous_last_step = 0
-            while True:
-                if first_iter:
-                    file_root = get_newest_dataset(self._data_log_dir, return_file_root=True)
-                    first_iter = False
-                data = pd.read_table(os.path.join(file_root, 'progress.txt'))
+            if os.path.getsize(self._file) == 0:
+                print("[TensorboardWriter - _retrieve_and_queue_data] progress.txt is empty. Tensorboard not started.")
+                return 0, 0
+
+            data = pd.read_table(self._file)
+            _queued_count = 0
+            if not data.empty:
+                new_last_step = int(data[self._global_step_tag].idxmax())
                 for scalar in self.scalar_tags:
-                    new_last_step = data.rows.get_loc(data[self._global_step_tag].max())
-                    for i in range(previous_last_step + 1, new_last_step + 1):
-                        self.data.put(('scalar', scalar, data[scalar], data[self._global_step_tag]))
-                    previous_last_step = new_last_step
-                time.sleep(self._data_retrieval_rate / 1000)  # milliseconds
+                    for i in range(_previous_last_step + 1, new_last_step + 1):
+                        self.data_queue.put(('scalar', scalar, data[scalar][i], data[self._global_step_tag][i]))
+                        _queued_count += 1
+                return new_last_step, _queued_count
+            else:
+                print("[TensorboardWriter - _retrieve_and_queue_data] Data is empty. Tensorboard not started.")
+                return 0, 0
 
         # processes main loop below
+        previous_last_step = 0
         while not self._loop_stop_signal.is_set():
-            _retrieve_and_queue_data()
-            time.sleep(self._data_retrieval_rate / 1000)  # milliseconds
-            try:
-                for _ in self.scalar_tags:
-                    write_type, *args = self.data.get()
-                    if write_type == 'scalar':
-                        if self._scalar_count_bucket > 0:
-                            print(f"[TensorboardWriter] Writing scalar: {args}")
-                            self.writer.add_scalar(*args)
-                            self.writer.flush()
-                            self._scalar_count_bucket -= 1
-            except queue.Empty:
-                continue
-            finally:
-                if self._scalar_count_bucket <= 0:
-                    print("[TensorboardWriter] Max scalar count per tag reached. Stopping.")
-                    self._loop_stop_signal.set()
+            previous_last_step, queued_count = _retrieve_and_queue_data(previous_last_step)
+            if queued_count != 0:
+                try:
+                    for count in range(queued_count):
+                        write_type, *args = self.data_queue.get()
+                        if write_type == 'scalar':
+                            tag, scalar_value, global_step = args
+                            if self._total_scalar_count > 0:
+                                print(f"[TensorboardWriter - _tensorboard_processes] Writing scalar: {args}")
+                                self.writer.add_scalar(tag, scalar_value, global_step)
+                                self._total_scalar_count -= 1
+                    self.writer.flush()
+                except queue.Empty:
+                    continue
+                finally:
+                    if self._total_scalar_count <= 0:
+                        print("[TensorboardWriter - _tensorboard_processes] Max scalar count per tag reached. Stopping.")
+                        self._loop_stop_signal.set()
+            else:
+                time.sleep(10)
         self.writer.close()
+        self._tb_thread.join()
 
-    def launch_tensorboard(self):
-        """
 
-        :return:
-        """
-        if not os.path.exists(self.writer.log_dir):
-            print("[TensorboardWriter] Directory not found. Tensorboard not started.")
-            return
+def launch_tensorboard():
+    """
+        Launches tensorboard process in the background.
+        Uses tb_log_dir parameter from config.json for log pathing.
+    :return:
+    """
+    if not os.path.exists(tb_params['tb_log_dir']):
+        print("[launch_tensorboard] Directory not found. Tensorboard not started.")
+        return
 
-        import subprocess
-        try:
-            print("[TensorboardWriter] Starting Tensorboard.")
-            subprocess.run(["tensorboard", "--logdir", os.path.join(top_dir, tb_params['log_dir'])])
-        except Exception as e:
-            print(f"[TensorboardWriter] Error: {e}")
-        finally:
-            print("[TensorboardWriter] Tensorboard closed.")
+    import subprocess
+    try:
+        print("[launch_tensorboard] Starting Tensorboard.")
+        subprocess.run(["tensorboard", "--logdir", os.path.join(top_dir, tb_params['log_dir'])])
+    except Exception as e:
+        print(f"[launch_tensorboard] Error: {e}")
+    finally:
+        print("[launch_tensorboard] Tensorboard closed.")
