@@ -47,8 +47,8 @@
     "model_paths": {
         "_comment1": "Model paths are relative to root directory.",
         "_comment2": "save and load share the same path (in all likelihood).",
-        "load_model": "models/model.pth",
-        "save_model": "models/model.pth"
+        "load_model": "examples/job-scheduling/model.pth",
+        "save_model": "examples/job-scheduling/model.pth"
     },
     "server": {
         "training_server": {
@@ -60,6 +60,15 @@
             "prefix": "tcp://",
             "host": "localhost",
             "port": ":5555"
+        }
+    },
+	  "tensorboard": {
+        "tensorboard_writer": {
+          "tb_log_dir": "examples/job-scheduling/tensorboards",
+          "data_log_dir": "examples/job-scheduling/logs",
+          "scalar_tags": "AverageEpRet;StdEpRet;AverageVVals",
+          "max_count_per_scalar": 100,
+          "global_step_tag": "Epoch"
         }
     }
 }

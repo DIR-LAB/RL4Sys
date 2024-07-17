@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 import math
 import random
+import torch
 
 import os
 import sys
@@ -320,7 +321,7 @@ SKIP_TIME = 360  # skip 60 seconds
 
 
 class BatchSchedSim():
-    def __init__(self, workload_file, seed):
+    def __init__(self, workload_file, seed, job_score_type=0, backfil=False, model=None, tensorboard=False):
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
         self.loads = Workloads(workload_file)
@@ -339,8 +340,9 @@ class BatchSchedSim():
         self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
         # 0: Average bounded slowdown, 1: Average waiting time
         # 2: Average turnaround time, 3: Resource utilization
-        self.job_score_type = 0
-        self.backfil = False
+        # 4: Average slowdown
+        self.job_score_type = job_score_type
+        self.backfil = backfil
     
         if seed < 0:
             print(f"Seed must be a non-negative integer or omitted, not {seed}")
@@ -348,7 +350,7 @@ class BatchSchedSim():
         seed_seq = np.random.SeedSequence(seed)
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
-        self.rlagent = RL4SysAgent()
+        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
 
     def f1_score(self, job):
         submit_time = job.submit_time
@@ -818,13 +820,23 @@ if __name__ == "__main__":
                                      epilog="Pass algorithm-specific parameters according to class attribute names:" + "\n" +
                                                 "  e.g. --gamma=.85, --lam=.65",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--workload', type=str, default='DEFAULT', # RICC-2010-2
-                        help="workload file, with SWF format") 
+    parser.add_argument('--model_path', type=str, default=None,
+                        help="path to pre-existing model to be loaded by agent")
+    parser.add_argument('--tensorboard', type=bool, default=False,
+                        help="enable tensorboard logging for training observations and insights")
+    parser.add_argument('--workload', type=str, default='DEFAULT',  # RICC-2010-2
+                        help="workload file, with SWF format")
     parser.add_argument('--seed', type=int, default=0,
                         help="change seed for random number generators")
+    parser.add_argument('--job_score_type', type=int, default=0,
+                        help="0: Average bounded slowdown, 1: Average waiting time\n" +
+                             "2: Average turnaround time, 3: Resource utilization\n" +
+                             "4: Average slowdown")
+    parser.add_argument('--backfil', type=bool, default=False,
+                        help="job backfilling option")
     parser.add_argument('--number-of-iterations', type=int, default=100,
                         help="number of iterations of entire workload to train model on")
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default="No Server",
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default="PPO",
                         help="run a local training server, using specified algorithm")
     args, extras = parser.parse_known_args()
     
@@ -843,8 +855,12 @@ if __name__ == "__main__":
         rl_training_server = TrainingServer(args.algorithm, MAX_QUEUE_SIZE, JOB_FEATURES, extras)
         print("[schedule.py] Created Training Server")
 
+    # load model if applicable
+    model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
+
     # create simulation environment
-    sim = BatchSchedSim(workload_file=workload_file, seed=args.seed)
+    sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
+                        backfil=args.backfil, model=model_arg, tensorboard=args.tensorboard)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations
