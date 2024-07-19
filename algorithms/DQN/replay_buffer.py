@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import scipy.signal
 import torch
 
@@ -41,13 +42,13 @@ class ReplayBuffer:
         Returns:
 
         """
-        index = self.ptr % self.max_size    # buffer index loops to lower values
-        self.obs_buf[index] = obs
-        self.act_buf[index] = act
-        self.mask_buf[index] = mask
-        self.rew_buf[index] = rew
-        self.next_obs_buf[index] = next_obs
-        self.q_val_buf[index] = q_val
+        assert self.ptr < self.max_size  
+        self.obs_buf[self.ptr] = obs
+        self.act_buf[self.ptr] = act
+        self.mask_buf[self.ptr] = mask
+        self.rew_buf[self.ptr] = rew
+        self.next_obs_buf[self.ptr] = next_obs
+        self.q_val_buf[self.ptr] = q_val
         self.ptr += 1
 
     def finish_path(self, last_val=0):
@@ -67,17 +68,18 @@ class ReplayBuffer:
 
         self.path_start_idx = self.ptr
 
-    def get(self, batch_size):
+    def get(self, batch_size: int):
         """
         
         """
-        assert self.ptr < batch_size
-        batch = np.random.choice(self.max_size, batch_size, replace=False)
+        assert self.ptr < self.max_size
+
+        assert self.ptr >= batch_size
+        batch = random.sample(range(self.ptr), batch_size)
         self.ptr, self.path_start_idx = 0, 0
 
-        data = dict(obs=self.obs_buf[batch],
-                    next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
-                    mask=self.mask_buf[batch], ret=self.ret_buf[batch],
+        data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
+                    mask=self.mask_buf[batch], rew=self.rew_buf[batch], ret=self.ret_buf[batch],
                     q_val=self.q_val_buf[batch])
 
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}, batch

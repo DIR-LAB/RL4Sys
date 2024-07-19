@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.optim import Adam
 
 from .kernel import DeepQNetwork
@@ -104,9 +103,8 @@ class DQN:
         self._train_update_freq = train_update_freq
         self._train_q_iters = train_q_iters
 
-        self._action_space = [i for i in range(act_dim)]
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
-        self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim)
+        self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
 
         # set up logger
@@ -154,7 +152,7 @@ class DQN:
             ep_len += 1
             if not r4a.done:
                 self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'], r4a.data['next_obs'])
-                self.logger.store(QVals=r4a.data['q_val'])
+                self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
@@ -168,34 +166,25 @@ class DQN:
 
         return False
 
-    def act(self, obs: torch.Tensor, mask: torch.Tensor) -> 'np.ndarray':
-        """
-        
-        """
-        if np.random.random() >= self._epsilon:
-            return self._model.step(obs, mask)[0]
-        else:
-            return np.random.choice(self._action_space)
-
     def train_model(self) -> None:
         """Train model on data from DQN replay_buffer.
         """
         data, batch = self._replay_buffer.get(self._batch_size)
 
+        q_l_old = self.compute_loss_q(data)
+        q_l_old = q_l_old[0].item()
+
         # Train Q network for n iterations of gradient descent
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
-            loss_q, q_info = self.compute_loss_q(data, batch)
+            loss_q, q_info = self.compute_loss_q(data)
             loss_q.backward()
             self._q_optimizer.step()
 
-            q_val, q_target = q_info['q_val'], q_info['q_target']
+            q_target = q_info['q_target']
+            self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
 
-            self.logger.store(QVals=q_val, QTargets=q_target, LossQ=loss_q,
-                              DeltaLossQ=abs(loss_q - (self.logger.get_stats('LossQ')[-1]
-                                                       if self.logger.get_stats('LossQ')[-1] else 0)))
-
-        self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
+        self.logger.store(StopIter=i)
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
@@ -204,37 +193,32 @@ class DQN:
         self.logger.log_tabular('EpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', average_only=True)
         self.logger.log_tabular('Epsilon', with_min_and_max=True)
-        self.logger.log_tabular('QVals', with_min_and_max=True)
-        self.logger.log_tabular('QTargets', with_min_and_max=True)
+        self.logger.log_tabular('QVals', average_only=True)
+        self.logger.log_tabular('QTargets', average_only=True)
         self.logger.log_tabular('LossQ', average_only=True)
         self.logger.log_tabular('DeltaLossQ', average_only=True)
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor], batch) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
         """Compute loss for Q function.
 
         Args:
-            data: dictionary containing all data from replay buffer
-            batch: batch indices for replay buffer
+            data: dictionary containing batched data from replay buffer
         Returns:
             Loss for Q function, statistics for logging
 
         """
-        # TODO: validate data input element contents for given environment/example context
         obs, act, mask, rew, next_obs = data['obs'], data['act'], data['mask'], data['rew'], data['next_obs']
 
-        batch_idx = np.arange(self._batch_size, dtype=np.int32)
-        act_batch = act.numpy()[batch]
-
         # Q loss
-        q_val = self._model.forward(obs, mask, softmax=True)[batch_idx, act_batch]
-        next_q_val = self._model.forward(next_obs, mask, softmax=True)
-        q_target = rew + self._gamma * torch.max(next_q_val.detach(), dim=1)[0]
+        q_val = self._model.forward(obs, mask)
+        next_q_val = self._model.forward(next_obs, mask)
+        q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
         # Mean Square Error (MSE) loss
-        loss_q = ((q_val - q_target.detach())**2).mean()
+        loss_q = ((q_val - q_target)**2).mean()
 
         # Q information
-        q_info = dict(q_val=q_val, q_target=q_target)
+        q_info = dict(q_target=q_target.detach().numpy())
 
         return loss_q, q_info
