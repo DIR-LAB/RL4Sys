@@ -34,7 +34,6 @@ except (FileNotFoundError, KeyError):
         "batch_size": 32,
         "seed": 0,
         "traj_per_epoch": 3,
-        "clip_value": 100,
         "gamma": 0.95,
         "epsilon": 1.0,
         "epsilon_min": 0.01,
@@ -73,7 +72,6 @@ class DQN:
                  buf_size: int, act_dim: int = 1, batch_size: int = hyperparams['batch_size'],
                  seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'],
-                 clip_value: float = hyperparams['clip_value'],
                  gamma: float = hyperparams['gamma'],
                  epsilon: float = hyperparams['epsilon'],
                  epsilon_min: float = hyperparams['epsilon_min'],
@@ -95,7 +93,6 @@ class DQN:
 
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch
-        self._clip_value = clip_value
         self._gamma = gamma
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min
