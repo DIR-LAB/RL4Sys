@@ -29,52 +29,52 @@ class ReplayBuffer:
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
-    def store(self, obs, act, mask, rew, q_val, next_obs):
+    def store(self, obs, act, mask, rew, q_val):
         """
-
-        Args:
-            obs:
-            act:
-            mask:
-            rew:
-            next_obs:
-            q_val:
-        Returns:
-
+        Append one timestep of agent-environment interaction to the buffer.
+        Stores this observation as the next observation of the previous transition.
         """
-        assert self.ptr < self.max_size  
+        assert self.ptr < self.max_size
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
-        self.next_obs_buf[self.ptr] = next_obs
         self.q_val_buf[self.ptr] = q_val
+        # most accurate way to retrieve next observation, I imagine.
+        if self.ptr > 0:
+            self.next_obs_buf[self.ptr - 1] = obs
         self.ptr += 1
 
     def finish_path(self, last_val=0):
         """
-
-        Args:
-            last_val:
-
-        Returns:
-
+        Call this at the end of a trajectory, or when one gets cut off by an epoch ending.
+        Looks back in buffer to where the trajectory started, and uses the rewards found there to
+        calculate the reward-to-go for each state in the trajectory.
         """
         path_slice = slice(self.path_start_idx, self.ptr)
         rews = np.append(self.rew_buf[path_slice], last_val)
-        vals = np.append(self.q_val_buf[path_slice], last_val)
 
         self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)[:-1]
 
         self.path_start_idx = self.ptr
 
     def get(self, batch_size: int):
-        """
-        
+        """ Sample a batch of data from the replay buffer.
+
+        Args:
+            batch_size: the number of samples to draw
+
+        Returns:
+            A dictionary containing the following keys:
+                obs: the current observation
+                next_obs: the next observation
+                act: the action
+                rew: the reward
+                ret: the reward-to-go
         """
         assert self.ptr < self.max_size
-
         assert self.ptr >= batch_size
+        # random sample of indices
         batch = random.sample(range(self.ptr), batch_size)
         self.ptr, self.path_start_idx = 0, 0
 

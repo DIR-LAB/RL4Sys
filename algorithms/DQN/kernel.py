@@ -12,11 +12,16 @@ Network configurations for DQN
 class DeepQNetwork(nn.Module):
     """Neural network for DQN.
 
-    Produces Q-values for actions; return categorical distribution if cat=True
+    Produces Q-values for actions.
+    Uses epsilon-greedy strategy for action exploration-exploitation process.
 
         Args:
-            kernel_dim:
-            kernel_size:
+            kernel_dim: number of observations
+            kernel_size: number of features
+            act_dim: number of actions (output layer dimensions)
+            epsilon: Initial value for epsilon; exploration rate that is decayed over time.
+            epsilon_min: Minimum possible value for epsilon
+            epsilon_decay: Decay rate for epsilon
     """
     def __init__(self, kernel_dim: int, kernel_size: int, act_dim: int = 1, epsilon: float = 1.0,
                  epsilon_min: float = 0.01, epsilon_decay: float = 5e-4):
@@ -28,7 +33,6 @@ class DeepQNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 8),
             nn.ReLU(),
-            nn.Dropout(0.5),
             nn.Linear(8, act_dim)
         )
 
@@ -42,34 +46,24 @@ class DeepQNetwork(nn.Module):
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
-
+            Forward pass through Q-network, outputs Q-values for actions.
         Args:
-            obs:
-            mask:
+            obs: current observation
+            mask: mask for current observation (unused in DQN)
         Returns:
-
+            Q-values for actions
         """
-        # if mask is not None:
-        #     obs_float = torch.as_tensor(obs, dtype=torch.float32)
-        #     obs_reshaped = obs_float.view(-1, mask.shape[1])
-        #     obs = obs_reshaped * mask
-
         return self.q_network(obs)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
-
+            Select an action based on epsilon-greedy policy.
         Args:
-            obs:
-            mask:
+            obs: current observation
+            mask: mask for current observation (unused in DQN)
         Returns:
 
         """
-        # if mask is not None:
-        #     obs_double = torch.as_tensor(obs, dtype=torch.double)
-        #     obs_reshaped = obs_double.view(-1, mask.shape[1])
-        #     obs = obs_reshaped * mask
-
         if np.random.rand() <= self._epsilon:
             with torch.no_grad():
                 q = self.forward(obs, mask)
@@ -81,25 +75,25 @@ class DeepQNetwork(nn.Module):
 
         data = {'q_val': q.detach().numpy(), 'epsilon': self._epsilon}
         self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
-        data['next_obs'] = self._compute_next_obs(a, obs, mask)
 
         return a, data
 
-    def _compute_next_obs(self, act, obs: torch.Tensor, mask: torch.Tensor = None):
-        """
-        Compute next observation based on current observation and mask.
 
-        Args:
-            obs: current observation
-            mask: mask for current observation
-        Returns:
-            next observation
-        """
-        # if mask is not None:
-        #     obs_double = torch.as_tensor(obs, dtype=torch.double)
-        #     obs_reshaped = obs_double.view(-1, mask.shape[1])
-        #     obs = obs_reshaped * mask
+def infer_next_obs(act, obs: torch.Tensor, mask: torch.Tensor = None):
+    """ Placeholder next observation function
+    Computes next observation based on current observation and mask.
+    Unused in DQN computations.
 
-        next_obs = obs + torch.tensor(act, dtype=torch.float32)
-        return next_obs
+    Next_obs calculation is the sum of the current observation
+     and the action taken in said observation.
+
+    Args:
+        act: action taken
+        obs: current observation
+        mask: mask for current observation (unused in DQN)
+    Returns:
+        next observation
+    """
+    next_obs = obs + torch.tensor(act, dtype=torch.float32)
+    return next_obs
 

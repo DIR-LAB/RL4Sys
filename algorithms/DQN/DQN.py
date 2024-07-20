@@ -39,7 +39,7 @@ except (FileNotFoundError, KeyError):
         "epsilon": 1.0,
         "epsilon_min": 0.01,
         "epsilon_decay": 5e-4,
-        "train_update_freq": 0.005,
+        "train_update_freq": 4,
         "q_lr": 1e-3,
         "train_q_iters": 80
     }
@@ -54,19 +54,19 @@ DQN Agent with hyperparameters
 class DQN:
     """
             Args:
-                kernel_size:
-                kernel_dim:
-                buf_size:
-                act_size:
-                batch_size:
-                seed:
-                traj_per_epoch:
-                gamma:
-                epsilon:
-                epsilon_min:
-                epsilon_decay:
-                train_update_freq:
-                q_lr:
+                kernel_size: number of observations
+                kernel_dim: number of features
+                buf_size: size of replay buffer
+                act_dim: number of actions (output dimension(s))
+                batch_size: batch size of replay buffer
+                seed: seed for random number generator
+                traj_per_epoch: number of trajectories to be retrieved prior to training
+                gamma: Q target discount factor
+                epsilon: initial value for epsilon; exploration rate that is decayed over time
+                epsilon_min: minimum value for epsilon
+                epsilon_decay: decay rate for epsilon
+                train_update_freq: frequency of training model
+                q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
     def __init__(self, kernel_size: int, kernel_dim: int,
@@ -151,7 +151,7 @@ class DQN:
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'], r4a.data['next_obs'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
@@ -159,10 +159,11 @@ class DQN:
 
         # get enough trajectories for training the model
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            self.epoch += 1
-            self.train_model()
-            self.log_epoch()
-            return True
+            if self.traj % self._train_update_freq == 0:
+                self.epoch += 1
+                self.train_model()
+                self.log_epoch()
+                return True
 
         return False
 
@@ -171,20 +172,19 @@ class DQN:
         """
         data, batch = self._replay_buffer.get(self._batch_size)
 
-        q_l_old = self.compute_loss_q(data)
-        q_l_old = q_l_old[0].item()
+        q_l_old = self.compute_loss_q(data)[0]
+        q_l_old = q_l_old.item()
 
         # Train Q network for n iterations of gradient descent
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
-            loss_q, q_info = self.compute_loss_q(data)
+            loss_q, q_target = self.compute_loss_q(data)
             loss_q.backward()
             self._q_optimizer.step()
 
-            q_target = q_info['q_target']
-            self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
-
         self.logger.store(StopIter=i)
+
+        self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
@@ -206,19 +206,18 @@ class DQN:
         Args:
             data: dictionary containing batched data from replay buffer
         Returns:
-            Loss for Q function, statistics for logging
+            Loss for Q function, Q target for logging
 
         """
-        obs, act, mask, rew, next_obs = data['obs'], data['act'], data['mask'], data['rew'], data['next_obs']
+        obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
 
         # Q loss
         q_val = self._model.forward(obs, mask)
-        next_q_val = self._model.forward(next_obs, mask)
-        q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
+        with torch.no_grad():
+            next_q_val = self._model.forward(next_obs, mask)
+            q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
+
         # Mean Square Error (MSE) loss
         loss_q = ((q_val - q_target)**2).mean()
 
-        # Q information
-        q_info = dict(q_target=q_target.detach().numpy())
-
-        return loss_q, q_info
+        return loss_q, q_target.detach().numpy()
