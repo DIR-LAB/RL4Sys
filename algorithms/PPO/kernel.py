@@ -2,6 +2,7 @@ from typing import Optional, Type
 
 import torch
 import torch.nn as nn
+from numpy import ndarray
 from torch.distributions.categorical import Categorical
 
 """
@@ -200,7 +201,8 @@ class RLActorCritic(nn.Module):
         # build value function
         self.v = RLCritic(self.flatten_obs_dim)
 
-    def step(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> tuple['numpy.ndarray', dict[str, 'numpy.ndarray']]:
+    def step(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> (tuple[ndarray, dict[str, ndarray]] |
+                                                                        tuple[Type[ndarray], Type[dict[str, ndarray]]]):
         """Get estimate for state-value
 
         Mask should contain 1 for all actions which are able to be chosen, and 0 for disabled.
@@ -219,20 +221,21 @@ class RLActorCritic(nn.Module):
         """
         # TODO masks may actually be ndarray type?
         # TODO a might just return an index. make sure that's ok
-
-        with torch.no_grad():
-            # actor
-            pi, _ = self.pi(flattened_obs, mask)
-            a = pi.sample()
-            logp_a = self.pi._log_prob_from_distribution(pi, a)
-            # critic
-            v = self.v(flattened_obs, mask)
-        a = a.numpy()
-        data = {'v': v.numpy(), 'logp_a': logp_a.numpy()}
-        return a, data
+        if flattened_obs is not None and mask is not None:
+            with torch.no_grad():
+                # actor
+                pi, _ = self.pi(flattened_obs, mask)
+                a = pi.sample()
+                logp_a = self.pi._log_prob_from_distribution(pi, a)
+                # critic
+                v = self.v(flattened_obs, mask)
+            a = a.numpy()
+            data = {'v': v.numpy(), 'logp_a': logp_a.numpy()}
+            return a, data
+        return ndarray, dict[str, ndarray]
 
     # this method appears completely unused by the training server code
-    def act(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> 'numpy.ndarray':
+    def act(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> ndarray:
         """Select an action according to the learned policy.
 
         Args:

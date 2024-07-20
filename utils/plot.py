@@ -5,6 +5,7 @@ import json
 import os
 import os.path as osp
 import numpy as np
+from packaging import version
 
 DIV_LINE_WIDTH = 50
 
@@ -12,9 +13,22 @@ DIV_LINE_WIDTH = 50
 exp_idx = 0
 units = dict()
 
+
+def get_simple_dataset_plot(data, x, y, title) -> sns.lineplot:
+    """
+    returns plot of data table with fewer parameters
+    """
+
+    plot = sns.lineplot(data=data, x=x, y=y)
+    plot.set_title(title)
+    plot.set_xlabel('Epoch')
+    plot.set_ylabel('AverageEpRet')
+    return plot
+
+
 def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1", smooth=1, **kwargs):
     if smooth > 1:
-        """
+        """ Requires use of get_dataset or get_all_datasets
         smooth data with moving window average.
         that is,
             smoothed_y[t] = average(y[t-k], y[t-k+1], ..., y[t+k-1], y[t+k])
@@ -25,7 +39,7 @@ def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1",
         for datum in data:
             x = np.asarray(datum[value])
             z = np.ones(len(x))
-            smoothed_x = np.convolve(x,y,'same') / np.convolve(z,y,'same')
+            smoothed_x = np.convolve(x, y, 'same') / np.convolve(z, y, 'same')
             datum[value] = smoothed_x
         # temp = None
         # for datum in data:
@@ -43,12 +57,13 @@ def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1",
     # blue = (0.2980392156862745, 0.4470588235294118, 0.6901960784313725)
     # red = (0.7686274509803922, 0.3058823529411765, 0.3215686274509804)
     # sns.set_palette([blue, red])
-    sns.tsplot(data=data, time=xaxis, value=value, unit="Unit", condition=condition, ci='sd', **kwargs)
+    if version.parse(sns.__version__) <= version.parse("0.8.1"):
+        sns.tsplot(data=data, time=xaxis, value=value, unit="Unit", condition=condition, ci='sd', **kwargs)
+    else:
+        sns.lineplot(data=data, x=xaxis, y=value, hue=condition, errorbar='sd', **kwargs)
     """
     If you upgrade to any version of Seaborn greater than 0.8.1, switch from 
-    tsplot to lineplot replacing L29 with:
-
-        sns.lineplot(data=data, x=xaxis, y=value, hue=condition, ci='sd', **kwargs)
+    tsplot to lineplot above
 
     Changes the colorscheme and the default legend style, though.
     """
@@ -67,9 +82,42 @@ def plot_data(data, xaxis='Epoch', value="AverageEpRet", condition="Condition1",
     xscale = np.max(np.asarray(data[xaxis])) > 5e3
     if xscale:
         # Just some formatting niceness: x-axis scale in scientific notation if max x is large
-        plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+        plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
 
     plt.tight_layout(pad=0.5)
+
+
+def get_newest_dataset(data_log_dir: str, return_file_root: bool = False):
+    """
+    Returns either data or full directory address of newest progress.txt file.
+    :param return_file_root: switch for returning the full path to the file
+    :param data_log_dir: directory to search for progress files
+    :return: Defaults to dataset, alternatively returns file directory if specified.
+    """
+    if not osp.exists(data_log_dir):
+        return None
+
+    roots = []
+    progress_files = []
+    for root, dirs, files in os.walk(data_log_dir):
+        for file in files:
+            if file == 'progress.txt':
+                full_path = os.path.join(root, file)
+                roots.append(root)
+                progress_files.append(full_path)
+
+    if not progress_files:
+        return None
+
+    newest_file = max(progress_files, key=os.path.getctime)
+    newest_root = os.path.abspath(os.path.dirname(newest_file))
+
+    if return_file_root:
+        return newest_root
+
+    newest_dataset = pd.read_table(newest_file)
+    return newest_dataset
+
 
 def get_datasets(logdir, condition=None, other_algos=False):
     """
@@ -85,7 +133,7 @@ def get_datasets(logdir, condition=None, other_algos=False):
         if 'progress.txt' in files:
             exp_name = None
             try:
-                config_path = open(os.path.join(root,'config.json'))
+                config_path = open(os.path.join(root, 'config.json'))
                 config = json.load(config_path)
                 if 'exp_name' in config:
                     exp_name = config['exp_name']
@@ -100,12 +148,12 @@ def get_datasets(logdir, condition=None, other_algos=False):
             units[condition1] += 1
 
             try:
-                exp_data = pd.read_table(os.path.join(root,'progress.txt'))
+                exp_data = pd.read_table(os.path.join(root, 'progress.txt'))
             except:
-                print('Could not read from %s'%os.path.join(root,'progress.txt'))
+                print('Could not read from %s' % os.path.join(root, 'progress.txt'))
                 continue
             performance = 'AverageTestEpRet' if 'AverageTestEpRet' in exp_data else 'AverageEpRet'
-            exp_data.insert(len(exp_data.columns),'Unit',unit)
+            exp_data.insert(len(exp_data.columns), 'Unit', unit)
             if other_algos:
                 exp_data2 = exp_data.copy()
                 exp_data2.insert(len(exp_data2.columns), 'Condition1', "F1")
@@ -119,9 +167,9 @@ def get_datasets(logdir, condition=None, other_algos=False):
                 exp_data3.insert(len(exp_data3.columns), 'Performance', -exp_data["SJF"])
                 datasets.append(exp_data3)
 
-            exp_data.insert(len(exp_data.columns),'Condition1',condition1)
-            exp_data.insert(len(exp_data.columns),'Condition2',condition2)
-            exp_data.insert(len(exp_data.columns),'Performance',exp_data[performance])
+            exp_data.insert(len(exp_data.columns), 'Condition1', condition1)
+            exp_data.insert(len(exp_data.columns), 'Condition2', condition2)
+            exp_data.insert(len(exp_data.columns), 'Performance', exp_data[performance])
 
             datasets.append(exp_data)
     return datasets
@@ -138,13 +186,13 @@ def get_all_datasets(all_logdirs, legend=None, select=None, exclude=None, other_
     """
     logdirs = []
     for logdir in all_logdirs:
-        if osp.isdir(logdir) and logdir[-1]==os.sep:
+        if osp.isdir(logdir) and logdir[-1] == os.sep:
             logdirs += [logdir]
         else:
             basedir = osp.dirname(logdir)
-            fulldir = lambda x : osp.join(basedir, x)
+            fulldir = lambda x: osp.join(basedir, x)
             prefix = logdir.split(os.sep)[-1]
-            listdir= os.listdir(basedir)
+            listdir = os.listdir(basedir)
             logdirs += sorted([fulldir(x) for x in listdir if prefix in x])
 
     """
@@ -155,16 +203,16 @@ def get_all_datasets(all_logdirs, legend=None, select=None, exclude=None, other_
     if select is not None:
         logdirs = [log for log in logdirs if all(x in log for x in select)]
     if exclude is not None:
-        logdirs = [log for log in logdirs if all(not(x in log) for x in exclude)]
+        logdirs = [log for log in logdirs if all(not (x in log) for x in exclude)]
 
     # Verify logdirs
-    print('Plotting from...\n' + '='*DIV_LINE_WIDTH + '\n')
+    print('Plotting from...\n' + '=' * DIV_LINE_WIDTH + '\n')
     for logdir in logdirs:
         print(logdir)
-    print('\n' + '='*DIV_LINE_WIDTH)
+    print('\n' + '=' * DIV_LINE_WIDTH)
 
     # Make sure the legend is compatible with the logdirs
-    assert not(legend) or (len(legend) == len(logdirs)), \
+    assert not (legend) or (len(legend) == len(logdirs)), \
         "Must give a legend title for each set of experiments."
 
     # Load data from logdirs
@@ -183,7 +231,7 @@ def make_plots(all_logdirs, legend=None, xaxis=None, values=None, count=False,
     data = get_all_datasets(all_logdirs, legend, select, exclude, other_algos=other_algos)
     values = values if isinstance(values, list) else [values]
     condition = 'Condition2' if count else 'Condition1'
-    estimator = getattr(np, estimator)      # choose what to show on main curve: mean? max? min?
+    estimator = getattr(np, estimator)  # choose what to show on main curve: mean? max? min?
     for value in values:
         plt.figure()
         plot_data(data, xaxis=xaxis, value=value, condition=condition, smooth=smooth, estimator=estimator)
@@ -253,9 +301,10 @@ def main():
 traj_per_epoch
     """
 
-    make_plots(args.logdir, args.legend, args.xaxis, args.value, args.count, 
+    make_plots(args.logdir, args.legend, args.xaxis, args.value, args.count,
                smooth=args.smooth, select=args.select, exclude=args.exclude,
                estimator=args.est, other_algos=args.other_algos)
+
 
 if __name__ == "__main__":
     main()
