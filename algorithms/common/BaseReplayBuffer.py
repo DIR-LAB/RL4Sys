@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import scipy.signal
-import torch
+
 
 
 def combined_shape(length, shape=None):
@@ -54,18 +54,18 @@ def statistics_scalar(x, with_min_and_max=False):
     return mean, std
 
 
-class ReplayBuffer(ABC):
-    def __init__(self):
-        super(ReplayBuffer, self).__init__()
+class ReplayBufferAbstract(ABC):
+    def __init__(self, *args, **kwargs):
+        super(ReplayBufferAbstract, self).__init__()
 
     @abstractmethod
-    def store(self, obs, act, mask, rew, *args, **kwargs):
+    def store(self, *args, **kwargs):
         pass
 
     @abstractmethod
-    def finish_path(self, last_val, *args, **kwargs):
+    def finish_path(self, *args, **kwargs):
         pass
 
     @abstractmethod
-    def get(self, *args, **kwargs):
+    def get(self):
         pass

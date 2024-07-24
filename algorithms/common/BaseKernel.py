@@ -20,27 +20,27 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     return nn.Sequential(*layers)
 
 
-class ForwardKernel(nn.Module, ABC):
+class ForwardKernelAbstract(nn.Module, ABC):
     def __init__(self):
-        super(ForwardKernel, self).__init__()
+        super(ForwardKernelAbstract, self).__init__()
 
     @abstractmethod
     def forward(self, obs: torch.Tensor, mask: torch.Tensor):
         pass
 
 
-class StepKernel(nn.Module, ABC):
+class StepKernelAbstract(nn.Module, ABC):
     def __init__(self):
-        super(StepKernel, self).__init__()
+        super(StepKernelAbstract, self).__init__()
 
     @abstractmethod
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
         pass
 
 
-class StepForwardKernel(nn.Module, ABC):
+class StepAndForwardKernelAbstract(nn.Module, ABC):
     def __init__(self):
-        super(StepForwardKernel, self).__init__()
+        super(StepAndForwardKernelAbstract, self).__init__()
 
     @abstractmethod
     def forward(self, obs: torch.Tensor, mask: torch.Tensor):

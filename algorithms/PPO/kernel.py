@@ -5,28 +5,14 @@ import torch.nn as nn
 from numpy import ndarray
 from torch.distributions.categorical import Categorical
 
+from algorithms.common.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+
 """
 Network configurations for PPO
 """
 
-def mlp(sizes, activation, output_activation=nn.Identity):
-    """Build a multilayer perceptron, with layers of nn.Linear.
 
-    Args:
-        sizes: a tuple of ints, each declaring the size of one layer.
-        activation: function type for activation layer.
-    Returns:
-        the built neural network as a torch.nn.Module.
-
-    """
-    layers = []
-    for j in range(len(sizes)-1):
-        act = activation if j < len(sizes)-2 else output_activation
-        layers += [nn.Linear(sizes[j], sizes[j+1]), act()]
-    return nn.Sequential(*layers)
-
-
-class RLActor(nn.Module):
+class RLActor(ForwardKernelAbstract):
     """Neural network of Actor.
 
     Produces distributions for actions.
@@ -128,7 +114,7 @@ class RLActor(nn.Module):
         return pi, logp_a
 
 
-class RLCritic(nn.Module):
+class RLCritic(ForwardKernelAbstract):
     """Neural network of Critic.
 
     Produces an estimate for V (state-value).
@@ -177,7 +163,7 @@ class RLCritic(nn.Module):
         return torch.squeeze(self.v_net(obs), -1)
 
 
-class RLActorCritic(nn.Module):
+class RLActorCritic(StepKernelAbstract):
     """PPO Actor-Critic kernel.
 
     Attributes:

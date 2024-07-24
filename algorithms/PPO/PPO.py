@@ -10,6 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
+from algorithms.common.BaseAlgorithm import AlgorithmAbstract
+
 import json
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
 the current instance.
@@ -44,7 +46,7 @@ except (FileNotFoundError, KeyError):
     save_model_path = os.path.join(top_dir, 'models/model.pth')
 
 
-class PPO:
+class PPO(AlgorithmAbstract):
     """Algorithm class for PPO.
 
     See OpenAI Spinning Up PPO implementation:
@@ -90,16 +92,14 @@ class PPO:
             for early stopping. (Usually small, 0.01 or 0.05.)
 
     """
-    def __init__(self, kernel_size: int, kernel_dim: int,
-                 buf_size: int,
-                 seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
-                 clip_ratio: float = hyperparams['clip_ratio'],
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
                  gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
                  pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
                  train_pi_iters: int = hyperparams['train_pi_iters'], train_v_iters: int = hyperparams['train_v_iters'],
                  target_kl: float = hyperparams['target_kl']):
 
+        super().__init__()
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
         np.random.seed(seed)

@@ -3,9 +3,9 @@ from abc import ABC, abstractmethod
 from trajectory import RL4SysTrajectory
 
 
-class Algorithm(ABC):
+class AlgorithmAbstract(ABC):
     def __init__(self):
-        super(Algorithm, self).__init__()
+        super(AlgorithmAbstract, self).__init__()
 
     @abstractmethod
     def save(self, filename) -> None:
