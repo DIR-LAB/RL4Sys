@@ -27,6 +27,21 @@ Training server parameters:
 GAME_ELEMENTS = {'path': 0, 'wall': 1, 'pitfall': 2, 'start': 3, 'goal': 4}
 
 
+def write_maze_to_log_dir(maze: np.ndarray, log_dir: str):
+    with open(f"{log_dir}/maze_{time.time()}.txt", 'w') as f:
+        f.write(str(maze))
+
+
+def read_maze_from_file(file_address: str):
+    try:
+        with open(f"{file_address}", 'r') as f:
+            maze = np.array(f.read())
+    except FileNotFoundError:
+        print(f"[maze.py] Maze file not found at {file_address}")
+        return None
+    return maze
+
+
 class MazeGenerator:
     def __init__(self, area_dimensions: tuple[int, int], start_position: tuple[int, int],
                  goal_position: tuple[int, int], pitfall_prob: float = 0.1, maze: np.ndarray = None):
@@ -171,20 +186,6 @@ class AgentProperties:
         pygame.draw.circle(screen, color, (x * 20 + 10, y * 20 + 10), 8.5)
 
 
-def write_maze_to_log_dir(maze: np.ndarray, log_dir: str):
-    with open(f"{log_dir}/maze_{time.time()}.txt", 'w') as f:
-        f.write(str(maze))
-
-
-def read_maze_from_file(file_address: str) -> np.ndarray:
-    try:
-        with open(f"{file_address}", 'r') as f:
-            maze = np.array(f.read())
-    except FileNotFoundError:
-        print(f"[maze.py] Maze file not found at {file_address}")
-    return maze
-
-
 FEATURES = 4
 MAX_SIZE = 5
 
@@ -192,7 +193,7 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class MazeGameSim:
-    def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
+    def __init__(self, seed, model=None, maze: np.ndarray = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
                  performance_metric: int = 0, tensorboard: bool = False):
         self._area_dimensions = area_dimensions
@@ -572,8 +573,13 @@ if __name__ == '__main__':
     # load model if applicable
     model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
 
+    # load maze if applicable
+    maze_array = None
+    if args.maze_path:
+        maze_array = read_maze_from_file(args.maze_path)
+
     # create simulation environment
-    maze_game = MazeGameSim(args.seed, model=model_arg, maze=args.maze_path, area_dimensions=args.area_dimensions,
+    maze_game = MazeGameSim(args.seed, model=model_arg, maze=maze_array, area_dimensions=args.area_dimensions,
                             static_area_dimensions=args.static_area_dimensions, enable_pitfalls=args.enable_pitfalls,
                             play_new_levels=args.play_new_levels, performance_metric=args.score_type,
                             tensorboard=args.tensorboard)
