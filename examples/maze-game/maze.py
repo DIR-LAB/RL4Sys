@@ -172,8 +172,7 @@ class AgentProperties:
 
 
 def write_maze_to_log_dir(maze: np.ndarray, log_dir: str):
-
-    with open(f"{log_dir}", 'w') as f:
+    with open(f"{log_dir}/maze_{time.time()}.txt", 'w') as f:
         f.write(str(maze))
 
 
@@ -309,6 +308,7 @@ class MazeGameSim:
         self.agent_properties = AgentProperties(self.maze, self._start_position, self._goal_position, play_new_levels)
         self._level_counter += 1
 
+        maze_logged = False
         clock = pygame.time.Clock()
         clock.tick(144)
         for iteration in range(num_iterations):
@@ -317,6 +317,12 @@ class MazeGameSim:
             moves, rl_runs = 0, 0
             print(f"[maze.py - simulator] Game Iteration {iteration}")
             while moves < num_moves:
+                if not maze_logged and moves / (MOVE_SEQUENCE_SIZE/4) >= 1:
+                    log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'logs'))
+                    newest_log_dir = get_newest_dataset(log_dir, return_file_root=True)
+                    write_maze_to_log_dir(self.maze, newest_log_dir)
+                    maze_logged = True
+
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.quit()
@@ -377,7 +383,6 @@ class MazeGameSim:
                     if reset:
                         reset_agent()
                         break
-
         if play_new_levels:
             self.play_new_level(num_iterations, num_moves)
 
@@ -545,7 +550,7 @@ if __name__ == '__main__':
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
                         help='Generate and cycle through new mazes after each episode')
-    parser.add_argument('--area-dimensions', type=tuple, default=(9, 9),
+    parser.add_argument('--area-dimensions', type=tuple, default=(8, 8),
                         help='dimensions of the maze area')
     parser.add_argument('--static-area-dimensions', type=bool, default=True,
                         help='Use static area dimensions for maze generation when playing new levels')
