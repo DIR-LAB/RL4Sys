@@ -28,14 +28,12 @@ GAME_ELEMENTS = {'path': 0, 'wall': 1, 'pitfall': 2, 'start': 3, 'goal': 4}
 
 
 def write_maze_to_log_dir(maze: np.ndarray, log_dir: str):
-    with open(f"{log_dir}/maze_{time.time()}.txt", 'w') as f:
-        f.write(str(maze))
+    np.save(f"{log_dir}/maze_{time.time()}", maze)
 
 
 def read_maze_from_file(file_address: str):
     try:
-        with open(f"{file_address}", 'r') as f:
-            maze = np.array(f.read())
+        maze = np.load(file_address)
     except FileNotFoundError:
         print(f"[maze.py] Maze file not found at {file_address}")
         return None
@@ -43,10 +41,10 @@ def read_maze_from_file(file_address: str):
 
 
 class MazeGenerator:
-    def __init__(self, area_dimensions: tuple[int, int], start_position: tuple[int, int],
-                 goal_position: tuple[int, int], pitfall_prob: float = 0.1, maze: np.ndarray = None):
+    def __init__(self, area_dimensions: tuple[int, int]=(10, 10), start_position: tuple[int, int]=(0, 0),
+                 goal_position: tuple[int, int]=(9, 9), pitfall_prob: float = 0.1, maze: np.ndarray = None):
         if maze is not None:
-            self._maze, self._area_dimensions, self._start, self._goal = self._maze_element_search(maze)
+            self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(maze)
             assert self._area_dimensions[0] > 0 and self._area_dimensions[1] > 0
             assert self._start is not None
             assert self._goal is not None
@@ -65,16 +63,21 @@ class MazeGenerator:
             print(f"[maze.py - MazeGenerator] Maze environment generation complete")
 
     def _maze_element_search(self, maze: np.ndarray):
-        area_dimensions = maze.shape
+        area_dimensions = (len(maze), len(maze[0]))
         start = None
         goal = None
+        pitfall_prob = 0
         for i in range(area_dimensions[0]):
             for j in range(area_dimensions[1]):
                 if maze[i, j] == GAME_ELEMENTS['start']:
                     start = (i, j)
                 elif maze[i, j] == GAME_ELEMENTS['goal']:
                     goal = (i, j)
-        return maze, area_dimensions, start, goal
+                elif maze[i, j] == GAME_ELEMENTS['pitfall']:
+                    pitfall_prob += 1
+
+        pitfall_prob = pitfall_prob / (area_dimensions[0] * area_dimensions[1])
+        return maze, area_dimensions, start, goal, pitfall_prob
 
     def _carve_paths(self):
         def _is_within_bounds(x, y):
@@ -193,7 +196,7 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class MazeGameSim:
-    def __init__(self, seed, model=None, maze: np.ndarray = None, area_dimensions: tuple[int, int] = (6, 6),
+    def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
                  performance_metric: int = 0, tensorboard: bool = False):
         self._area_dimensions = area_dimensions
@@ -349,7 +352,9 @@ class MazeGameSim:
                     # Validate move and new position
                     # If invalid, reset agent position to previous position
                     previous_position = self.agent_properties.position
-                    new_position = self.agent_properties.move(rl4sys_action.act[0])
+                    new_position = self.agent_properties.move(rl4sys_action.act[0]
+                                                              if isinstance(rl4sys_action.act, np.ndarray)
+                                                              else rl4sys_action.act)
                     new_rew = self.agent_properties.calculate_reward(previous_position, new_position)
                     self.simulator_stats['action_rewards'].append(new_rew)
                     obs, mask = self.build_observation(new_position)
@@ -370,6 +375,7 @@ class MazeGameSim:
                         self.simulator_stats['success_count'] += 1
                         self.simulator_stats['time_to_goal'].append(clock.get_time() - start_time)
 
+                    # flag last action
                     if rl_runs >= MOVE_SEQUENCE_SIZE:
                         print(f'[maze.py - simulator] RL4SysAgent moves made: {moves}')
                         self.simulator_stats['moves'] = moves
@@ -392,7 +398,7 @@ class MazeGameSim:
         Play new level after each set of n iterations (if enabled)
         :param num_iterations: Number of iterations of n steps per level
         :param num_moves: Maximum number of moves allowed per iteration
-        :return:
+        :return: new simulation instance
         """
         if not self._static_area_dimensions:
             x, y = self._area_dimensions
@@ -502,12 +508,12 @@ class MazeGameSim:
     def calculate_performance_score(self, elements) -> float:
         """
         Calculate performance score based on performance metric using captured simulator elements
-        :return:
+        :return: returns calculated performance score
         """
         move_sequence_count = elements['moves'] / MOVE_SEQUENCE_SIZE
         if self._performance_metric == 0:
             # cumulative reward per n move sequences
-            return sum(elements['action_rewards']) / move_sequence_count
+            return float(sum(elements['action_rewards']) / move_sequence_count)
         elif self._performance_metric == 1:
             # cumulative performance rewards per n move sequences
             return float(sum(elements['performance_rewards']) / move_sequence_count)
@@ -531,6 +537,18 @@ class MazeGameSim:
 
 
 if __name__ == '__main__':
+    """ Requires pygame
+    
+    Runs MazeGameSim instance(s) according to user input parameters.
+    
+    Example Usage:
+    python maze.py --tensorboard=True --play-new-levels=True --number-of-iterations=1 --number-of-moves=1000 --area-dimensions 6 6
+    or
+    python maze.py --tensorboard=True --enable-pitfalls=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 6 6
+    or
+    python maze.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 10 10
+    
+    """
     import argparse
     parser = argparse.ArgumentParser(prog="RL4Sys Maze Game Simulator",
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -551,7 +569,7 @@ if __name__ == '__main__':
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
                         help='Generate and cycle through new mazes after each episode')
-    parser.add_argument('--area-dimensions', type=tuple, default=(8, 8),
+    parser.add_argument('--area-dimensions', nargs='+', type=int, default=(10, 10),
                         help='dimensions of the maze area')
     parser.add_argument('--static-area-dimensions', type=bool, default=True,
                         help='Use static area dimensions for maze generation when playing new levels')
@@ -574,12 +592,15 @@ if __name__ == '__main__':
     model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
 
     # load maze if applicable
-    maze_array = None
+    loaded_maze = None
     if args.maze_path:
         maze_array = read_maze_from_file(args.maze_path)
+        loaded_maze = MazeGenerator(maze=maze_array)
+
+    args.area_dimensions = (args.area_dimensions[0], args.area_dimensions[1])
 
     # create simulation environment
-    maze_game = MazeGameSim(args.seed, model=model_arg, maze=maze_array, area_dimensions=args.area_dimensions,
+    maze_game = MazeGameSim(args.seed, model=model_arg, maze=loaded_maze, area_dimensions=args.area_dimensions,
                             static_area_dimensions=args.static_area_dimensions, enable_pitfalls=args.enable_pitfalls,
                             play_new_levels=args.play_new_levels, performance_metric=args.score_type,
                             tensorboard=args.tensorboard)
