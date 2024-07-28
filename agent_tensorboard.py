@@ -9,33 +9,15 @@ import os
 import json
 
 import pandas as pd
+from conf_loader import ConfigLoader
 
 """ Import and load RL4Sys/config.json asynchronous tensorboard parameters and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))
-CONFIG_PATH = os.path.join(top_dir, 'config.json')
-tb_server = {}
-tb_params = {}
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        tb_params = config['tensorboard']
-        tb_params = tb_params['tensorboard_writer']
-except (FileNotFoundError, KeyError):
-    print(f"[TensorboardWriter] Failed to load configuration from {CONFIG_PATH}, loading defaults.")
-    tb_params = {
-        'tb_log_dir': 'utils/tb_runs',
-        'data_log_dir': 'data',
-        'scalar_tags': 'AverageEpRet;StdEpRet',
-        'max_count_per_scalar': 100,
-        'global_step_tag': 'Epoch'
-    }
-finally:
-    tb_params['tb_log_dir'] = os.path.join(top_dir, tb_params['tb_log_dir'])
-    tb_params['data_log_dir'] = os.path.join(top_dir, tb_params['data_log_dir'])
+config_loader = ConfigLoader()
+tb_params = config_loader.tb_params
 
 
 class TensorboardWriter:
