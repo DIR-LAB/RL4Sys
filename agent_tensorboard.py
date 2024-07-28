@@ -35,7 +35,7 @@ class TensorboardWriter:
                  scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
                  global_step_tag=tb_params['global_step_tag']):
         self.writer = None
-        self._tb_log_dir = tb_log_dir
+        self._tb_log_dir = tb_log_dir + f'/tb_run_{int(time.time())}'
 
         self.data_queue = queue.Queue()
         self._data_log_dir = data_log_dir
