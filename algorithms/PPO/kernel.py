@@ -5,7 +5,7 @@ import torch.nn as nn
 from numpy import ndarray
 from torch.distributions.categorical import Categorical
 
-from algorithms.common.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+from algorithms._common.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
 """
 Network configurations for PPO

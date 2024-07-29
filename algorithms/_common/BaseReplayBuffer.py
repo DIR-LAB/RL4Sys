@@ -67,5 +67,5 @@ class ReplayBufferAbstract(ABC):
         pass
 
     @abstractmethod
-    def get(self):
+    def get(self, *args, **kwargs):
         pass
