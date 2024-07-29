@@ -8,6 +8,8 @@ import inspect
 from typing import Union
 from typing import NoReturn as Never
 
+from conf_loader import ConfigLoader
+
 ALGORITHMS_PATH = 'algorithms'
 
 import os, json
@@ -16,30 +18,10 @@ the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
-train_server = {}
-traj_server = {}
-save_model_path = {}
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        train_server, traj_server = config['server'], config['server']
-        train_server, traj_server = train_server['training_server'], traj_server['trajectory_server']
-        save_model_path = config['model_paths']
-        save_model_path = os.path.join(os.path.dirname(__file__), save_model_path['save_model'])
-except (FileNotFoundError, KeyError):
-    print(f"[TrainingServer: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
-    train_server = {
-        'prefix': 'tcp://',
-        'host': '*',
-        'port': ":5556"
-    }
-    traj_server = {
-        'prefix': 'tcp://',
-        'host': '*',
-        'port': ":5555"
-    }
-    save_model_path = os.path.join(os.path.dirname(__file__), 'models/model.pth')
+config_loader = ConfigLoader()
+train_server = config_loader.train_server
+traj_server = config_loader.traj_server
+save_model_path = config_loader.save_model_path
 
 class TrainingServer:
     """Train a model for a remote agent.

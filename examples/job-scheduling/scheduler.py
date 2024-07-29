@@ -464,7 +464,8 @@ class BatchSchedSim():
 
                     # get a new RL action
                     rl4sys_action = self.rlagent.request_for_action(flatten_obs_old, mask, rew)
-                    job_id_in_queue = rl4sys_action.act[0]
+                    job_id_in_queue = rl4sys_action.act[0] if isinstance(rl4sys_action.act, np.ndarray) \
+                        else rl4sys_action.act
                     job_for_scheduling = self.pairs[job_id_in_queue][0]
                     if job_for_scheduling is None:
                         self.skip_and_retry()

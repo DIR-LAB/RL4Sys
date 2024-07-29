@@ -5,28 +5,17 @@ import pickle
 import os
 
 import json
+
+from conf_loader import ConfigLoader
+
 """Import and load RL4Sys/config.json trajectory & server configurations and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
-max_traj_length = None
-traj_server = None
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        max_traj_length = config['max_traj_length']
-        traj_server = config['server']
-        traj_server = traj_server['trajectory_server']
-except (FileNotFoundError, KeyError):
-    print(f"Failed to load configuration from {CONFIG_PATH}, loading defaults.")
-    max_traj_length = 1000
-    traj_server = {
-        'prefix': 'tcp://',
-        'host': 'localhost',
-        'port': ":5555"
-    }
+config_loader = ConfigLoader()
+max_traj_length = config_loader.max_traj_length
+traj_server = config_loader.traj_server
 
 class RL4SysTrajectory:
     """Container for trajectories in RL4Sys environments.

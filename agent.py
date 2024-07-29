@@ -12,32 +12,16 @@ from agent_tensorboard import TensorboardWriter
 import zmq
 import threading
 
-import os
-import json
+from conf_loader import ConfigLoader
 
 """Import and load RL4Sys/config.json server configurations and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
-train_server = {}
-load_model_path = {}
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        train_server = config['server']
-        train_server = train_server['training_server']
-        load_model_path = config['model_paths']
-        load_model_path = os.path.join(os.path.dirname(__file__), load_model_path['load_model'])
-except (FileNotFoundError, KeyError):
-    print(f"[RL4SysAgent: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
-    train_server = {
-        'prefix': 'tcp://',
-        'host': '*',
-        'port': ":5556"
-    }
-    load_model_path = os.path.join(os.path.dirname(__file__), 'models/model.pth')
+config_loader = ConfigLoader()
+train_server = config_loader.train_server
+load_model_path = config_loader.load_model_path
 
 
 class RL4SysAgent:
