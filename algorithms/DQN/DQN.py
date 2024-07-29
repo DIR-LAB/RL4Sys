@@ -10,39 +10,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
-import json
+from conf_loader import ConfigLoader
+
 """
 Import and load RL4Sys/config.json DQN Agent configurations and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-CONFIG_PATH = os.path.join(top_dir, 'config.json')
-hyperparams = {}
-save_model_path = {}
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        hyperparams = config['algorithms']
-        hyperparams = hyperparams['DQN']
-        save_model_path = config['model_paths']
-        save_model_path = os.path.join(save_model_path['save_model'])
-except (FileNotFoundError, KeyError):
-    print(f"DQN: Failed to load configuration from {CONFIG_PATH}, loading defaults.")
-    hyperparams = {
-        "batch_size": 32,
-        "seed": 0,
-        "traj_per_epoch": 3,
-        "gamma": 0.95,
-        "epsilon": 1.0,
-        "epsilon_min": 0.01,
-        "epsilon_decay": 5e-4,
-        "train_update_freq": 4,
-        "q_lr": 1e-3,
-        "train_q_iters": 80
-    }
-    save_model_path = os.path.join(top_dir, 'models/model.pth')
+config_loader = ConfigLoader(algorithm='DQN')
+hyperparams = config_loader.algorithm_params
+save_model_path = config_loader.save_model_path
 
 
 """
