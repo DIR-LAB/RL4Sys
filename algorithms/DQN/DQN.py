@@ -10,6 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
+from algorithms._common.BaseAlgorithm import AlgorithmAbstract
+
 import json
 """
 Import and load RL4Sys/config.json DQN Agent configurations and applies them to
@@ -50,7 +52,7 @@ DQN Agent with hyperparameters
 """
 
 
-class DQN:
+class DQN(AlgorithmAbstract):
     """
             Args:
                 kernel_size: number of observations
@@ -68,18 +70,15 @@ class DQN:
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, kernel_size: int, kernel_dim: int,
-                 buf_size: int, act_dim: int = 1, batch_size: int = hyperparams['batch_size'],
-                 seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
-                 gamma: float = hyperparams['gamma'],
-                 epsilon: float = hyperparams['epsilon'],
-                 epsilon_min: float = hyperparams['epsilon_min'],
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+                 batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
+                 epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
                  epsilon_decay: float = hyperparams['epsilon_decay'],
-                 train_update_freq: float = hyperparams['train_update_freq'],
-                 q_lr: float = hyperparams['q_lr'],
+                 train_update_freq: float = hyperparams['train_update_freq'], q_lr: float = hyperparams['q_lr'],
                  train_q_iters: int = hyperparams['train_q_iters']):
 
+        super().__init__()
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
         np.random.seed(seed)
