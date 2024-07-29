@@ -3,13 +3,13 @@ import torch.nn as nn
 
 import numpy as np
 
-
+from algorithms._common.BaseKernel import StepAndForwardKernelAbstract
 """
 Network configurations for DQN
 """
 
 
-class DeepQNetwork(nn.Module):
+class DeepQNetwork(StepAndForwardKernelAbstract):
     """Neural network for DQN.
 
     Produces Q-values for actions.
