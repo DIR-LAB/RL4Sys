@@ -6,7 +6,7 @@ class ConfigLoader:
         self.config_path = config_path or os.path.join(os.path.dirname(__file__), 'config.json')
         self.config = self.load_config()
 
-        self.algorithm_params = self.get_algorithm_params(algorithm)
+        self.algorithm_params = self.get_algorithm_params(algorithm) if algorithm is not None else None
         self.train_server = self.get_train_server()
         self.traj_server = self.get_traj_server()
         self.tb_params = self.get_tensorboard_params()
@@ -24,15 +24,14 @@ class ConfigLoader:
 
     def get_algorithm_params(self, algo: str):
         available_algorithms = ['DQN', 'PPO', 'SAC']
-        if algo not in available_algorithms:
-            print(f"Algorithm {algo} not found in available algorithms: {available_algorithms}, returning None.")
+        if algo is None or algo not in available_algorithms:
             return None
         try:
-            self.algorithm_params = self.config['algorithms'][algo]
+            algorithm_params = self.config['algorithms'][algo]
         except FileNotFoundError:
             print(f"[ConfigLoader] Failed to load algorithm hyperparameters, loading defaults.")
             if algo == 'DQN':
-                self.algorithm_params = {
+                algorithm_params = {
                     "batch_size": 32,
                     "seed": 0,
                     "traj_per_epoch": 3,
@@ -45,7 +44,7 @@ class ConfigLoader:
                     "train_q_iters": 80
                 }
             elif algo == 'PPO':
-                self.algorithm_params = {
+                algorithm_params = {
                     "seed": 0,
                     "traj_per_epoch": 3,
                     "clip_ratio": 0.2,
@@ -58,7 +57,7 @@ class ConfigLoader:
                     "target_kl": 0.01,
                 }
             elif algo == 'SAC':
-                self.algorithm_params = {
+                algorithm_params = {
                     "batch_size": 32,
                     "seed": 0,
                     "traj_per_epoch": 3,
@@ -69,7 +68,9 @@ class ConfigLoader:
                     "train_update_freq": 4,
                     "train_iters": 80
                 }
-        return self.algorithm_params
+            else:
+                algorithm_params = None
+        return algorithm_params
 
     def get_train_server(self):
         try:

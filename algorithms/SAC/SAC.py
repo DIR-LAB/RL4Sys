@@ -27,23 +27,19 @@ save_model_path = config_loader.save_model_path
 
 
 class SAC(AlgorithmAbstract):
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int,
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  polyak: float = hyperparams['polyak'], alpha: float = hyperparams['alpha'],
                  lr: float = hyperparams['lr'], train_update_freq: int = hyperparams['train_update_freq'],
                  train_iters: int = hyperparams['train_iters']):
+
         super().__init__()
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        self._kernel_size = kernel_size
-        self._kernel_dim = kernel_dim
-        self._buf_size = buf_size
-        self._act_dim = act_dim
         self._batch_size = batch_size
-
         self._traj_per_epoch = traj_per_epoch
         self._lr = lr
         self._gamma = gamma
@@ -52,11 +48,11 @@ class SAC(AlgorithmAbstract):
         self._train_update_freq = train_update_freq
         self._train_iters = train_iters
 
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size)
+        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma)
         self._model = RLActorCritic(kernel_size * kernel_dim, act_dim)
         self._model_target = deepcopy(self._model)
-        self._q_params = itertools.chain(self._model.q1.parameters(), self._model.q2.parameters())
         self._pi_optimizer = Adam(self._model.pi.parameters(), lr=lr)
+        self._q_params = itertools.chain(self._model.q1.parameters(), self._model.q2.parameters())
         self._q_optimizer = Adam(self._q_params, lr=lr)
 
         current_dir = os.getcwd()
@@ -101,8 +97,8 @@ class SAC(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
-                self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['logp_a'])
+                self.logger.store(LogPi=r4a.data['logp_a'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
@@ -137,7 +133,7 @@ class SAC(AlgorithmAbstract):
 
         for i in range(self._train_iters):
             self._pi_optimizer.zero_grad()
-            loss_pi, logp_a = self.compute_loss_pi(data)
+            loss_pi = self.compute_loss_pi(data)
             loss_pi.backward()
             self._pi_optimizer.step()
 
@@ -150,7 +146,7 @@ class SAC(AlgorithmAbstract):
                 param_target.data.add_((1 - self._polyak) * param.data)
 
         q1_vals, q2_vals = q_info['Q1Vals'], q_info['Q2Vals']
-        self.logger.store(LossQ=loss_q.item(), LossPi=loss_pi.item(), Q1Vals=q1_vals, Q2Vals=q2_vals, LogPi=logp_a)
+        self.logger.store(LossQ=loss_q.item(), LossPi=loss_pi.item(), Q1Vals=q1_vals, Q2Vals=q2_vals)
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
@@ -192,7 +188,7 @@ class SAC(AlgorithmAbstract):
 
         return loss_q, q_info
 
-    def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
         obs = data['obs']
         pi, logp_a = self._model.pi(obs)
         q1_pi = self._model.q1(obs, pi)
@@ -201,4 +197,4 @@ class SAC(AlgorithmAbstract):
 
         loss_pi = (self._alpha * logp_a - q_pi).mean()
 
-        return loss_pi, logp_a.detach().numpy()
+        return loss_pi

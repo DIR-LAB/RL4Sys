@@ -1,4 +1,3 @@
-from abc import ABCMeta
 from typing import Optional, Type
 
 import numpy as np
@@ -22,7 +21,7 @@ class RLActor(ForwardKernelAbstract):
     """
     Squashed gaussian MLP actor network.
     """
-    def __init__(self, obs_dim: int, act_dim: int, act_limit, hidden_sizes: tuple = (256, 256),
+    def __init__(self, obs_dim: int, act_dim: int, act_limit: int, hidden_sizes: tuple = (256, 256),
                  activation=nn.ReLU):
         super().__init__()
         self.obs_dim = obs_dim
@@ -53,7 +52,7 @@ class RLActor(ForwardKernelAbstract):
 
         if with_logprob:
             logp_a = pi_distribution.log_prob(pi_action).sum(axis=-1)
-            logp_a -= (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(axis=1)
+            logp_a -= (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(axis=-1)
         else:
             logp_a = None
 
@@ -77,10 +76,8 @@ class QFunction(ForwardKernelAbstract):
 
 
 class RLActorCritic(StepKernelAbstract):
-    def __init__(self, obs_space, act_space, hidden_sizes=(256, 256), activation=nn.ReLU):
+    def __init__(self, obs_dim, act_dim, hidden_sizes=(256, 256), activation=nn.ReLU):
         super().__init__()
-        obs_dim = obs_space.shape[0]
-        act_dim = act_space.shape[0]
         act_limit = act_dim
 
         self.pi = RLActor(obs_dim, act_dim, act_limit, hidden_sizes, activation)
@@ -89,5 +86,6 @@ class RLActorCritic(StepKernelAbstract):
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor, deterministic: Optional[bool] = False):
         with torch.no_grad():
-            a, logp_a = self.pi(obs, deterministic, False)
-            return a.numpy(), logp_a.numpy()
+            a, logp_a = self.pi.forward(obs, mask, deterministic, True)
+            data = {'logp_a': logp_a}
+            return a.numpy(), data

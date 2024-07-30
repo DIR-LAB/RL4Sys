@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from algorithms.common.BaseReplayBuffer import combined_shape, discount_cumsum, statistics_scalar, ReplayBufferAbstract
+from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, statistics_scalar, ReplayBufferAbstract
 
 """
 PPO Code
