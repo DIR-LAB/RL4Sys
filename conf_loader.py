@@ -2,10 +2,11 @@ import os
 import json
 
 class ConfigLoader:
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, algorithm=None):
         self.config_path = config_path or os.path.join(os.path.dirname(__file__), 'config.json')
         self.config = self.load_config()
-        
+
+        self.algorithm_params = self.get_algorithm_params(algorithm)
         self.train_server = self.get_train_server()
         self.traj_server = self.get_traj_server()
         self.tb_params = self.get_tensorboard_params()
@@ -20,6 +21,43 @@ class ConfigLoader:
         except (FileNotFoundError, KeyError):
             print(f"Failed to load configuration from {self.config_path}, loading defaults.")
             return {}
+
+    def get_algorithm_params(self, algo: str):
+        available_algorithms = ['DQN', 'PPO']
+        if algo not in available_algorithms:
+            print(f"Algorithm {algo} not found in available algorithms: {available_algorithms}, returning None.")
+            return None
+        try:
+            self.algorithm_params = self.config['algorithms'][algo]
+        except FileNotFoundError:
+            print(f"[ConfigLoader] Failed to load algorithm hyperparameters, loading defaults.")
+            if algo == 'DQN':
+                self.algorithm_params = {
+                    "batch_size": 32,
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "gamma": 0.95,
+                    "epsilon": 1.0,
+                    "epsilon_min": 0.01,
+                    "epsilon_decay": 5e-4,
+                    "train_update_freq": 4,
+                    "q_lr": 1e-3,
+                    "train_q_iters": 80
+                }
+            elif algo == 'PPO':
+                self.algorithm_params = {
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "clip_ratio": 0.2,
+                    "gamma": 0.99,
+                    "lam": 0.97,
+                    "pi_lr": 3e-4,
+                    "vf_lr": 1e-3,
+                    "train_pi_iters": 80,
+                    "train_v_iters": 80,
+                    "target_kl": 0.01,
+                }
+        return self.algorithm_params
 
     def get_train_server(self):
         try:
