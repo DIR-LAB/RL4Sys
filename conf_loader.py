@@ -23,7 +23,7 @@ class ConfigLoader:
             return {}
 
     def get_algorithm_params(self, algo: str):
-        available_algorithms = ['DQN', 'PPO']
+        available_algorithms = ['DQN', 'PPO', 'SAC']
         if algo not in available_algorithms:
             print(f"Algorithm {algo} not found in available algorithms: {available_algorithms}, returning None.")
             return None
@@ -56,6 +56,18 @@ class ConfigLoader:
                     "train_pi_iters": 80,
                     "train_v_iters": 80,
                     "target_kl": 0.01,
+                }
+            elif algo == 'SAC':
+                self.algorithm_params = {
+                    "batch_size": 32,
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "gamma": 0.95,
+                    "polyak": 0.995,
+                    "alpha": 0.2,
+                    "lr": 1e-3,
+                    "train_update_freq": 4,
+                    "train_iters": 80
                 }
         return self.algorithm_params
 
