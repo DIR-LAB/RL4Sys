@@ -31,7 +31,22 @@ class ConfigLoader:
             self.algorithm_params = self.config['algorithms'][algo]
         except FileNotFoundError:
             print(f"[ConfigLoader] Failed to load algorithm hyperparameters, loading defaults.")
-            if algo == 'DQN':
+            if algo == 'C51':
+                self.algorithm_params = {
+                    "batch_size": 32,
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "atoms": 51,
+                    "v_min": -10.0,
+                    "v_max": 10.0,
+                    "gamma": 0.95,
+                    "epsilon": 1.0,
+                    "epsilon_min": 0.01,
+                    "epsilon_decay": 5e-4,
+                    "q_lr": 1e-3,
+                    "train_q_iters": 80
+                }
+            elif algo == 'DQN':
                 self.algorithm_params = {
                     "batch_size": 32,
                     "seed": 0,
