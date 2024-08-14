@@ -3,7 +3,6 @@ import numpy as np
 import scipy.signal
 
 
-
 def combined_shape(length, shape=None):
     if shape is None:
         return (length,)
@@ -55,17 +54,29 @@ def statistics_scalar(x, with_min_and_max=False):
 
 
 class ReplayBufferAbstract(ABC):
+    """
+    Abstract class for designing and implementing new replay buffers that can interface with RL4Sys and its algorithms.
+    """
     def __init__(self, *args, **kwargs):
         super(ReplayBufferAbstract, self).__init__()
 
     @abstractmethod
     def store(self, *args, **kwargs):
+        """
+        Store a new trajectory in the replay buffer.
+        """
         pass
 
     @abstractmethod
     def finish_path(self, *args, **kwargs):
+        """
+        Store the final observation in the replay buffer.
+        """
         pass
 
     @abstractmethod
     def get(self, *args, **kwargs):
+        """
+        Get a collection of data from the replay buffer.
+        """
         pass

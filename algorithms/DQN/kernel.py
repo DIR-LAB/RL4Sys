@@ -1,9 +1,9 @@
+from _common._algorithms.BaseKernel import StepAndForwardKernelAbstract
+
 import torch
 import torch.nn as nn
-
 import numpy as np
 
-from _common._algorithms.BaseKernel import StepAndForwardKernelAbstract
 """
 Network configurations for DQN
 """
@@ -77,23 +77,3 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
         self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
 
         return a, data
-
-
-def infer_next_obs(act, obs: torch.Tensor, mask: torch.Tensor = None):
-    """ Placeholder next observation function
-    Computes next observation based on current observation and mask.
-    Unused in DQN computations.
-
-    Next_obs calculation is the sum of the current observation
-     and the action taken in said observation.
-
-    Args:
-        act: action taken
-        obs: current observation
-        mask: mask for current observation (unused in DQN)
-    Returns:
-        next observation
-    """
-    next_obs = obs + torch.tensor(act, dtype=torch.float32)
-    return next_obs
-

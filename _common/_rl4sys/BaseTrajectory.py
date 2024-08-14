@@ -12,11 +12,20 @@ traj_server = config_loader.traj_server
 
 
 class RL4SysTrajectoryAbstract(ABC):
+    """
+    Abstract class for a trajectory in RL4Sys.
+    """
     def __init__(self, *args, **kwargs):
         super(RL4SysTrajectoryAbstract, self).__init__(*args, **kwargs)
 
     @abstractmethod
     def add_action(self, action: RL4SysActionAbstract):
+        """
+        Add an action to the trajectory.
+
+        args:
+            action: the action to add to the trajectory.
+        """
         pass
 
 

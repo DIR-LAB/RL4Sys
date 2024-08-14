@@ -1,11 +1,11 @@
+from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+
 from typing import Optional, Type
 
 import torch
 import torch.nn as nn
 from numpy import ndarray
 from torch.distributions.categorical import Categorical
-
-from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
 """
 Network configurations for PPO
