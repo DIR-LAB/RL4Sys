@@ -1,3 +1,5 @@
+from algorithms._common.BaseAlgorithm import AlgorithmAbstract
+
 import numpy as np
 import torch
 from torch.optim import Adam
@@ -9,8 +11,6 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
-
-from algorithms._common.BaseAlgorithm import AlgorithmAbstract
 
 from conf_loader import ConfigLoader
 
@@ -60,14 +60,8 @@ class C51(AlgorithmAbstract):
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        # Input parameters
-        self._kernel_size = kernel_size
-        self._kernel_dim = kernel_dim
-        self._buf_size = buf_size
-        self._act_dim = act_dim
-        self._batch_size = batch_size
-
         # Hyperparameters
+        self._batch_size = batch_size
         self._traj_per_epoch = traj_per_epoch
         self._atoms = atoms
         self._v_min = v_min
@@ -79,9 +73,11 @@ class C51(AlgorithmAbstract):
         self._train_q_iters = train_q_iters
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
-        self._model = C51QNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._model = C51QNetwork(kernel_size, kernel_dim, act_dim, atoms, v_min, v_max, self._epsilon,
+                                  self._epsilon_min, self._epsilon_decay)
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
-        self._target_model = C51QNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._target_model = C51QNetwork(kernel_size, kernel_dim, act_dim, atoms, v_min, v_max, self._epsilon,
+                                         self._epsilon_min, self._epsilon_decay)
         self._target_model.load_state_dict(self._model.state_dict())
 
         # set up logger
@@ -128,8 +124,8 @@ class C51(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
-                self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['logp_a'])
+                self.logger.store(QVals=r4a.data['logp_a'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
@@ -148,8 +144,9 @@ class C51(AlgorithmAbstract):
         """
         data, batch = self._replay_buffer.get(self._batch_size)
 
-        q_l_old = self.compute_loss_q(data)[0]
+        q_l_old, pmf_target_old = self.compute_loss_q(data)
         q_l_old = q_l_old.item()
+        pmf_target_old = pmf_target_old.item()
 
         # Train Q network for n iterations of gradient descent
         for i in range(self._train_q_iters):
@@ -160,7 +157,8 @@ class C51(AlgorithmAbstract):
 
         self.logger.store(StopIter=i)
 
-        self.logger.store(PMFTargets=pmf_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
+        self.logger.store(PMFTargets=pmf_target.item(), LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old),
+                          DeltaPMFTargets=abs(pmf_target.item() - pmf_target_old))
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
@@ -176,7 +174,7 @@ class C51(AlgorithmAbstract):
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute loss for Q function.
 
         Args:
@@ -187,26 +185,27 @@ class C51(AlgorithmAbstract):
         """
         obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
 
-        # Q loss
+        # Projection and Q-Loss
         with torch.no_grad():
-            _, next_pmf = self._target_model.step(next_obs, mask)
-            next_atoms = rew + self._gamma * self._target_model.atoms
+            next_pmf = self._target_model.step(next_obs, mask)[1]['q_pmf'].logits
+            next_atoms = rew.unsqueeze(-1) + self._gamma * self._target_model.atoms
 
             delta_z = self._target_model.atoms[1] - self._target_model.atoms[0]
-            tz = next_atoms.clamp(self._v_min, self._v_max)
+            target_z = next_atoms.clamp(self._v_min, self._v_max)
 
-            b = (tz - self._v_min) / delta_z
-            l = b.floor().clamp(0, self._atoms - 1)
-            u = b.ceil().clamp(0, self._atoms - 1)
-            d_m_l = (u + (l == u).float() - b) * next_pmf
-            d_m_u = (b - l) * next_pmf
+            b = (target_z - self._v_min) / delta_z
+            l = b.floor().clamp(0, self._atoms - 1).long()
+            u = b.ceil().clamp(0, self._atoms - 1).long()
+
+            d_m_l = ((u + (l == u).float() - b) * next_pmf).to(next_pmf.dtype)
+            d_m_u = ((b - l) * next_pmf).to(next_pmf.dtype)
             target_pmf = torch.zeros_like(next_pmf)
             for i in range(target_pmf.size(0)):
-                target_pmf[i].index_add_(0, l[i].long(), d_m_l[i])
-                target_pmf[i].index_add_(0, u[i].long(), d_m_u[i])
+                target_pmf[i].index_add_(0, l[i], d_m_l[i])
+                target_pmf[i].index_add_(0, u[i], d_m_u[i])
 
         # loss_q probability mass function
-        _, old_pmf = self._model.step(obs, mask)
+        old_pmf = self._model.step(obs, mask)[1]['q_pmf'].logits
         loss_q = (-(target_pmf * old_pmf.clamp(min=1e-5, max=1-1e5).log()).sum(-1)).mean()
 
-        return loss_q, target_pmf.detach().numpy()
+        return loss_q, target_pmf

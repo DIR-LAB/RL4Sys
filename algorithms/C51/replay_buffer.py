@@ -1,9 +1,8 @@
+from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
+
 import numpy as np
 import random
-import scipy.signal
 import torch
-
-from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
 
 """
 C51 Code

@@ -7,7 +7,7 @@
 
         },
         "C51": {
-            "batch_size": 32,
+            "batch_size": 128,
             "seed": 0,
             "traj_per_epoch": 3,
             "atoms": 51,

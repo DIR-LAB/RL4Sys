@@ -1,9 +1,12 @@
+from algorithms._common.BaseKernel import StepAndForwardKernelAbstract
+
+from typing import Optional
+
 import torch
 import torch.nn as nn
+from torch.distributions import Categorical
 
 import numpy as np
-
-from algorithms._common.BaseKernel import StepAndForwardKernelAbstract
 
 """
 Network configurations for C51
@@ -41,69 +44,75 @@ class C51QNetwork(StepAndForwardKernelAbstract):
         self.kernel_size = kernel_size
         self.act_dim = act_dim
 
-        self.atoms = atoms
-        self.register_buffer("atoms", torch.linspace(v_min, v_max, steps=atoms))
+        self.n_atoms = atoms
+        self.register_buffer("atoms", torch.linspace(v_min, v_max, steps=self.n_atoms))
 
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min
         self._epsilon_decay = epsilon_decay
 
-    def forward(self, obs: torch.Tensor, mask: torch.Tensor = None):
+    def _distribution(self, obs: torch.Tensor, mask: torch.Tensor = None) -> Categorical:
         """
             Forward pass through Q-network, outputs Q-values for actions.
         Args:
             obs: current observation
-            mask: mask for current observation (unused in DQN)
+            mask: mask for current observation (unused in C51)
         Returns:
             Q-values for actions
         """
-        return self.q_network(obs)
+        return Categorical(logits=self.q_network(obs))
+
+    def _log_prob_from_distribution(self, q: torch.distributions.distribution.Distribution, act: torch.Tensor) -> torch.Tensor:
+        """
+        Get log probability of action(s) from distribution.
+
+        Args:
+            q: Q-value distribution
+            act: action(s) to get log probability for
+
+        Returns:
+            log probability of action(s)
+        """
+        return q.log_prob(act)
+
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor = None, act: Optional[torch.Tensor] = None):
+        """
+            Forward pass through Q-network, outputs Q-values for actions.
+        Args:
+            obs: current observation
+            mask: mask for current observation (unused in C51)
+            act: action(s) to get log probability for (optional)
+        Returns:
+            Q-values for actions
+        """
+        pmf = self._distribution(obs, mask)
+
+        logp_a = None
+        if act is not None:
+            logp_a = self._log_prob_from_distribution(pmf, act)
+
+        return pmf, logp_a
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
             Select an action based on epsilon-greedy policy.
             If explore, choose random action from distribution.
-            If exploit, choose action with highest Q-value.
+            If exploit, choose action with highest Q-value from distribution.
         Args:
             obs: current observation
-            mask: mask for current observation (unused in DQN)
+            mask: mask for current observation (unused in C51)
         Returns:
 
         """
-        if np.random.rand() <= self._epsilon:
-            with torch.no_grad():
-                logits = self.forward(obs, mask)
-                q_pmf = torch.softmax(logits.view(len(obs), self.act_dim, self.n_atoms), dim=2)
-                q_distribution = (q_pmf * self.atoms).sum(2)
-            a = np.random.choice(self.act_dim * self.atoms, size=len(obs), p=q_distribution)
-        else:
-            with torch.no_grad():
-                logits = self.forward(obs, mask)
-                q_pmf = torch.softmax(logits.view(len(obs), self.act_dim, self.n_atoms), dim=2)
-                q_distribution = (q_pmf * self.atoms).sum(2)
-                a = torch.argmax(q_distribution, dim=1)
+        with torch.no_grad():
+            q_pmf = self.forward(obs, mask)[0]
+            if np.random.rand() <= self._epsilon:
+                a = np.random.choice(q_pmf.logits.size(0))
+            else:
+                a = torch.argmax(q_pmf.sample(), dim=0).item()
+            q_logp_a = self._log_prob_from_distribution(q_pmf, torch.tensor([a]))
 
-        data = {'q_val': q_pmf.detach().numpy()[torch.arange(len(obs)), a], 'epsilon': self._epsilon}
+        data = {'q_pmf': q_pmf, 'logp_a': q_logp_a.numpy(), 'epsilon': self._epsilon}
         self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
 
         return a, data
-
-
-def infer_next_obs(act, obs: torch.Tensor, mask: torch.Tensor = None):
-    """ Placeholder next observation function
-    Computes next observation based on current observation and mask.
-    Unused in DQN computations.
-
-    Next_obs calculation is the sum of the current observation
-     and the action taken in said observation.
-
-    Args:
-        act: action taken
-        obs: current observation
-        mask: mask for current observation (unused in DQN)
-    Returns:
-        next observation
-    """
-    next_obs = obs + torch.tensor(act, dtype=torch.float32)
-    return next_obs
-
