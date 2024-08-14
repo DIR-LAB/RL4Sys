@@ -1,10 +1,5 @@
+from _common._rl4sys.BaseTrajectory import TrajectoryAbstract, send_trajectory
 from action import RL4SysAction
-import zmq
-import pickle
-
-import os
-
-import json
 
 from conf_loader import ConfigLoader
 
@@ -15,9 +10,8 @@ Loads defaults if config.json is unavailable or key error thrown.
 """
 config_loader = ConfigLoader()
 max_traj_length = config_loader.max_traj_length
-traj_server = config_loader.traj_server
 
-class RL4SysTrajectory:
+class RL4SysTrajectory(TrajectoryAbstract):
     """Container for trajectories in RL4Sys environments.
 
     Stores actions taken in environment script to send to training_server.
@@ -30,6 +24,7 @@ class RL4SysTrajectory:
     """
 
     def __init__(self, max_length: int = max_traj_length):
+        super().__init__()
 
         if max_length:
             self.max_length = max_length
@@ -50,7 +45,7 @@ class RL4SysTrajectory:
         self.actions.append(action)
 
         if action.done:
-            print("[trajectory.py - whole traj - send to Training Server]")
+            print("[BaseTrajectory.py - whole traj - send to Training Server]")
 
             # TODO refactor out to RL4SysAgent object which holds this trajectory, or allow connection information to be passed in from agent
             send_trajectory(self)
@@ -58,42 +53,3 @@ class RL4SysTrajectory:
             if len(self.actions) >= self.max_length:
                 print("traj too long, ignored in current implementation") # TODO handle max traj length
 
-def serialize_trajectory(trajectory: RL4SysTrajectory) -> bytes:
-    """Pickle trajectory.
-
-    Used to send trajectory over network.
-    Unpickle with pickle.loads(bytes).
-
-    Args:
-        trajectory: the trajectory to serialize.
-    Returns:
-        Pickled trajectory object.
-
-    """
-    return pickle.dumps(trajectory)
-
-def send_trajectory(trajectory: RL4SysTrajectory) -> None:
-    """Send trajectory over network.
-
-    Currently uses tcp://localhost:5555.
-
-    Args:
-        trajectory: the trajectory to send.
-
-    """
-    # Serialize the trajectory
-    serialized_trajectory = serialize_trajectory(trajectory)
-
-    # Create a ZMQ context and a push socket
-    context = zmq.Context()
-    socket = context.socket(zmq.PUSH)
-    # Assuming the server is on localhost, port 5555
-    address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
-    socket.connect(address)
-
-    # Send the trajectory data
-    socket.send(serialized_trajectory)
-
-    # Close the socket and context
-    socket.close()
-    context.term()

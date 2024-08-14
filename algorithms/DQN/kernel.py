@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import numpy as np
 
-from algorithms._common.BaseKernel import StepAndForwardKernelAbstract
+from _common._algorithms.BaseKernel import StepAndForwardKernelAbstract
 """
 Network configurations for DQN
 """

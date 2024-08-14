@@ -1,3 +1,5 @@
+from _common._examples.BaseApplication import ApplicationAbstract
+
 import numpy as np
 import argparse
 import math
@@ -320,8 +322,9 @@ JOB_SEQUENCE_SIZE = 256
 SKIP_TIME = 360  # skip 60 seconds
 
 
-class BatchSchedSim():
+class BatchSchedSim(ApplicationAbstract):
     def __init__(self, workload_file, seed, job_score_type=0, backfil=False, model=None, tensorboard=False):
+        super().__init__()
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
         self.loads = Workloads(workload_file)
@@ -432,7 +435,10 @@ class BatchSchedSim():
         self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
         print("[schedule.py - reset()]")
 
-    def schedule_whole_trace(self):
+    """
+    Schedules whole job trace
+    """
+    def run_application(self):
         # start from the beginning of the trace
         self.start = 0
         self.current_timestamp = self.loads[self.start].submit_time
@@ -605,7 +611,7 @@ class BatchSchedSim():
             self.running_jobs.pop(0)  # remove the first running job (which was running on just-released machines).
         return
 
-    def calculate_scheduling_score(self, scheduled_jobs):
+    def calculate_scheduling_return(self, scheduled_jobs):
         sum = 0
         for job in scheduled_jobs:
             sum += self.job_score(job)

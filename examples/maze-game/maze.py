@@ -1,3 +1,5 @@
+from _common._examples.BaseApplication import ApplicationAbstract
+
 import numpy as np
 import random
 import time
@@ -195,10 +197,11 @@ MAX_SIZE = 5
 MOVE_SEQUENCE_SIZE = 500
 
 
-class MazeGameSim:
+class MazeGameSim(ApplicationAbstract):
     def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
                  performance_metric: int = 0, tensorboard: bool = False):
+        super().__init__()
         self._area_dimensions = area_dimensions
         self._seed = seed
         self._play_new_levels = play_new_levels
@@ -291,7 +294,7 @@ class MazeGameSim:
         self.agent_properties.draw_agent(self._screen)
         pygame.display.flip()
 
-    def run_sim(self, num_iterations: int = 1, num_moves: int = 500, play_new_levels: bool = False):
+    def run_application(self, num_iterations: int = 1, num_moves: int = 500, play_new_levels: bool = False):
         def reset_agent():
             self.agent_properties.position = self._start_position
 
@@ -505,7 +508,7 @@ class MazeGameSim:
         mask = torch.as_tensor(mask, dtype=torch.float32)
         return obs, mask
 
-    def calculate_performance_score(self, elements) -> float:
+    def calculate_performance_return(self, elements) -> float:
         """
         Calculate performance score based on performance metric using captured simulator elements
         :return: returns calculated performance score
