@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import pickle
 import zmq
 
-from _common._rl4sys.BaseAction import ActionAbstract
+from _common._rl4sys.BaseAction import RL4SysActionAbstract
 
 from conf_loader import ConfigLoader
 
@@ -11,16 +11,16 @@ config_loader = ConfigLoader()
 traj_server = config_loader.traj_server
 
 
-class TrajectoryAbstract(ABC):
+class RL4SysTrajectoryAbstract(ABC):
     def __init__(self, *args, **kwargs):
-        super(TrajectoryAbstract, self).__init__(*args, **kwargs)
+        super(RL4SysTrajectoryAbstract, self).__init__(*args, **kwargs)
 
     @abstractmethod
-    def add_action(self, action: ActionAbstract):
+    def add_action(self, action: RL4SysActionAbstract):
         pass
 
 
-def serialize_trajectory(trajectory: TrajectoryAbstract) -> bytes:
+def serialize_trajectory(trajectory: RL4SysTrajectoryAbstract) -> bytes:
     """Pickle trajectory.
 
     Used to send trajectory over network.
@@ -35,7 +35,7 @@ def serialize_trajectory(trajectory: TrajectoryAbstract) -> bytes:
     return pickle.dumps(trajectory)
 
 
-def send_trajectory(trajectory: TrajectoryAbstract) -> None:
+def send_trajectory(trajectory: RL4SysTrajectoryAbstract) -> None:
     """Send trajectory over network.
 
     Currently uses tcp://localhost:5555.

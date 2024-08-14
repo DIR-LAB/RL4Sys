@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from _common._rl4sys.BaseTrajectory import TrajectoryAbstract
+from _common._rl4sys.BaseTrajectory import RL4SysTrajectoryAbstract
 
 
 class AlgorithmAbstract(ABC):
@@ -12,7 +12,7 @@ class AlgorithmAbstract(ABC):
         pass
 
     @abstractmethod
-    def receive_trajectory(self, trajectory: TrajectoryAbstract) -> bool:
+    def receive_trajectory(self, trajectory: RL4SysTrajectoryAbstract) -> bool:
         pass
 
     @abstractmethod

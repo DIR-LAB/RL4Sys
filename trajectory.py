@@ -1,4 +1,4 @@
-from _common._rl4sys.BaseTrajectory import TrajectoryAbstract, send_trajectory
+from _common._rl4sys.BaseTrajectory import RL4SysTrajectoryAbstract, send_trajectory
 from action import RL4SysAction
 
 from conf_loader import ConfigLoader
@@ -11,7 +11,8 @@ Loads defaults if config.json is unavailable or key error thrown.
 config_loader = ConfigLoader()
 max_traj_length = config_loader.max_traj_length
 
-class RL4SysTrajectory(TrajectoryAbstract):
+
+class RL4SysTrajectory(RL4SysTrajectoryAbstract):
     """Container for trajectories in RL4Sys environments.
 
     Stores actions taken in environment script to send to training_server.

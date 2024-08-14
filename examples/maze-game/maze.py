@@ -383,7 +383,7 @@ class MazeGameSim(ApplicationAbstract):
                         print(f'[maze.py - simulator] RL4SysAgent moves made: {moves}')
                         self.simulator_stats['moves'] = moves
                         rl_runs = 0
-                        rl_total = self.calculate_performance_score(self.simulator_stats)
+                        rl_total = self.calculate_performance_return(self.simulator_stats)
                         rew = -rl_total
                         self.simulator_stats['performance_rewards'].append(rew)
                         self.rlagent.flag_last_action(rew)
@@ -412,11 +412,11 @@ class MazeGameSim(ApplicationAbstract):
             self._area_dimensions = (nx, ny)
             self.set_new_maze()
             print(f"[maze.py] New level generated: ({nx}, {ny}) -> {self._area_dimensions}, loading...")
-            self.run_sim(num_iterations, num_moves, play_new_levels=True)
+            self.run_application(num_iterations, num_moves, play_new_levels=True)
         else:
             print(f"[maze.py] Static area dimensions enabled, loading...")
             self.set_new_maze()
-            self.run_sim(num_iterations, play_new_levels=True)
+            self.run_application(num_iterations, play_new_levels=True)
 
     def build_observation(self, agent_position: tuple[int, int]):
         """
@@ -610,5 +610,5 @@ if __name__ == '__main__':
 
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
-    maze_game.run_sim(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
+    maze_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
                       play_new_levels=args.play_new_levels)

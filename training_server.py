@@ -1,4 +1,4 @@
-from _common._rl4sys.BaseTrainingServer import TrainingServerAbstract
+from _common._rl4sys.BaseTrainingServer import RL4SysTrainingServerAbstract
 import argparse
 import zmq
 import threading
@@ -25,7 +25,7 @@ traj_server = config_loader.traj_server
 save_model_path = config_loader.save_model_path
 
 
-class TrainingServer(TrainingServerAbstract):
+class TrainingServer(RL4SysTrainingServerAbstract):
     """Train a model for a remote agent.
 
     Sends one untrained model for agent initialization.

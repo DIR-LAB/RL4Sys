@@ -1,8 +1,8 @@
-from _common._rl4sys.BaseAction import ActionAbstract
+from _common._rl4sys.BaseAction import RL4SysActionAbstract
 from typing import Optional
 
 
-class RL4SysAction(ActionAbstract):
+class RL4SysAction(RL4SysActionAbstract):
     """
     An action stored with relevant data for RL models.
 

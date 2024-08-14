@@ -1,4 +1,4 @@
-from _common._rl4sys.BaseAgent import AgentAbstract
+from _common._rl4sys.BaseAgent import RL4SysAgentAbstract
 from typing import NoReturn as Never
 
 import time
@@ -25,7 +25,7 @@ train_server = config_loader.train_server
 load_model_path = config_loader.load_model_path
 
 
-class RL4SysAgent(AgentAbstract):
+class RL4SysAgent(RL4SysAgentAbstract):
     """RL model for use in environment scripts.
 
     Listens for updated models on the network asynchronously.

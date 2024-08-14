@@ -484,7 +484,7 @@ class BatchSchedSim(ApplicationAbstract):
                 if rl_runs > JOB_SEQUENCE_SIZE:
                     rl_runs = 0
                     rl_working = False
-                    rl_total = self.calculate_scheduling_score(self.rl_scheduled_jobs)
+                    rl_total = self.calculate_performance_return(self.rl_scheduled_jobs)
                     rew = -rl_total
                     self.rlagent.flag_last_action(rew)
                 else: # TODO was i right to add this line
@@ -611,13 +611,12 @@ class BatchSchedSim(ApplicationAbstract):
             self.running_jobs.pop(0)  # remove the first running job (which was running on just-released machines).
         return
 
-    def calculate_scheduling_return(self, scheduled_jobs):
+    def calculate_performance_return(self, scheduled_jobs):
         sum = 0
         for job in scheduled_jobs:
             sum += self.job_score(job)
         avg = sum / len(scheduled_jobs)
         return avg
-
 
     def post_process_score(self, scheduled_logs):
         if self.job_score_type == 0:
@@ -642,7 +641,6 @@ class BatchSchedSim(ApplicationAbstract):
                 scheduled_logs[i] /= self.num_job_in_batch
         else:
             raise NotImplementedError
-
 
     def build_observation(self):
         vector = np.zeros((MAX_QUEUE_SIZE) * JOB_FEATURES, dtype=float)
@@ -873,4 +871,4 @@ if __name__ == "__main__":
     iters = args.number_of_iterations
     for i in range(0, iters):
         sim.reset()
-        sim.schedule_whole_trace()
+        sim.run_application()

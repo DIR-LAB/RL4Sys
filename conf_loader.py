@@ -1,6 +1,7 @@
 import os
 import json
 
+
 class ConfigLoader:
     def __init__(self, config_path=None, algorithm=None):
         self.config_path = config_path or os.path.join(os.path.dirname(__file__), 'config.json')

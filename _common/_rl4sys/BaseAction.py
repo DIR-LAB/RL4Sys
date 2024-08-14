@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 
 
-class ActionAbstract(ABC):
+class RL4SysActionAbstract(ABC):
     def __init__(self, *args, **kwargs):
-        super(ActionAbstract, self).__init__()
+        super(RL4SysActionAbstract, self).__init__()
 
     @abstractmethod
     def update_reward(self, *args, **kwargs):
