@@ -189,6 +189,7 @@ def launch_tensorboard():
     import subprocess
     try:
         print("[launch_tensorboard] Starting Tensorboard.")
+        top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))
         subprocess.run(["tensorboard", "--logdir", os.path.join(top_dir, tb_params['log_dir'])])
     except Exception as e:
         print(f"[launch_tensorboard] Error: {e}")
