@@ -1,3 +1,5 @@
+from _common._rl4sys.BaseTrainingServer import RL4SysTrainingServerAbstract
+
 import argparse
 import zmq
 import threading
@@ -23,7 +25,8 @@ train_server = config_loader.train_server
 traj_server = config_loader.traj_server
 save_model_path = config_loader.save_model_path
 
-class TrainingServer:
+
+class TrainingServer(RL4SysTrainingServerAbstract):
     """Train a model for a remote agent.
 
     Sends one untrained model for agent initialization.
@@ -40,6 +43,7 @@ class TrainingServer:
 
     """
     def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]]):
+        super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams)
         # get algorithm class
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)

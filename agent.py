@@ -1,3 +1,5 @@
+from _common._rl4sys.BaseAgent import RL4SysAgentAbstract
+
 from typing import NoReturn as Never
 
 import time
@@ -24,7 +26,7 @@ train_server = config_loader.train_server
 load_model_path = config_loader.load_model_path
 
 
-class RL4SysAgent:
+class RL4SysAgent(RL4SysAgentAbstract):
     """RL model for use in environment scripts.
 
     Listens for updated models on the network asynchronously.
@@ -39,7 +41,9 @@ class RL4SysAgent:
 
     """
 
-    def __init__(self, model: torch.nn.Module = None, port: int = train_server['port'], tensorboard: bool = False):
+    def __init__(self, model: torch.nn.Module = None, training_server_port: int = train_server['port'],
+                 tensorboard: bool = False):
+        super().__init__(model, training_server_port, tensorboard)
         if model is not None:
             assert hasattr(model, 'step'), "Model must have a step method."
             result = model.step(None, None)
@@ -50,7 +54,7 @@ class RL4SysAgent:
                                                  " dict as the second element.")
 
         self._lock = threading.Lock()
-        self.port = port
+        self.port = training_server_port
 
         self._listen_thread = threading.Thread(target=self._loop_for_updated_model)
         self._listen_thread.daemon = True
@@ -71,7 +75,7 @@ class RL4SysAgent:
 
         print("[RLSysAgent] Model Initialized")
 
-    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward) -> RL4SysAction:
+    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward, *args, **kwargs) -> RL4SysAction:
         """Produce action based on trained model and given observation.
 
         Automatically records action to trajectory.
