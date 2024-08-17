@@ -1,6 +1,7 @@
 import os
 import json
 
+
 class ConfigLoader:
     def __init__(self, config_path=None, algorithm=None):
         self.config_path = config_path or os.path.join(os.path.dirname(__file__), 'config.json')
@@ -58,9 +59,13 @@ class ConfigLoader:
                 }
             elif algo == 'SAC':
                 algorithm_params = {
+                    "discrete": True,
+                    "adaptive_alpha": True,
                     "batch_size": 32,
                     "seed": 0,
                     "traj_per_epoch": 3,
+                    "log_std_min": -20,
+                    "log_std_max": 2,
                     "gamma": 0.95,
                     "polyak": 0.995,
                     "alpha": 0.2,

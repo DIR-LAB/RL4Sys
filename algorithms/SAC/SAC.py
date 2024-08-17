@@ -1,3 +1,5 @@
+from algorithms._common.BaseAlgorithm import AlgorithmAbstract, count_vars
+
 import itertools
 
 import numpy as np
@@ -13,8 +15,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
-from algorithms._common.BaseAlgorithm import AlgorithmAbstract, count_vars
-
 from conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json SAC algorithm configurations and applies them to
 the current instance.
@@ -28,8 +28,10 @@ save_model_path = config_loader.save_model_path
 
 class SAC(AlgorithmAbstract):
     def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+                 discrete: bool = hyperparams['discrete'], adaptive_alpha: bool = hyperparams['adaptive_alpha'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], log_std_min: int = hyperparams['log_std_min'],
+                 log_std_max: int = hyperparams['log_std_max'], gamma: float = hyperparams['gamma'],
                  polyak: float = hyperparams['polyak'], alpha: float = hyperparams['alpha'],
                  lr: float = hyperparams['lr'], train_update_freq: int = hyperparams['train_update_freq'],
                  train_iters: int = hyperparams['train_iters']):
@@ -39,6 +41,8 @@ class SAC(AlgorithmAbstract):
         torch.manual_seed(seed)
         np.random.seed(seed)
 
+        self._discrete = discrete
+        self._adaptive_alpha = adaptive_alpha
         self._batch_size = batch_size
         self._traj_per_epoch = traj_per_epoch
         self._lr = lr
@@ -49,11 +53,21 @@ class SAC(AlgorithmAbstract):
         self._train_iters = train_iters
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma)
-        self._model = RLActorCritic(kernel_size * kernel_dim, act_dim)
-        self._model_target = deepcopy(self._model)
+        self._model = RLActorCritic(kernel_size * kernel_dim, act_dim, (256, 256), torch.nn.ReLU, log_std_min,
+                                    log_std_max, discrete)
         self._pi_optimizer = Adam(self._model.pi.parameters(), lr=lr)
+
+        self._model_target = deepcopy(self._model)
+        for param in self._model_target.parameters():
+            param.requires_grad = False
+
         self._q_params = itertools.chain(self._model.q1.parameters(), self._model.q2.parameters())
         self._q_optimizer = Adam(self._q_params, lr=lr)
+
+        if self._adaptive_alpha:
+            self._entropy_target = 0.6 * (-np.log(1 / act_dim))
+            self._log_alpha = torch.tensor(np.log(self._alpha), dtype=torch.float, requires_grad=True)
+            self._alpha_optimizer = torch.optim.Adam([self._log_alpha], lr=self._lr)
 
         current_dir = os.getcwd()
         log_data_dir = os.path.join(current_dir, './logs/')
@@ -104,7 +118,7 @@ class SAC(AlgorithmAbstract):
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
 
         # get enough trajectories for training the model
-        if self.traj > 0 and self.traj+1 % self._traj_per_epoch == 0:
+        if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             if self.traj % self._train_update_freq == 0:
                 self.epoch += 1
                 self.train_model()
@@ -119,6 +133,9 @@ class SAC(AlgorithmAbstract):
         Returns:
         """
         data, batch = self._replay_buffer.get(self._batch_size)
+
+        q_l_old = self.compute_loss_q(data)[0].item()
+        pi_l_old = self.compute_loss_pi(data).item()
 
         for i in range(self._train_iters):
             self._q_optimizer.zero_grad()
@@ -140,47 +157,62 @@ class SAC(AlgorithmAbstract):
         for param in self._q_params:
             param.requires_grad = True
 
+        if self._adaptive_alpha:
+            for i in range(self._train_iters):
+                self._alpha_optimizer.zero_grad()
+                loss_alpha = self.compute_loss_alpha(data)
+                loss_alpha.backward()
+                self._alpha_optimizer.step()
+
+                self._alpha = self._log_alpha.exp().item()
+
+            self.logger.store(LossAlpha=loss_alpha.item(), DeltaLossAlpha=abs(loss_alpha.item() - self._entropy_target))
+
         with torch.no_grad():
             for param, param_target in zip(self._model.parameters(), self._model_target.parameters()):
-                param_target.data.mul_(self._polyak)
-                param_target.data.add_((1 - self._polyak) * param.data)
+                param_target.data.copy_(self._polyak * param.data + (1 - self._polyak) * param_target.data)
 
         q1_vals, q2_vals = q_info['Q1Vals'], q_info['Q2Vals']
-        self.logger.store(LossQ=loss_q.item(), LossPi=loss_pi.item(), Q1Vals=q1_vals, Q2Vals=q2_vals)
+        self.logger.store(Q1Vals=q1_vals, Q2Vals=q2_vals, LossQ=loss_q.item(), LossPi=loss_pi.item(),
+                          DeltaLossQ=abs(loss_q.item() - q_l_old), DeltaLossPi=abs(loss_pi.item() - pi_l_old))
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
         """
         self.logger.log_tabular('Epoch', self.epoch)
         self.logger.log_tabular('EpRet', with_min_and_max=True)
-        self.logger.log_tabular('TestEpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', average_only=True)
-        self.logger.log_tabular('TestEpLen', average_only=True)
         self.logger.log_tabular('Q1Vals', with_min_and_max=True)
         self.logger.log_tabular('Q2Vals', with_min_and_max=True)
         self.logger.log_tabular('LogPi', with_min_and_max=True)
         self.logger.log_tabular('LossPi', average_only=True)
         self.logger.log_tabular('LossQ', average_only=True)
+        if self._adaptive_alpha:
+            self.logger.log_tabular('LossAlpha', average_only=True)
         self.logger.log_tabular('DeltaLossQ', average_only=True)
+        self.logger.log_tabular('DeltaLossPi', average_only=True)
+        if self._adaptive_alpha:
+            self.logger.log_tabular('DeltaLossAlpha', average_only=True)
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
     def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
-        obs, act, rew, next_obs = data['obs'], data['act'], data['rew'], data['next_obs']
+        obs, mask, act, rew, next_obs = data['obs'], data['mask'], data['act'], data['rew'], data['next_obs']
 
-        q1 = self._model.q1.forward(obs, act)
-        q2 = self._model.q2.forward(obs, act)
+        q1 = self._model.q1(obs, act)
+        q2 = self._model.q2(obs, act)
 
         with torch.no_grad():
-            next_act, logp_next_act = self._model.pi(next_obs)
+            next_act, logp_next_act = self._model.pi(next_obs, mask)
 
-            q1_pi_target = self._model_target.q1.forward(next_obs, next_act)
-            q2_pi_target = self._model_target.q2.forward(next_obs, next_act)
-            q_pi_target = torch.min(q1_pi_target, q2_pi_target)
-            q_pi_target = rew + self._gamma * (q_pi_target - self._alpha * logp_next_act)
+            q1_target = self._model_target.q1(next_obs, next_act)
+            q2_target = self._model_target.q2(next_obs, next_act)
+            q_target_min = torch.min(q1_target, q2_target)
+            q_next = torch.sum(next_act * (q_target_min - self._alpha * logp_next_act), dim=1, keepdim=True)
+            q_target = rew + (self._gamma * q_next)
 
-        loss_q1 = ((q1 - q_pi_target)**2).mean()
-        loss_q2 = ((q2 - q_pi_target)**2).mean()
+        loss_q1 = ((q1 - q_target)**2).mean()
+        loss_q2 = ((q2 - q_target)**2).mean()
         loss_q = loss_q1 + loss_q2
 
         q_info = dict(Q1Vals=q1.detach().numpy(),
@@ -190,11 +222,25 @@ class SAC(AlgorithmAbstract):
 
     def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
         obs = data['obs']
-        pi, logp_a = self._model.pi(obs)
-        q1_pi = self._model.q1(obs, pi)
-        q2_pi = self._model.q2(obs, pi)
-        q_pi = torch.min(q1_pi, q2_pi)
 
-        loss_pi = (self._alpha * logp_a - q_pi).mean()
+        act, logp_a = self._model.pi(obs)
 
-        return loss_pi
+        with torch.no_grad():
+            q1_pi = self._model.q1.forward(obs, act)
+            q2_pi = self._model.q2.forward(obs, act)
+        q_min = torch.min(q1_pi, q2_pi)
+
+        loss_pi = torch.sum(act * (self._alpha*logp_a - q_min), dim=1, keepdim=True)
+
+        return loss_pi.mean()
+
+    def compute_loss_alpha(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
+        obs = data['obs']
+        act, logp_a = self._model.pi(obs)
+
+        with torch.no_grad():
+            h_mean = -torch.sum(act * logp_a, dim=0).mean()
+
+        loss_alpha = self._log_alpha * (h_mean - self._entropy_target)
+
+        return loss_alpha

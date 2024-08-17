@@ -34,15 +34,19 @@
             "target_kl": 0.01
         },
         "SAC": {
+            "discrete": true,
+            "adaptive_alpha": true,
             "batch_size": 32,
             "seed": 0,
             "traj_per_epoch": 3,
+            "log_std_min": -20,
+            "log_std_max": 2,
             "gamma": 0.95,
             "polyak": 0.995,
             "alpha": 0.2,
             "lr": 1e-3,
             "train_update_freq": 4,
-            "train_iters": 80
+            "train_iters": 100
         },
         "TRPO": {
 

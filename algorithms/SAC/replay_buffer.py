@@ -1,7 +1,7 @@
+from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, statistics_scalar, ReplayBufferAbstract
+
 import numpy as np
 import torch
-
-from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, statistics_scalar, ReplayBufferAbstract
 
 """
 SAC Code
