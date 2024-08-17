@@ -1,23 +1,17 @@
+from _common._algorithms.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
+
 import numpy as np
 import random
-import scipy.signal
 import torch
 
 """
 DQN Code
 """
 
-def combined_shape(length, shape=None):
-    if shape is None:
-        return (length,)
-    return (length, shape) if np.isscalar(shape) else (length, *shape)
 
-def discount_cumsum(x, discount):
-    return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
-
-
-class ReplayBuffer:
-    def __init__(self, obs_dim, mask_dim, buf_size, gamma, epsilon):
+class ReplayBuffer(ReplayBufferAbstract):
+    def __init__(self, obs_dim, mask_dim, buf_size, gamma, epsilon, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
         self.next_obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros(combined_shape(buf_size), dtype=np.int32)

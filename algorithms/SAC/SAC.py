@@ -1,4 +1,4 @@
-from algorithms._common.BaseAlgorithm import AlgorithmAbstract, count_vars
+from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
 
 import itertools
 

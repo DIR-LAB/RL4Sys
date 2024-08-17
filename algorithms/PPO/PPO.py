@@ -1,3 +1,5 @@
+from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
+
 import numpy as np
 import torch
 from torch.optim import Adam
@@ -10,7 +12,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
-from algorithms._common.BaseAlgorithm import AlgorithmAbstract
 
 from conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to

@@ -1,4 +1,4 @@
-from algorithms._common.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
 from typing import Optional, Type
 
