@@ -43,7 +43,7 @@ class ForwardKernelAbstract(nn.Module, ABC):
     """
     PyTorch NN module class for forward pass.
     """
-    def __init__(self):
+    def __init__(self, custom_network: nn.Sequential = None):
         super(ForwardKernelAbstract, self).__init__()
 
     @abstractmethod
@@ -58,8 +58,9 @@ class StepKernelAbstract(nn.Module, ABC):
     """
     PyTorch NN module class for step function.
     """
-    def __init__(self):
+    def __init__(self, custom_network: nn.Sequential = None):
         super(StepKernelAbstract, self).__init__()
+        self.custom_network = custom_network
 
     @abstractmethod
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
@@ -74,7 +75,7 @@ class StepAndForwardKernelAbstract(nn.Module, ABC):
     """
     PyTorch NN module class for step and forward functions.
     """
-    def __init__(self):
+    def __init__(self, custom_network: nn.Sequential = None):
         super(StepAndForwardKernelAbstract, self).__init__()
 
     @abstractmethod

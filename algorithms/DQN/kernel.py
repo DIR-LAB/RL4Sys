@@ -24,17 +24,20 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
             epsilon_decay: Decay rate for epsilon
     """
     def __init__(self, kernel_dim: int, kernel_size: int, act_dim: int = 1, epsilon: float = 1.0,
-                 epsilon_min: float = 0.01, epsilon_decay: float = 5e-4):
+                 epsilon_min: float = 0.01, epsilon_decay: float = 5e-4, custom_network: nn.Sequential = None):
         super().__init__()
-        self.q_network = nn.Sequential(
-            nn.Linear(kernel_dim * kernel_size, 32),
-            nn.ReLU(),
-            nn.Linear(32, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-            nn.ReLU(),
-            nn.Linear(8, act_dim)
-        )
+        if custom_network is None:
+            self.q_network = nn.Sequential(
+                nn.Linear(kernel_dim * kernel_size, 32),
+                nn.ReLU(),
+                nn.Linear(32, 16),
+                nn.ReLU(),
+                nn.Linear(16, 8),
+                nn.ReLU(),
+                nn.Linear(8, act_dim)
+            )
+        else:
+            self.q_network = custom_network
 
         self.kernel_dim = kernel_dim
         self.kernel_size = kernel_size
