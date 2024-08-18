@@ -1,9 +1,9 @@
+from _common._algorithms.BaseKernel import StepAndForwardKernelAbstract
+
 import torch
 import torch.nn as nn
-
 import numpy as np
 
-from algorithms._common.BaseKernel import StepAndForwardKernelAbstract
 """
 Network configurations for DQN
 """
@@ -24,17 +24,20 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
             epsilon_decay: Decay rate for epsilon
     """
     def __init__(self, kernel_dim: int, kernel_size: int, act_dim: int = 1, epsilon: float = 1.0,
-                 epsilon_min: float = 0.01, epsilon_decay: float = 5e-4):
+                 epsilon_min: float = 0.01, epsilon_decay: float = 5e-4, custom_network: nn.Sequential = None):
         super().__init__()
-        self.q_network = nn.Sequential(
-            nn.Linear(kernel_dim * kernel_size, 32),
-            nn.ReLU(),
-            nn.Linear(32, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-            nn.ReLU(),
-            nn.Linear(8, act_dim)
-        )
+        if custom_network is None:
+            self.q_network = nn.Sequential(
+                nn.Linear(kernel_dim * kernel_size, 32),
+                nn.ReLU(),
+                nn.Linear(32, 16),
+                nn.ReLU(),
+                nn.Linear(16, 8),
+                nn.ReLU(),
+                nn.Linear(8, act_dim)
+            )
+        else:
+            self.q_network = custom_network
 
         self.kernel_dim = kernel_dim
         self.kernel_size = kernel_size
@@ -77,23 +80,3 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
         self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
 
         return a, data
-
-
-def infer_next_obs(act, obs: torch.Tensor, mask: torch.Tensor = None):
-    """ Placeholder next observation function
-    Computes next observation based on current observation and mask.
-    Unused in DQN computations.
-
-    Next_obs calculation is the sum of the current observation
-     and the action taken in said observation.
-
-    Args:
-        act: action taken
-        obs: current observation
-        mask: mask for current observation (unused in DQN)
-    Returns:
-        next observation
-    """
-    next_obs = obs + torch.tensor(act, dtype=torch.float32)
-    return next_obs
-
