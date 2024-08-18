@@ -1,3 +1,5 @@
+from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+
 from typing import Optional, Type
 
 import torch
@@ -9,24 +11,8 @@ from torch.distributions.categorical import Categorical
 Network configurations for PPO
 """
 
-def mlp(sizes, activation, output_activation=nn.Identity):
-    """Build a multilayer perceptron, with layers of nn.Linear.
 
-    Args:
-        sizes: a tuple of ints, each declaring the size of one layer.
-        activation: function type for activation layer.
-    Returns:
-        the built neural network as a torch.nn.Module.
-
-    """
-    layers = []
-    for j in range(len(sizes)-1):
-        act = activation if j < len(sizes)-2 else output_activation
-        layers += [nn.Linear(sizes[j], sizes[j+1]), act()]
-    return nn.Sequential(*layers)
-
-
-class RLActor(nn.Module):
+class RLActor(ForwardKernelAbstract):
     """Neural network of Actor.
 
     Produces distributions for actions.
@@ -61,12 +47,20 @@ class RLActor(nn.Module):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int):
+    def __init__(self, kernel_size: int, kernel_dim: int, custom_network: nn.Sequential = None):
         super().__init__()
-        self.dense1 = nn.Linear(kernel_dim, 32)
-        self.dense2 = nn.Linear(32, 16)
-        self.dense3 = nn.Linear(16, 8)
-        self.dense4 = nn.Linear(8, 1)
+        if custom_network is None:
+            self.pi_network = nn.Sequential(
+                nn.Linear(kernel_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 16),
+                nn.ReLU(),
+                nn.Linear(16, 8),
+                nn.ReLU(),
+                nn.Linear(8, 1)
+            )
+        else:
+            self.pi_network = custom_network
 
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
@@ -84,10 +78,8 @@ class RLActor(nn.Module):
 
         """
         x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
-        x = torch.relu(self.dense1(x))
-        x = torch.relu(self.dense2(x))
-        x = torch.relu(self.dense3(x))
-        logits = torch.squeeze(self.dense4(x), -1) # each action has only one feature now
+        x = self.pi_network(x)
+        logits = torch.squeeze(x, -1) # each action has only one feature now
         logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
         return Categorical(logits=logits)
 
@@ -128,7 +120,7 @@ class RLActor(nn.Module):
         return pi, logp_a
 
 
-class RLCritic(nn.Module):
+class RLCritic(ForwardKernelAbstract):
     """Neural network of Critic.
 
     Produces an estimate for V (state-value).
@@ -154,12 +146,16 @@ class RLCritic(nn.Module):
 
     """
 
-    def __init__(self, obs_dim: int, hidden_sizes: tuple[int, int, int] = (32, 16, 8), activation: Type[nn.Module] = nn.ReLU):
+    def __init__(self, obs_dim: int, hidden_sizes: tuple[int, int, int] = (32, 16, 8), activation: Type[nn.Module] = nn.ReLU,
+                 custom_network: nn.Sequential = None):
         super().__init__()
         self.obs_dim = obs_dim
-        self.layer_sizes = [obs_dim] + list(hidden_sizes) + [1]
-        self.activation = activation
-        self.v_net = mlp(self.layer_sizes, self.activation)
+        if custom_network is None:
+            self.layer_sizes = [obs_dim] + list(hidden_sizes) + [1]
+            self.activation = activation
+            self.v_net = mlp(self.layer_sizes, self.activation)
+        else:
+            self.v_net = custom_network
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Get estimate for state-value
@@ -177,7 +173,7 @@ class RLCritic(nn.Module):
         return torch.squeeze(self.v_net(obs), -1)
 
 
-class RLActorCritic(nn.Module):
+class RLActorCritic(StepKernelAbstract):
     """PPO Actor-Critic kernel.
 
     Attributes:

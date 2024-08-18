@@ -1,28 +1,63 @@
-TODO: bring over plot.py, DQN, DQN soft updates, all #TODO comments, make sure all parameters can be changed (e.g. gamma, lambda for replay buffer), PEP 8 line width, check docstrings for consistency (capitalization, punctuation)
+# RL4Sys, a Framework for Reinforcement Learning Optimization
+___
 
-user-definables:
-* environment script, using RL4SysAgent
-    * should build observations, then interact with trajectory and model through RL4SysAgent
-    * option to start instance of training_server if __name__==main
-    * should specify parameters for training server
-* algorithm
-    * kernel(kernel_dim: int, kernel_size: int):
-        step(flattened_obs: Tensor, mask: Tensor) -> ndarray, dict
-        act(flattened_obs: Tensor, mask: Tensor) -> ndarray, dict
-    * algorithm(kernel_dim: int, kernel_size: int, seed: int, *hyperparams):
-        traj, epoch: int
-        save(filename: str) -> None
-        receive_trajectory(trajectory: RL4SysTrajectory) -> None
-* ~~RL4SysObservation~~ removed from implementation for version 0.2.0
+![RL4Sys Agent Implementation](RL4Sys.png)
+___
 
-# RL4Sys
 
-## Agent APIs
+Before use, the user _must_ ensure they adhere to and implement the `ApplicationAbstract` class and its methods to create an environment capable of providing RL4Sys with observations and rewards/performance returns. The `RL4SysAgent` will be initialized into the main loop of this environment through `run_application()`.
+## RL4Sys Main loop
 
+1. **Request application observation**
+2. **Observation & Reward**
+3. **Action Request**
+4. **Return & Perform Action**
+
+**Repeat**
+
+# RL4Sys Components
+___
+
+User is able to use the existing RL4Sys components or create their own components by extending the abstract classes found in `_common`.
+### Agent
+- `RL4SysAgent` or
+- `RL4SysAgentAbstract` 
+
+### Action
+- `RL4SysAction` or
+- `RL4SysActionAbstract`
+    
+### Trajectory
+- `RL4SysTrajectory` or
+- `RL4SysTrajectoryAbstract`
+    
+### Training Server
+- `RL4SysTrainingServer` or
+- `RL4SysTrainingServerAbstract`
+    
+### Training Algorithm
+- `PPO`, `TRPO`, `DQN`, `SAC`, `C51` or
+- algorithm abstract components, see [Customizablility](#Customizability)
+    
+
+# Application Components
+___
+
+User is able to create their own application components by extending the abstract class `BaseApplication.py` found in `_common`. The `examples` folder contains example applications that show how to implement the `BaseApplication` class.
+
+### Run Application
+- `run_application()`
+### Build Observation
+- `build_observation()`
+### Calculate Performance Return
+- `calculate_performance_return()`
+
+# Agent APIs
+___
 The loop of using RL4Sys agent
 
 1. First, users implement observation.
-2. Second, call action() to get output of 
+2. Second, call action() to get output of
 
 a1 = agent.action(obv)
 a1 = agent.action_with_mask(obv)
@@ -44,7 +79,46 @@ RL4SysReplayBuffer() instance
 buff.store(RLSysAction)
 
 if traj is done
-    buff.finish_traj(RLSysAction)
+buff.finish_traj(RLSysAction)
 
 if done:
-    reset()
+reset()
+
+# Customizability
+___
+
+RL4Sys is designed to be highly flexible to the user's needs. 
+
+Configuration of RL4Sys occurs in the root directory's `config.json`. This includes configurable parameters for RL4Sys training and algorithm hyperparameters.
+
+By using template classes and common functions found in `_common`, the user can easily implement their own applications, algorithms, and RL4Sys components.
+
+`_common` contains the following abstract classes and functions:
+- `_algorithm`
+  - `BaseKernel.py`
+    - ForwardKernelAbstraction(nn.Module, ABC)
+    - StepKernelAbstract(nn.Module, ABC)
+    - StepAndForwardKernelAbstract(nn.Module, ABC)
+    - infer_next_obs(act, obs, mask=None)
+    - mlp(sizes, activation, output_activation=nn.Identity)
+  - `BaseReplayBuffer.py`
+    - ReplayBufferAbstract(ABC)
+    - combined_shape(length, shape=None)
+    - discount_cumsum(x, discount)
+    - statistics_scalar(x, with_min_and_max=False)
+  - `BaseAlgorithm.py`
+    - AlgorithmAbstract(ABC)
+- `_examples`
+  - `BaseApplication.py`
+    - ApplicationAbstract(ABC)
+- `_rl4sys`
+  - `BaseTrajectory.py`
+    - RL4SysTrajectoryAbstract(ABC)
+    - send_trajectory(trajectory)
+    - serialize_trajectory(trajectory)
+  - `BaseAgent.py`
+    - RL4SysAgentAbstract(ABC)
+  - `BaseTrainingServer.py`
+    - RL4SysTrainingServerAbstract(ABC)
+  - `BaseAction.py`
+    - RL4SysActionAbstract(ABC)
