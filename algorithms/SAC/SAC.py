@@ -166,7 +166,7 @@ class SAC(AlgorithmAbstract):
 
                 self._alpha = self._log_alpha.exp().item()
 
-            self.logger.store(LossAlpha=loss_alpha.item(), DeltaLossAlpha=abs(loss_alpha.item() - self._entropy_target))
+            self.logger.store(Alpha=self._alpha, LossAlpha=loss_alpha.item(), DeltaLossAlpha=abs(loss_alpha.item() - self._entropy_target))
 
         with torch.no_grad():
             for param, param_target in zip(self._model.parameters(), self._model_target.parameters()):
@@ -182,9 +182,10 @@ class SAC(AlgorithmAbstract):
         self.logger.log_tabular('Epoch', self.epoch)
         self.logger.log_tabular('EpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', average_only=True)
+        self.logger.log_tabular('Alpha', with_min_and_max=True)
+        self.logger.log_tabular('LogPi', with_min_and_max=True)
         self.logger.log_tabular('Q1Vals', with_min_and_max=True)
         self.logger.log_tabular('Q2Vals', with_min_and_max=True)
-        self.logger.log_tabular('LogPi', with_min_and_max=True)
         self.logger.log_tabular('LossPi', average_only=True)
         self.logger.log_tabular('LossQ', average_only=True)
         if self._adaptive_alpha:
@@ -221,22 +222,22 @@ class SAC(AlgorithmAbstract):
         return loss_q, q_info
 
     def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
-        obs = data['obs']
+        obs, mask = data['obs'], data['mask']
 
-        act, logp_a = self._model.pi(obs)
+        act, logp_a = self._model.pi(obs, mask)
 
         with torch.no_grad():
             q1_pi = self._model.q1.forward(obs, act)
             q2_pi = self._model.q2.forward(obs, act)
         q_min = torch.min(q1_pi, q2_pi)
 
-        loss_pi = torch.sum(act * (self._alpha*logp_a - q_min), dim=1, keepdim=True)
+        loss_pi = torch.sum(act * (q_min - self._alpha * logp_a), dim=1, keepdim=True)
 
         return loss_pi.mean()
 
     def compute_loss_alpha(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
-        obs = data['obs']
-        act, logp_a = self._model.pi(obs)
+        obs, mask = data['obs'], data['mask']
+        act, logp_a = self._model.pi(obs, mask)
 
         with torch.no_grad():
             h_mean = -torch.sum(act * logp_a, dim=0).mean()

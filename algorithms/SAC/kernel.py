@@ -85,7 +85,7 @@ class DiscreteSAC(ForwardKernelAbstract):
         if mask is not None:
             logits = logits + (mask-1) * 1e4
         else:
-            logits = logits * 1e4
+            logits = logits + 1e4
 
         return Categorical(logits=logits), logits
 
