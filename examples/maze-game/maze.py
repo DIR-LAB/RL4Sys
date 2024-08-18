@@ -564,7 +564,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0,
                         help='seed for random number generation in maze')
     parser.add_argument('--score-type', type=int, default=0,
-                             '4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
+                        help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
+                             '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
     parser.add_argument('--enable-pitfalls', type=bool, default=False,
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
