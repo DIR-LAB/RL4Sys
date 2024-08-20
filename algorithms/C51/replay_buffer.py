@@ -1,4 +1,4 @@
-from algorithms._common.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
+from _common._algorithms.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
 
 import numpy as np
 import random
