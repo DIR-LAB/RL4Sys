@@ -1,11 +1,11 @@
+from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
+
 from typing import Optional, Type
 
 import torch
 import torch.nn as nn
 from numpy import ndarray
 from torch.distributions.categorical import Categorical
-
-from algorithms._common.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
 """
 Network configurations for PPO
@@ -47,12 +47,20 @@ class RLActor(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int):
+    def __init__(self, kernel_size: int, kernel_dim: int, custom_network: nn.Sequential = None):
         super().__init__()
-        self.dense1 = nn.Linear(kernel_dim, 32)
-        self.dense2 = nn.Linear(32, 16)
-        self.dense3 = nn.Linear(16, 8)
-        self.dense4 = nn.Linear(8, 1)
+        if custom_network is None:
+            self.pi_network = nn.Sequential(
+                nn.Linear(kernel_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 16),
+                nn.ReLU(),
+                nn.Linear(16, 8),
+                nn.ReLU(),
+                nn.Linear(8, 1)
+            )
+        else:
+            self.pi_network = custom_network
 
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
@@ -70,10 +78,8 @@ class RLActor(ForwardKernelAbstract):
 
         """
         x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
-        x = torch.relu(self.dense1(x))
-        x = torch.relu(self.dense2(x))
-        x = torch.relu(self.dense3(x))
-        logits = torch.squeeze(self.dense4(x), -1) # each action has only one feature now
+        x = self.pi_network(x)
+        logits = torch.squeeze(x, -1) # each action has only one feature now
         logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
         return Categorical(logits=logits)
 
@@ -140,12 +146,16 @@ class RLCritic(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, obs_dim: int, hidden_sizes: tuple[int, int, int] = (32, 16, 8), activation: Type[nn.Module] = nn.ReLU):
+    def __init__(self, obs_dim: int, hidden_sizes: tuple[int, int, int] = (32, 16, 8), activation: Type[nn.Module] = nn.ReLU,
+                 custom_network: nn.Sequential = None):
         super().__init__()
         self.obs_dim = obs_dim
-        self.layer_sizes = [obs_dim] + list(hidden_sizes) + [1]
-        self.activation = activation
-        self.v_net = mlp(self.layer_sizes, self.activation)
+        if custom_network is None:
+            self.layer_sizes = [obs_dim] + list(hidden_sizes) + [1]
+            self.activation = activation
+            self.v_net = mlp(self.layer_sizes, self.activation)
+        else:
+            self.v_net = custom_network
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Get estimate for state-value

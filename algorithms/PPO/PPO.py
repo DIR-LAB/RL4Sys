@@ -1,3 +1,5 @@
+from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
+
 import numpy as np
 import torch
 from torch.optim import Adam
@@ -10,40 +12,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
-from algorithms._common.BaseAlgorithm import AlgorithmAbstract
+from conf_loader import ConfigLoader
 
-import json
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-CONFIG_PATH = os.path.join(top_dir, 'config.json')
-hyperparams = {}
-save_model_path = {}
-try:
-    with open(CONFIG_PATH, 'r') as f:
-        config = json.load(f)
-        hyperparams = config['algorithms']
-        hyperparams = hyperparams['PPO']
-        save_model_path = config['model_paths']
-        save_model_path = os.path.join(save_model_path['save_model'])
-except (FileNotFoundError, KeyError):
-    print(f"[PPO: Failed to load configuration from {CONFIG_PATH}, loading defaults.]")
-    hyperparams = {
-        "seed": 0,
-        "traj_per_epoch": 3,
-        "clip_ratio": 0.2,
-        "gamma": 0.99,
-        "lam": 0.97,
-        "pi_lr": 3e-4,
-        "vf_lr": 1e-3,
-        "train_pi_iters": 80,
-        "train_v_iters": 80,
-        "target_kl": 0.01,
-    }
-    save_model_path = os.path.join(top_dir, 'models/model.pth')
+config_loader = ConfigLoader(algorithm='PPO')
+hyperparams = config_loader.algorithm_params
+save_model_path = config_loader.save_model_path
 
 
 class PPO(AlgorithmAbstract):
@@ -137,7 +115,9 @@ class PPO(AlgorithmAbstract):
             filename: name to save file as
 
         """
-        torch.save(self._model, filename)
+        new_path = os.path.join(save_model_path, filename +
+                                ('.pth' if not filename.__contains__('.pth') else ''))
+        torch.save(self._model, new_path)
 
     def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
         """Process a trajectory received by training_server.

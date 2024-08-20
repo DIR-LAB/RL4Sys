@@ -1,3 +1,5 @@
+from _common._examples.BaseApplication import ApplicationAbstract
+
 import numpy as np
 import random
 import time
@@ -195,10 +197,11 @@ MAX_SIZE = 5
 MOVE_SEQUENCE_SIZE = 500
 
 
-class MazeGameSim:
+class MazeGameSim(ApplicationAbstract):
     def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
                  performance_metric: int = 0, tensorboard: bool = False):
+        super().__init__()
         self._area_dimensions = area_dimensions
         self._seed = seed
         self._play_new_levels = play_new_levels
@@ -291,7 +294,7 @@ class MazeGameSim:
         self.agent_properties.draw_agent(self._screen)
         pygame.display.flip()
 
-    def run_sim(self, num_iterations: int = 1, num_moves: int = 500, play_new_levels: bool = False):
+    def run_application(self, num_iterations: int = 1, num_moves: int = 500, play_new_levels: bool = False):
         def reset_agent():
             self.agent_properties.position = self._start_position
 
@@ -380,7 +383,7 @@ class MazeGameSim:
                         print(f'[maze.py - simulator] RL4SysAgent moves made: {moves}')
                         self.simulator_stats['moves'] = moves
                         rl_runs = 0
-                        rl_total = self.calculate_performance_score(self.simulator_stats)
+                        rl_total = self.calculate_performance_return(self.simulator_stats)
                         rew = -rl_total
                         self.simulator_stats['performance_rewards'].append(rew)
                         self.rlagent.flag_last_action(rew)
@@ -409,11 +412,11 @@ class MazeGameSim:
             self._area_dimensions = (nx, ny)
             self.set_new_maze()
             print(f"[maze.py] New level generated: ({nx}, {ny}) -> {self._area_dimensions}, loading...")
-            self.run_sim(num_iterations, num_moves, play_new_levels=True)
+            self.run_application(num_iterations, num_moves, play_new_levels=True)
         else:
             print(f"[maze.py] Static area dimensions enabled, loading...")
             self.set_new_maze()
-            self.run_sim(num_iterations, play_new_levels=True)
+            self.run_application(num_iterations, play_new_levels=True)
 
     def build_observation(self, agent_position: tuple[int, int]):
         """
@@ -505,7 +508,7 @@ class MazeGameSim:
         mask = torch.as_tensor(mask, dtype=torch.float32)
         return obs, mask
 
-    def calculate_performance_score(self, elements) -> float:
+    def calculate_performance_return(self, elements) -> float:
         """
         Calculate performance score based on performance metric using captured simulator elements
         :return: returns calculated performance score
@@ -607,5 +610,5 @@ if __name__ == '__main__':
 
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
-    maze_game.run_sim(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
+    maze_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
                       play_new_levels=args.play_new_levels)

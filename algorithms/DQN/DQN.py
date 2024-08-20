@@ -1,3 +1,5 @@
+from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
+
 import numpy as np
 import torch
 from torch.optim import Adam
