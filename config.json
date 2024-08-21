@@ -29,20 +29,20 @@
             "epsilon": 1.0,
             "epsilon_min": 0.01,
             "epsilon_decay": 0.001,
-            "train_update_freq": 4,
-            "q_lr": 1e-3,
+            "train_update_freq": 8,
+            "q_lr": 5e-4,
             "train_q_iters": 80
         },
         "PPO": {
             "seed": 0,
-            "traj_per_epoch": 3,
-            "clip_ratio": 0.2,
+            "traj_per_epoch": 5,
+            "clip_ratio": 0.1,
             "gamma": 0.99,
             "lam": 0.97,
             "pi_lr": 3e-4,
-            "vf_lr": 1e-3,
-            "train_pi_iters": 80,
-            "train_v_iters": 80,
+            "vf_lr": 3e-4,
+            "train_pi_iters": 40,
+            "train_v_iters": 40,
             "target_kl": 0.01
         },
         "SAC": {
@@ -79,7 +79,7 @@
           "tb_log_dir": "examples/maze-game/tensorboards",
           "data_log_dir": "examples/maze-game/logs",
           "scalar_tags": "AverageEpRet;StdEpRet;AverageVVals;StdVVals;LossPi;LossV",
-          "max_count_per_scalar": 100,
+          "max_count_per_scalar": 300,
           "global_step_tag": "Epoch"
         }
     }
