@@ -69,7 +69,8 @@ class ReplayBuffer(ReplayBufferAbstract):
         assert self.ptr < self.max_size
         assert self.ptr >= batch_size
         # random sample of indices
-        batch = random.sample(range(self.ptr), batch_size)
+
+        batch = np.random.permutation(self.ptr)[:batch_size]
         self.ptr, self.path_start_idx = 0, 0
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],

@@ -40,10 +40,11 @@ class ConfigLoader:
                     "v_min": -10.0,
                     "v_max": 10.0,
                     "gamma": 0.95,
-                    "tau": 0.005,
                     "epsilon": 1.0,
                     "epsilon_min": 0.01,
                     "epsilon_decay": 5e-4,
+                    "train_update_freq": 8,
+                    "target_update_freq": 20,
                     "q_lr": 1e-3,
                     "train_q_iters": 80
                 }

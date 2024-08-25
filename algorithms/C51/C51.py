@@ -1,10 +1,10 @@
-from copy import deepcopy
-
 from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
+
+from torch.nn import functional as F
 
 import numpy as np
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, RMSprop
 
 from .kernel import CategoricalQNetwork
 from .replay_buffer import ReplayBuffer
@@ -49,13 +49,14 @@ class C51(AlgorithmAbstract):
             q_lr: learning rate for Q network, passed to Adam optimizer
             train_q_iters: number of iterations for training Q network
     """
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int,
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], n_atoms: int = hyperparams['n_atoms'],
                  v_min: int = hyperparams['v_min'], v_max: int = hyperparams['v_max'],
-                 gamma: float = hyperparams['gamma'], tau: float = hyperparams['tau'],
-                 epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
-                 epsilon_decay: float = hyperparams['epsilon_decay'], q_lr: float = hyperparams['q_lr'],
+                 gamma: float = hyperparams['gamma'], epsilon: float = hyperparams['epsilon'],
+                 epsilon_min: float = hyperparams['epsilon_min'], epsilon_decay: float = hyperparams['epsilon_decay'],
+                 train_update_freq: float = hyperparams['train_update_freq'],
+                 target_update_freq: float = hyperparams['target_update_freq'], q_lr: float = hyperparams['q_lr'],
                  train_q_iters: int = hyperparams['train_q_iters']):
 
         super().__init__()
@@ -70,31 +71,29 @@ class C51(AlgorithmAbstract):
         self._v_min = v_min
         self._v_max = v_max
         self._gamma = gamma
-        self._tau = tau
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min
         self._epsilon_decay = epsilon_decay
+        self._train_update_freq = train_update_freq
+        self._target_update_freq = target_update_freq
         self._train_q_iters = train_q_iters
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
 
-        self._atoms = torch.linspace(v_min, v_max, steps=self._n_atoms)
-        self._model = CategoricalQNetwork(kernel_size, kernel_dim, act_dim, self._atoms, self._epsilon,
-                                          self._epsilon_min, self._epsilon_decay)
+        self._model = CategoricalQNetwork(kernel_size, kernel_dim, kernel_dim, self._n_atoms, self._v_min, self._v_max,
+                                          self._epsilon, self._epsilon_min, self._epsilon_decay)
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
-        self._target_model = deepcopy(self._model)
-        for p in self._target_model.parameters():
-            p.requires_grad = False
+        self._target_model = CategoricalQNetwork(kernel_size, kernel_dim, kernel_dim, self._n_atoms, self._v_min,
+                                                 self._v_max, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._target_model.load_state_dict(self._model.state_dict())
 
-        self._offset = torch.linspace(0, (self._batch_size - 1) * self._n_atoms, self._batch_size).unsqueeze(-1).long()
         self._delta_z = (self._v_max - self._v_min) / (self._n_atoms - 1)
-        self._m = torch.zeros((self._batch_size, self._n_atoms))
 
         # set up logger
         current_dir = os.getcwd()
         log_data_dir = os.path.join(current_dir, './logs/')
         logger_kwargs = setup_logger_kwargs(
-            "rl4sys-dqn-scheduler", seed=seed, data_dir=log_data_dir)
+            "rl4sys-c51-scheduler", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
         self.logger.setup_pytorch_saver(self._model)
@@ -142,10 +141,11 @@ class C51(AlgorithmAbstract):
 
         # get enough trajectories for training the model
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            self.epoch += 1
-            self.train_model()
-            self.log_epoch()
-            return True
+            if self.traj % self._train_update_freq == 0:
+                self.epoch += 1
+                self.train_model()
+                self.log_epoch()
+                return True
 
         return False
 
@@ -165,8 +165,11 @@ class C51(AlgorithmAbstract):
 
         self.logger.store(StopIter=i)
 
-        for param, target_param in zip(self._model.parameters(), self._target_model.parameters()):
-            target_param.data.copy_(self._tau * param.data + (1 - self._tau) * target_param.data)
+        if self.epoch % self._target_update_freq == 0:
+            self._target_model.load_state_dict(self._model.state_dict())
+            self.logger.store(TargetUpdated=1)
+        else:
+            self.logger.store(TargetUpdated=0)
 
         loss_q = loss_q.detach().numpy()
         self.logger.store(LossQ=loss_q, DeltaLossQ=abs(loss_q - q_l_old.detach().numpy()))
@@ -182,10 +185,11 @@ class C51(AlgorithmAbstract):
         self.logger.log_tabular('LossQ', with_min_and_max=True)
         self.logger.log_tabular('DeltaLossQ', average_only=True)
         self.logger.log_tabular('StopIter', average_only=True)
+        self.logger.log_tabular('TargetUpdated', average_only=True)
         self.logger.dump_tabular()
 
     def compute_loss_q(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Compute loss for Q function.
+        """Compute batched loss for Q function.
 
         Args:
             data: dictionary containing batched data from replay buffer
@@ -197,21 +201,29 @@ class C51(AlgorithmAbstract):
 
         # Projection and Q-Loss
         with torch.no_grad():
-            batched_next_q_pmf = self._target_model(next_obs, mask)[0]
+            next_pmf, next_q_vals = self._target_model.forward(next_obs, mask)[:2]
+            next_act = torch.argmax(next_q_vals, dim=1)
+            next_pmf = next_pmf[torch.arange(next_pmf.size(0)), next_act]
 
-            self._m *= 0
-            t_z = (rew.view(-1, 1) + self._gamma * self._atoms).clamp(self._v_min, self._v_max)
-            b = (t_z - self._v_min) / self._delta_z
-            l = b.floor().long()
-            u = b.ceil().long()
+            m = torch.zeros_like(next_pmf)
+            for j in range(self._n_atoms):
+                Tz_j = torch.clamp((rew.unsqueeze(1) + self._gamma * self._target_model.atoms[j])
+                                   .expand(-1, self._n_atoms), self._v_min, self._v_max)
+                b_j = (Tz_j - self._v_min) / self._delta_z
+                l = b_j.floor().clamp(0, self._n_atoms - 1).long()
+                u = b_j.ceil().clamp(0, self._n_atoms - 1).long()
+                p_j = next_pmf[:, j]
 
-            delta_m_l = (u + (l == u).long() - b) * batched_next_q_pmf.logits
-            delta_m_u = (b - l) * batched_next_q_pmf.logits
+                m_l = (u.float() - b_j).T * p_j
+                m_u = (b_j - l.float()).T * p_j
 
-            self._m.view(-1).index_add_(0, (l + self._offset).view(-1), delta_m_l.view(-1))
-            self._m.view(-1).index_add_(0, (u + self._offset).view(-1), delta_m_u.view(-1))
+                m.scatter_add_(1, l, m_u.T)
+                m.scatter_add_(1, u, m_l.T)
 
-        batched_q_pmf = self._model(obs, mask, act.flatten())[0]
-        loss_q = (-(self._m * batched_q_pmf.logits.clamp(min=1e-5, max=1 - 1e-5).log()).sum(-1)).mean()
+        q_pmf, q_vals = self._model(obs, mask)[:2]
+        act = torch.argmax(q_vals, dim=1)
+        q_pmf = q_pmf[torch.arange(q_pmf.size(0)), act]
+
+        loss_q = (-(m * q_pmf.clamp(min=1e-5, max=1 - 1e-5).log()).sum(-1)).mean()
 
         return loss_q
