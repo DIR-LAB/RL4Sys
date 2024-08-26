@@ -35,18 +35,20 @@
         },
         "SAC": {
             "discrete": true,
-            "adaptive_alpha": true,
-            "batch_size": 32,
+            "adaptive_alpha": false,
+            "act_dim": 4,
+            "batch_size": 128,
             "seed": 0,
-            "traj_per_epoch": 3,
+            "traj_per_epoch": 10,
             "log_std_min": -20,
             "log_std_max": 2,
-            "gamma": 0.95,
-            "polyak": 0.995,
-            "alpha": 0.2,
-            "lr": 1e-3,
-            "train_update_freq": 4,
-            "train_iters": 100
+            "gamma": 0.99,
+            "polyak": 1e-2,
+            "alpha": 0.1,
+            "lr": 5e-4,
+            "clip_grad_norm": 1,
+            "train_update_freq": 8,
+            "train_iters": 50
         },
         "TRPO": {
 

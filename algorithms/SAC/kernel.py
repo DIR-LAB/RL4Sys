@@ -75,6 +75,7 @@ class DiscreteSAC(ForwardKernelAbstract):
         super().__init__()
         self.actor_net = mlp([obs_dim] + list(hidden_sizes), activation)
         self.logit_layer = nn.Linear(hidden_sizes[-1], act_dim)
+        self.softmax = nn.Softmax(dim=-1)
 
         self.obs_dim = obs_dim
         self.act_dim = act_dim
@@ -82,30 +83,30 @@ class DiscreteSAC(ForwardKernelAbstract):
     def _distribution(self, obs: torch.Tensor, mask: torch.Tensor):
         a = self.actor_net(obs)
         logits = self.logit_layer(a)
-        if mask is not None:
-            logits = logits + (mask-1) * 1e4
-        else:
-            logits = logits + 1e4
+        probs = self.softmax(logits)
+        probs += 1e-8
 
-        return Categorical(logits=logits), logits
+        return Categorical(probs=probs), probs
 
-    def _log_prob_from_distribution(self, pi: torch.distributions.distribution.Distribution, act: torch.Tensor) -> torch.Tensor:
-        return pi.log_prob(act)
+    def _log_prob(self, probs: torch.Tensor) -> torch.Tensor:
+        z: int = probs == 0
+        z = z.float() * 1e-8
+        return torch.log(probs + z)
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor = None, deterministic: Optional[bool] = False,
                 with_logprob: Optional[bool] = True):
-        categorical_distribution, logits = self._distribution(obs, mask)
+        categorical_distribution, probs = self._distribution(obs, mask)
         if deterministic:
-            pi_action = torch.argmax(logits, dim=-1)
+            act = torch.argmax(probs, dim=-1, keepdim=True)
         else:
-            pi_action = categorical_distribution.sample()
+            act = categorical_distribution.sample()
 
         if with_logprob:
-            logp_a = self._log_prob_from_distribution(categorical_distribution, pi_action)
+            logp_a = self._log_prob(probs)
         else:
             logp_a = None
 
-        return pi_action, logp_a
+        return act, probs, logp_a
 
 
 class QFunction(ForwardKernelAbstract):
@@ -113,37 +114,46 @@ class QFunction(ForwardKernelAbstract):
     MLP Q-network.
     """
 
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, discrete=False):
+    def __init__(self, obs_dim, hidden_sizes, act_dim, activation, discrete=False, seed=0):
         super().__init__()
-        self.q = mlp([obs_dim + act_dim] + list(hidden_sizes) + [1], activation)
+        torch.manual_seed(seed)
+        self.q = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
 
         self.discrete = discrete
 
-    def forward(self, obs: torch.Tensor, act: torch.Tensor):
-        act = act.unsqueeze(1)
-        obs = torch.cat([obs, act], dim=1)
-        q_vals = self.q(obs)
-        if not self.discrete:
-            q_vals = torch.squeeze(q_vals, -1)
-
-        return q_vals
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor):
+        return self.q(obs)
 
 
-class RLActorCritic(StepKernelAbstract):
+class DoubleQFunction(ForwardKernelAbstract):
+    def __init__(self, obs_dim, hidden_sizes, act_dim, activation, discrete=False, seed=0):
+        super().__init__()
+        self.q1 = QFunction(obs_dim, hidden_sizes, act_dim, activation, discrete, seed+1)
+        self.q2 = QFunction(obs_dim, hidden_sizes, act_dim, activation, discrete, seed+2)
+
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor):
+        q1 = self.q1.forward(obs, mask)
+        q2 = self.q2.forward(obs, mask)
+        return q1, q2
+
+
+class DoubleQActorCritic(StepKernelAbstract):
     def __init__(self, obs_dim, act_dim, hidden_sizes=(256, 256), activation=nn.ReLU, log_std_min: int = LOG_STD_MIN,
-                 log_std_max: int = LOG_STD_MAX, discrete=False):
+                 log_std_max: int = LOG_STD_MAX, discrete: bool = False, seed=0):
         super().__init__()
         act_limit = act_dim
+        self.discrete = discrete
 
-        if discrete:
+        if self.discrete:
             self.pi = DiscreteSAC(obs_dim, act_dim, hidden_sizes, activation)
         else:
             self.pi = ContinuousSAC(obs_dim, act_dim, act_limit, hidden_sizes, activation, log_std_min, log_std_max)
-        self.q1 = QFunction(obs_dim, act_dim, hidden_sizes, activation, discrete)
-        self.q2 = QFunction(obs_dim, act_dim, hidden_sizes, activation, discrete)
+        self.q = DoubleQFunction(obs_dim, hidden_sizes, act_dim, activation, discrete, seed)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor, deterministic: Optional[bool] = False):
         with torch.no_grad():
-            a, logp_a = self.pi.forward(obs, mask, deterministic, True)
-            data = {'logp_a': logp_a}
-            return a.numpy(), data
+            if self.discrete:
+                a, _, logp_a = self.pi.forward(obs, mask, deterministic, True)
+            else:
+                a, logp_a = self.pi.forward(obs, mask, deterministic, True)
+            return a, {}

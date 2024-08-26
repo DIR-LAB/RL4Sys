@@ -61,6 +61,7 @@ class ConfigLoader:
                 algorithm_params = {
                     "discrete": True,
                     "adaptive_alpha": True,
+                    "act_dim": 4,
                     "batch_size": 32,
                     "seed": 0,
                     "traj_per_epoch": 3,
@@ -70,6 +71,7 @@ class ConfigLoader:
                     "polyak": 0.995,
                     "alpha": 0.2,
                     "lr": 1e-3,
+                    "clip_grad_norm": 1,
                     "train_update_freq": 4,
                     "train_iters": 80
                 }

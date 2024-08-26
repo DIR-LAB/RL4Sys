@@ -5,8 +5,9 @@ import itertools
 import numpy as np
 import torch
 from torch.optim import Adam
+from torch.nn.utils import clip_grad_norm_
 
-from .kernel import RLActorCritic
+from .kernel import DoubleQActorCritic, DoubleQFunction
 from .replay_buffer import ReplayBuffer
 
 from copy import deepcopy
@@ -27,20 +28,21 @@ save_model_path = config_loader.save_model_path
 
 
 class SAC(AlgorithmAbstract):
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
                  discrete: bool = hyperparams['discrete'], adaptive_alpha: bool = hyperparams['adaptive_alpha'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], log_std_min: int = hyperparams['log_std_min'],
                  log_std_max: int = hyperparams['log_std_max'], gamma: float = hyperparams['gamma'],
                  polyak: float = hyperparams['polyak'], alpha: float = hyperparams['alpha'],
-                 lr: float = hyperparams['lr'], train_update_freq: int = hyperparams['train_update_freq'],
-                 train_iters: int = hyperparams['train_iters']):
+                 lr: float = hyperparams['lr'], clip_grad_name: float = hyperparams['clip_grad_norm'],
+                 train_update_freq: int = hyperparams['train_update_freq'], train_iters: int = hyperparams['train_iters']):
 
         super().__init__()
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
         np.random.seed(seed)
 
+        # hyperparameters
         self._discrete = discrete
         self._adaptive_alpha = adaptive_alpha
         self._batch_size = batch_size
@@ -49,25 +51,30 @@ class SAC(AlgorithmAbstract):
         self._gamma = gamma
         self._polyak = polyak
         self._alpha = alpha
+        self._clip_grad_norm = clip_grad_name
         self._train_update_freq = train_update_freq
         self._train_iters = train_iters
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma)
-        self._model = RLActorCritic(kernel_size * kernel_dim, act_dim, (256, 256), torch.nn.ReLU, log_std_min,
-                                    log_std_max, discrete)
-        self._pi_optimizer = Adam(self._model.pi.parameters(), lr=lr)
+        self._model = DoubleQActorCritic(kernel_size * kernel_dim, kernel_dim, (256, 256),
+                                         torch.nn.ReLU, log_std_min, log_std_max, discrete, seed)
 
-        self._model_target = deepcopy(self._model)
-        for param in self._model_target.parameters():
+        self._target_critic = DoubleQFunction(kernel_size * kernel_dim, (256, 256), kernel_dim,
+                                              torch.nn.ReLU, discrete, seed)
+        self._target_critic.q1.load_state_dict(self._model.q.q1.state_dict())
+        self._target_critic.q2.load_state_dict(self._model.q.q2.state_dict())
+        for param in self._target_critic.parameters():
             param.requires_grad = False
 
-        self._q_params = itertools.chain(self._model.q1.parameters(), self._model.q2.parameters())
-        self._q_optimizer = Adam(self._q_params, lr=lr)
+        self._pi_optimizer = Adam(self._model.pi.parameters(), lr=lr)
+        self._q1_optimizer = Adam(self._model.q.q1.parameters(), lr=lr)
+        self._q2_optimizer = Adam(self._model.q.q2.parameters(), lr=lr)
 
         if self._adaptive_alpha:
-            self._entropy_target = 0.6 * (-np.log(1 / act_dim))
-            self._log_alpha = torch.tensor(np.log(self._alpha), dtype=torch.float, requires_grad=True)
-            self._alpha_optimizer = torch.optim.Adam([self._log_alpha], lr=self._lr)
+            self._target_entropy = -act_dim
+            self._log_alpha = torch.zeros(1, dtype=torch.float32, requires_grad=True)
+            self._alpha = self._log_alpha.exp().detach()
+            self._alpha_optimizer = Adam([self._log_alpha], lr=lr)
 
         current_dir = os.getcwd()
         log_data_dir = os.path.join(current_dir, './logs/')
@@ -111,8 +118,7 @@ class SAC(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['logp_a'])
-                self.logger.store(LogPi=r4a.data['logp_a'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew)
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
@@ -134,47 +140,67 @@ class SAC(AlgorithmAbstract):
         """
         data, batch = self._replay_buffer.get(self._batch_size)
 
-        q_l_old = self.compute_loss_q(data)[0].item()
-        pi_l_old = self.compute_loss_pi(data).item()
+        q1_l_old, q2_l_old, _ = self.compute_loss_critic(data)
+        q_l_old = q1_l_old + q2_l_old
+        pi_l_old, log_act_probs_old = self.compute_loss_actor(data)
+        if self._adaptive_alpha:
+            alpha_l_old = self.compute_loss_entropy(log_act_probs_old)
 
+        # train critic
         for i in range(self._train_iters):
-            self._q_optimizer.zero_grad()
-            loss_q, q_info = self.compute_loss_q(data)
-            loss_q.backward()
-            self._q_optimizer.step()
+            loss_q1, loss_q2, q_info = self.compute_loss_critic(data)
+            # q1 loss propagation
+            self._q1_optimizer.zero_grad()
+            loss_q1.backward(retain_graph=True)
+            clip_grad_norm_(self._model.q.q1.parameters(), self._clip_grad_norm)
+            self._q1_optimizer.step()
+            # q2 loss propagation
+            self._q2_optimizer.zero_grad()
+            loss_q2.backward()
+            clip_grad_norm_(self._model.q.q2.parameters(), self._clip_grad_norm)
+            self._q2_optimizer.step()
 
         self.logger.store(StopIter=i)
 
-        for param in self._q_params:
-            param.requires_grad = False
+        for param_q1 in self._model.q.q1.parameters():
+            param_q1.requires_grad = False
+        for param_q2 in self._model.q.q2.parameters():
+            param_q2.requires_grad = False
 
+        # train actor
         for i in range(self._train_iters):
             self._pi_optimizer.zero_grad()
-            loss_pi = self.compute_loss_pi(data)
+            loss_pi, log_act_probs = self.compute_loss_actor(data)
+            loss_pi = loss_pi.requires_grad_()
             loss_pi.backward()
             self._pi_optimizer.step()
 
-        for param in self._q_params:
-            param.requires_grad = True
+        for param_q1 in self._model.q.q1.parameters():
+            param_q1.requires_grad = True
+        for param_q2 in self._model.q.q2.parameters():
+            param_q2.requires_grad = True
 
+        # train adaptive alpha if enabled
         if self._adaptive_alpha:
             for i in range(self._train_iters):
                 self._alpha_optimizer.zero_grad()
-                loss_alpha = self.compute_loss_alpha(data)
+                loss_alpha = self.compute_loss_entropy(log_act_probs)
                 loss_alpha.backward()
                 self._alpha_optimizer.step()
+                self._alpha = self._log_alpha.exp().detach()
 
-                self._alpha = self._log_alpha.exp().item()
+            self.logger.store(Alpha=self._alpha, LossAlpha=loss_alpha.item(),
+                              DeltaLossAlpha=abs(loss_alpha.item() - alpha_l_old.item()))
 
-            self.logger.store(Alpha=self._alpha, LossAlpha=loss_alpha.item(), DeltaLossAlpha=abs(loss_alpha.item() - self._entropy_target))
-
-        with torch.no_grad():
-            for param, param_target in zip(self._model.parameters(), self._model_target.parameters()):
-                param_target.data.copy_(self._polyak * param.data + (1 - self._polyak) * param_target.data)
+        for param, param_target in zip(self._model.q.q1.parameters(), self._target_critic.q1.parameters()):
+            param_target.data.copy_(self._polyak * param.data + (1 - self._polyak) * param_target.data)
+        for param, param_target in zip(self._model.q.q2.parameters(), self._target_critic.q2.parameters()):
+            param_target.data.copy_(self._polyak * param.data + (1 - self._polyak) * param_target.data)
 
         q1_vals, q2_vals = q_info['Q1Vals'], q_info['Q2Vals']
+        loss_q = loss_q1 + loss_q2
         self.logger.store(Q1Vals=q1_vals, Q2Vals=q2_vals, LossQ=loss_q.item(), LossPi=loss_pi.item(),
-                          DeltaLossQ=abs(loss_q.item() - q_l_old), DeltaLossPi=abs(loss_pi.item() - pi_l_old))
+                          DeltaLossQ=abs(loss_q.item() - q_l_old.item()), DeltaLossPi=abs(loss_pi.item() - pi_l_old.item()))
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
@@ -182,10 +208,10 @@ class SAC(AlgorithmAbstract):
         self.logger.log_tabular('Epoch', self.epoch)
         self.logger.log_tabular('EpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', average_only=True)
-        self.logger.log_tabular('Alpha', with_min_and_max=True)
-        self.logger.log_tabular('LogPi', with_min_and_max=True)
-        self.logger.log_tabular('Q1Vals', with_min_and_max=True)
-        self.logger.log_tabular('Q2Vals', with_min_and_max=True)
+        if self._adaptive_alpha:
+            self.logger.log_tabular('Alpha', average_only=True)
+        self.logger.log_tabular('Q1Vals', average_only=True)
+        self.logger.log_tabular('Q2Vals', average_only=True)
         self.logger.log_tabular('LossPi', average_only=True)
         self.logger.log_tabular('LossQ', average_only=True)
         if self._adaptive_alpha:
@@ -197,51 +223,43 @@ class SAC(AlgorithmAbstract):
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_critic(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, dict[str, float]]:
         obs, mask, act, rew, next_obs = data['obs'], data['mask'], data['act'], data['rew'], data['next_obs']
 
-        q1 = self._model.q1(obs, act)
-        q2 = self._model.q2(obs, act)
-
         with torch.no_grad():
-            next_act, logp_next_act = self._model.pi(next_obs, mask)
+            _, next_probs, logp_a = self._model.pi(obs, mask)
 
-            q1_target = self._model_target.q1(next_obs, next_act)
-            q2_target = self._model_target.q2(next_obs, next_act)
-            q_target_min = torch.min(q1_target, q2_target)
-            q_next = torch.sum(next_act * (q_target_min - self._alpha * logp_next_act), dim=1, keepdim=True)
-            q_target = rew + (self._gamma * q_next)
+            target_q1, target_q2 = self._target_critic.forward(next_obs, mask)
+            target_q = next_probs * (torch.min(target_q1, target_q2) - self._alpha * logp_a)
+            target_q = rew + (self._gamma * target_q.sum(1).unsqueeze(-1))
 
-        loss_q1 = ((q1 - q_target)**2).mean()
-        loss_q2 = ((q2 - q_target)**2).mean()
-        loss_q = loss_q1 + loss_q2
+        curr_q1, curr_q2 = self._model.q(obs, mask)
+        act = act.view(-1, 1)
+        curr_q1 = curr_q1.gather(1, act.long())
+        curr_q2 = curr_q2.gather(1, act.long())
 
-        q_info = dict(Q1Vals=q1.detach().numpy(),
-                      Q2Vals=q2.detach().numpy())
+        loss_q1 = ((curr_q1 - target_q) ** 2).mean() * 0.5
+        loss_q2 = ((curr_q2 - target_q) ** 2).mean() * 0.5
 
-        return loss_q, q_info
+        q_info = dict(Q1Vals=curr_q1.detach().numpy(),
+                      Q2Vals=curr_q2.detach().numpy())
 
-    def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
+        return loss_q1, loss_q2, q_info
+
+    def compute_loss_actor(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         obs, mask = data['obs'], data['mask']
 
-        act, logp_a = self._model.pi(obs, mask)
-
         with torch.no_grad():
-            q1_pi = self._model.q1.forward(obs, act)
-            q2_pi = self._model.q2.forward(obs, act)
-        q_min = torch.min(q1_pi, q2_pi)
+            _, probs, logp_a = self._model.pi(obs, mask)
+            q1, q2 = self._model.q(obs, mask)
+            min_q = torch.min(q1, q2)
 
-        loss_pi = torch.sum(act * (q_min - self._alpha * logp_a), dim=1, keepdim=True)
+        loss_pi = torch.mean((probs * (self._alpha * logp_a - min_q)).sum(1))
+        log_act_probs = torch.sum(logp_a * probs, dim=1)
 
-        return loss_pi.mean()
+        return loss_pi, log_act_probs
 
-    def compute_loss_alpha(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
-        obs, mask = data['obs'], data['mask']
-        act, logp_a = self._model.pi(obs, mask)
-
-        with torch.no_grad():
-            h_mean = -torch.sum(act * logp_a, dim=0).mean()
-
-        loss_alpha = self._log_alpha * (h_mean - self._entropy_target)
+    def compute_loss_entropy(self, log_act_probs: torch.Tensor) -> torch.Tensor:
+        loss_alpha = -torch.mean(self._log_alpha.exp() * (log_act_probs + self._target_entropy).detach())
 
         return loss_alpha

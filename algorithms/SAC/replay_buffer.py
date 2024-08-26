@@ -21,18 +21,16 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.ret_buf = np.zeros(buf_size, dtype=np.float32)
-        self.logpi_buf = np.zeros(buf_size, dtype=np.float32)
         self.gamma = gamma
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
-    def store(self, obs, act, mask, rew, logpi):
+    def store(self, obs, act, mask, rew):
         assert self.ptr < self.max_size
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
-        self.logpi_buf[self.ptr] = logpi
         if self.ptr > 0:
             self.next_obs_buf[self.ptr-1] = obs
         self.ptr = (self.ptr+1) % self.max_size
