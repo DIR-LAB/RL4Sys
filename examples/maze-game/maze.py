@@ -581,7 +581,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent per level')
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
                         help='run a local training server, using a specific algorithm')
     args, extras = parser.parse_known_args()
 

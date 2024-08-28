@@ -34,7 +34,21 @@
             "target_kl": 0.01
         },
         "SAC": {
-
+            "discrete": true,
+            "adaptive_alpha": false,
+            "act_dim": 4,
+            "batch_size": 128,
+            "seed": 0,
+            "traj_per_epoch": 10,
+            "log_std_min": -20,
+            "log_std_max": 2,
+            "gamma": 0.99,
+            "polyak": 1e-2,
+            "alpha": 0.1,
+            "lr": 5e-4,
+            "clip_grad_norm": 1,
+            "train_update_freq": 8,
+            "train_iters": 50
         },
         "TRPO": {
 
@@ -66,8 +80,8 @@
         "tensorboard_writer": {
           "tb_log_dir": "examples/maze-game/tensorboards",
           "data_log_dir": "examples/maze-game/logs",
-          "scalar_tags": "AverageEpRet;StdEpRet;AverageVVals;StdVVals;LossPi;LossV",
-          "max_count_per_scalar": 300,
+          "scalar_tags": "AverageEpRet",
+          "max_count_per_scalar": 100,
           "global_step_tag": "Epoch"
         }
     }
