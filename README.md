@@ -1,8 +1,7 @@
 # RL4Sys, a Framework for Reinforcement Learning Optimization
-___
+
 
 ![RL4Sys Agent Implementation](RL4Sys.png)
-___
 
 
 Before use, the user _must_ ensure they adhere to and implement the `ApplicationAbstract` class and its methods to create an environment capable of providing RL4Sys with observations and rewards/performance returns. The `RL4SysAgent` will be initialized into the main loop of this environment through `run_application()`.
@@ -16,7 +15,7 @@ Before use, the user _must_ ensure they adhere to and implement the `Application
 **Repeat**
 
 # RL4Sys Components
-___
+
 
 User is able to use the existing RL4Sys components or create their own components by extending the abstract classes found in `_common`.
 ### Agent
@@ -41,7 +40,7 @@ User is able to use the existing RL4Sys components or create their own component
     
 
 # Application Components
-___
+
 
 User is able to create their own application components by extending the abstract class `BaseApplication.py` found in `_common`. The `examples` folder contains example applications that show how to implement the `BaseApplication` class.
 
@@ -53,7 +52,7 @@ User is able to create their own application components by extending the abstrac
 - `calculate_performance_return()`
 
 # Agent APIs
-___
+
 The loop of using RL4Sys agent
 
 1. First, users implement observation.
@@ -85,7 +84,7 @@ if done:
 reset()
 
 # Customizability
-___
+
 
 RL4Sys is designed to be highly flexible to the user's needs. 
 
