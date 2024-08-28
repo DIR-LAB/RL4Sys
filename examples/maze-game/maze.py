@@ -43,10 +43,11 @@ def read_maze_from_file(file_address: str):
 
 
 class MazeGenerator:
-    def __init__(self, area_dimensions: tuple[int, int]=(10, 10), start_position: tuple[int, int]=(0, 0),
-                 goal_position: tuple[int, int]=(9, 9), pitfall_prob: float = 0.1, maze: np.ndarray = None):
+    def __init__(self, area_dimensions: tuple[int, int] = (10, 10), start_position: tuple[int, int] = (0, 0),
+                 goal_position: tuple[int, int] = (9, 9), pitfall_prob: float = 0.1, maze: np.ndarray = None):
         if maze is not None:
-            self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(maze)
+            self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(
+                maze)
             assert self._area_dimensions[0] > 0 and self._area_dimensions[1] > 0
             assert self._start is not None
             assert self._goal is not None
@@ -167,17 +168,17 @@ class AgentProperties:
                     (abs(nx - start_x) + abs(ny - start_y) > abs(px - start_x) + abs(py - start_y))
 
             if towards_goal():
-                return .02
+                return .01
             else:
-                return -.01
+                return -.05
 
         def element_reward():
             if not (0 <= nx < self.maze.shape[0] and 0 <= ny < self.maze.shape[1]):
-                return -0.5
+                return -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['wall']:
-                return -0.5
+                return -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['pitfall']:
-                return -1
+                return -2.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['goal']:
                 return self.GOAL_REWARD
             else:
@@ -324,7 +325,7 @@ class MazeGameSim(ApplicationAbstract):
             moves, rl_runs = 0, 0
             print(f"[maze.py - simulator] Game Iteration {iteration}")
             while moves < num_moves:
-                if not maze_logged and moves / (MOVE_SEQUENCE_SIZE/4) >= 1:
+                if not maze_logged and moves / (MOVE_SEQUENCE_SIZE / 4) >= 1:
                     log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'logs'))
                     newest_log_dir = get_newest_dataset(log_dir, return_file_root=True)
                     write_maze_to_log_dir(self.maze, newest_log_dir)
@@ -495,7 +496,7 @@ class MazeGameSim(ApplicationAbstract):
         nearby_wall_prob = nearby_wall_count / 4
         global_obs[9] = nearby_wall_prob
 
-        # Calculate distance vector to goal from agent
+        # Calculate distance to goal from agent
         manhattan_distance = -(abs(agent_x - goal_x) + abs(agent_y - goal_y))
         global_obs[10] = manhattan_distance
 
@@ -513,25 +514,25 @@ class MazeGameSim(ApplicationAbstract):
         Calculate performance score based on performance metric using captured simulator elements
         :return: returns calculated performance score
         """
-        move_sequence_count = elements['moves'] / MOVE_SEQUENCE_SIZE
         if self._performance_metric == 0:
-            # cumulative reward per n move sequences
-            return float(sum(elements['action_rewards']) / move_sequence_count)
+            # avg cumulative reward per reward count
+            return float(sum(elements['action_rewards']) / len(elements['action_rewards']))
         elif self._performance_metric == 1:
-            # cumulative performance rewards per n move sequences
-            return float(sum(elements['performance_rewards']) / move_sequence_count)
+            # avg cumulative reward per success rate
+            return float(elements['action_rewards'] / len(elements['success_count']))
         elif self._performance_metric == 2:
-            # success rate per n move sequences
-            return float(elements['success_count'] / move_sequence_count)
+            # avg cumulative reward per death rate
+            return -float(elements['action_rewards'] / len(elements['death_count']))
         elif self._performance_metric == 3:
-            # failure rate per n move sequences
-            return -float(elements['death_count'] / move_sequence_count)
+            # avg cumulative reward per collision rate
+            return -float(elements['action_rewards'] / len(elements['collision_count']))
         elif self._performance_metric == 4:
-            # collision rate per n move sequences
-            return -float(elements['collision_count'] / move_sequence_count)
+            # avg cumulative reward per failure rate
+            return float(sum(elements['action_rewards']) /
+                         (elements['collision_count'] + elements['death_count']))
         elif self._performance_metric == 5:
-            # time-to-goal per success
-            return float(sum(elements['time_to_goal']) / elements['success_count'])
+            # avg cumulative time-to-goal per success
+            return float((sum(elements['time_to_goal']) / elements['success_count']))
         elif self._performance_metric == 6:
             # time-to-death per death (ONLY makes sense when pitfalls are enabled)
             return -float(sum(elements['time_to_death']) / elements['death_count'])
@@ -553,6 +554,7 @@ if __name__ == '__main__':
     
     """
     import argparse
+
     parser = argparse.ArgumentParser(prog="RL4Sys Maze Game Simulator",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--model-path', type=str, default=None,
@@ -565,9 +567,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0,
                         help='seed for random number generation in maze')
     parser.add_argument('--score-type', type=int, default=0,
-                        help='0. Cumulative Action Reward, 1. Cumulative Performance Reward\n' +
-                             '2. Success Rate, 3. Death Rate, 4. Collision Rate\n' +
-                             '5. Time-to-Goal, 6. Time-to-Death')
+                        help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
+                             '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
     parser.add_argument('--enable-pitfalls', type=bool, default=False,
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
