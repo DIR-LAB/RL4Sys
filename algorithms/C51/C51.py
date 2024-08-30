@@ -49,7 +49,7 @@ class C51(AlgorithmAbstract):
             q_lr: learning rate for Q network, passed to Adam optimizer
             train_q_iters: number of iterations for training Q network
     """
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int,
+    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], n_atoms: int = hyperparams['n_atoms'],
                  v_min: int = hyperparams['v_min'], v_max: int = hyperparams['v_max'],
@@ -65,6 +65,7 @@ class C51(AlgorithmAbstract):
         np.random.seed(seed)
 
         # Hyperparameters
+        self._act_dim = act_dim
         self._batch_size = batch_size
         self._traj_per_epoch = traj_per_epoch
         self._n_atoms = n_atoms
@@ -80,10 +81,10 @@ class C51(AlgorithmAbstract):
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
 
-        self._model = CategoricalQNetwork(kernel_size, kernel_dim, kernel_dim, self._n_atoms, self._v_min, self._v_max,
+        self._model = CategoricalQNetwork(kernel_size, kernel_dim, act_dim, self._n_atoms, self._v_min, self._v_max,
                                           self._epsilon, self._epsilon_min, self._epsilon_decay)
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
-        self._target_model = CategoricalQNetwork(kernel_size, kernel_dim, kernel_dim, self._n_atoms, self._v_min,
+        self._target_model = CategoricalQNetwork(kernel_size, kernel_dim, act_dim, self._n_atoms, self._v_min,
                                                  self._v_max, self._epsilon, self._epsilon_min, self._epsilon_decay)
         self._target_model.load_state_dict(self._model.state_dict())
 

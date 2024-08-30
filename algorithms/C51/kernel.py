@@ -33,7 +33,7 @@ class CategoricalQNetwork(StepAndForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.q_network = mlp([kernel_dim * kernel_size] + [256, 128] + [act_dim * n_atoms], nn.ReLU)
-            self.softmax = nn.Softmax(2)
+            self.softmax = nn.Softmax(dim=2)
         else:
             self.q_network = custom_network
 

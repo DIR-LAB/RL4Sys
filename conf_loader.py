@@ -34,6 +34,7 @@ class ConfigLoader:
             if algo == 'C51':
                 algorithm_params = {
                     "batch_size": 32,
+                    "act_dim": 4,
                     "seed": 0,
                     "traj_per_epoch": 3,
                     "n_atoms": 51,
