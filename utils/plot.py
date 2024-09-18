@@ -6,7 +6,6 @@ import os
 import os.path as osp
 import numpy as np
 from packaging import version
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 DIV_LINE_WIDTH = 50
 
@@ -16,24 +15,22 @@ units = dict()
 
 
 def load_training_data(data_folder, algo):
-    hyperparameters = {}
+    hyperparameters = []
     performance_metrics = []
 
     # Search for hyperparameter data
-    with open('config.json', 'r') as file:
-        config = json.load(file)
-        algorithms = config.get('algorithms', {})
-
-    for algo, params in algorithms.items():
-        hyperparameters[algo] = params
-        for param, value in params.items():
-            print(f"{param}: {value}")
-        print()
+    """ preferably this should parse the training result's .json file as there can be
+    different values applied to hyperparams upon algorithm execution, but
+    for now it will search the config.json file in the root dir
+    """
+    from conf_loader import ConfigLoader
+    config = ConfigLoader(algorithm=algo)
+    hyperparameters = config.algorithm_params
 
     # Search for performance metric data
-    root_progress_File = os.path.join(data_folder, 'progress.txt')
-    if os.path.exists(root_progress_File):
-        data = np.loadtxt(root_progress_File)
+    root_progress_file = os.path.join(data_folder, 'progress.txt')
+    if os.path.exists(root_progress_file):
+        data = np.loadtxt(root_progress_file, dtype=str)
         performance_metrics.append(data)
     else:
         for dirpath, dirnames, filenames in os.walk(data_folder):
@@ -46,21 +43,25 @@ def load_training_data(data_folder, algo):
     return hyperparameters, performance_metrics
 
 
-def data_normalization(data, norm_type: int = 1):
+def data_normalization(data, norm_type: int = 0):
     if norm_type < 0 or norm_type > 3:
         raise ValueError("Normalization type must be between 0 and 3")
     if norm_type == 0:
         return data
+
     # Standardization
-    elif norm_type == 1:
+    if norm_type == 1:
+        from sklearn.preprocessing import StandardScaler
         scaler = StandardScaler()
         return scaler.fit_transform(data)
     # Min-Max Scaling
     elif norm_type == 2:
+        from sklearn.preprocessing import MinMaxScaler
         scaler = MinMaxScaler()
         return scaler.fit_transform(data)
     # Robust Scaler
     else:
+        from sklearn.preprocessing import RobustScaler
         scaler = RobustScaler()
         return scaler.fit_transform(data)
 
