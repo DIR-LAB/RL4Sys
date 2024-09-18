@@ -6,12 +6,63 @@ import os
 import os.path as osp
 import numpy as np
 from packaging import version
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 DIV_LINE_WIDTH = 50
 
 # Global vars for tracking and labeling data at load time.
 exp_idx = 0
 units = dict()
+
+
+def load_training_data(data_folder, algo):
+    hyperparameters = {}
+    performance_metrics = []
+
+    # Search for hyperparameter data
+    with open('config.json', 'r') as file:
+        config = json.load(file)
+        algorithms = config.get('algorithms', {})
+
+    for algo, params in algorithms.items():
+        hyperparameters[algo] = params
+        for param, value in params.items():
+            print(f"{param}: {value}")
+        print()
+
+    # Search for performance metric data
+    root_progress_File = os.path.join(data_folder, 'progress.txt')
+    if os.path.exists(root_progress_File):
+        data = np.loadtxt(root_progress_File)
+        performance_metrics.append(data)
+    else:
+        for dirpath, dirnames, filenames in os.walk(data_folder):
+            for filename in filenames:
+                if filename == 'progress.txt':
+                    progress_file = str(os.path.join(dirpath, filename))
+                    data = np.loadtxt(progress_file)
+                    performance_metrics.append(data)
+
+    return hyperparameters, performance_metrics
+
+
+def data_normalization(data, norm_type: int = 1):
+    if norm_type < 0 or norm_type > 3:
+        raise ValueError("Normalization type must be between 0 and 3")
+    if norm_type == 0:
+        return data
+    # Standardization
+    elif norm_type == 1:
+        scaler = StandardScaler()
+        return scaler.fit_transform(data)
+    # Min-Max Scaling
+    elif norm_type == 2:
+        scaler = MinMaxScaler()
+        return scaler.fit_transform(data)
+    # Robust Scaler
+    else:
+        scaler = RobustScaler()
+        return scaler.fit_transform(data)
 
 
 def get_simple_dataset_plot(data, x, y, title) -> sns.lineplot:
