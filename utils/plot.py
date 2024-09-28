@@ -14,37 +14,63 @@ exp_idx = 0
 units = dict()
 
 
-def load_training_data(data_folder, algo):
-    hyperparameters = []
-    performance_metrics = []
-
-    # Search for hyperparameter data
-    """ preferably this should parse the training result's .json file as there can be
-    different values applied to hyperparams upon algorithm execution, but
-    for now it will search the config.json file in the root dir
-    """
+def load_training_data(log_folder, algo):
     from conf_loader import ConfigLoader
     config = ConfigLoader(algorithm=algo)
-    hyperparameters = config.algorithm_params
+    conf_params = config.algorithm_params
 
-    # Search for performance metric data
-    root_progress_file = os.path.join(data_folder, 'progress.txt')
+    root_progress_file = os.path.join(log_folder, 'progress.txt')
+    # If the data folder is a single file
     if os.path.exists(root_progress_file):
+        hyperparams = {}
+        performance_metrics = {}
+
+        # Search for performance metric data
         data = np.loadtxt(root_progress_file, dtype=str)
-        performance_metrics.append(data)
+        col_titles = data[0, :]
+        for i, title in enumerate(col_titles):
+            performance_metrics[title] = data[1:, i]
+        # Search for hyperparameter data
+        with open(os.path.join(log_folder, 'config.json')) as f:
+            conf_file = json.load(f)
+            for param in conf_params:
+                if param in conf_file:
+                    hyperparams[param] = conf_file[param]
+    # Or if the data folder is a directory
     else:
-        for dirpath, dirnames, filenames in os.walk(data_folder):
+        hyperparams = [{}]
+        performance_metrics = [{}]
+
+        param_iter, perf_iter = 0, 0
+        for dirpath, _, filenames in os.walk(log_folder):
             for filename in filenames:
                 if filename == 'progress.txt':
                     progress_file = str(os.path.join(dirpath, filename))
-                    data = np.loadtxt(progress_file)
-                    performance_metrics.append(data)
+                    data = np.loadtxt(progress_file, dtype=str)
+                    col_titles = data[0, :]
+                    performance_metrics.append({})
+                    for i, title in enumerate(col_titles):
+                        performance_metrics[perf_iter][title] = data[1:, i]
+                    perf_iter += 1
+                if filename == 'config.json':
+                    with open(os.path.join(dirpath, filename)) as f:
+                        conf_file = json.load(f)
+                        hyperparams.append({})
+                        for param in conf_params:
+                            if param in conf_file:
+                                hyperparams[param_iter][param] = conf_file[param]
+                        if hyperparams[param_iter]:
+                            param_iter += 1
 
-    return hyperparameters, performance_metrics
+        # Remove empty dicts
+        hyperparams = [hp for hp in hyperparams if hp]
+        performance_metrics = [pm for pm in performance_metrics if pm]
+
+    return hyperparams, performance_metrics
 
 
-def data_normalization(data, norm_type: int = 0):
-    if norm_type < 0 or norm_type > 3:
+def data_normalization(data: np.ndarray, norm_type: int = 0):
+    if norm_type < 0 or norm_type > 4:
         raise ValueError("Normalization type must be between 0 and 3")
     if norm_type == 0:
         return data
@@ -60,7 +86,7 @@ def data_normalization(data, norm_type: int = 0):
         scaler = MinMaxScaler()
         return scaler.fit_transform(data)
     # Robust Scaler
-    else:
+    elif norm_type == 3:
         from sklearn.preprocessing import RobustScaler
         scaler = RobustScaler()
         return scaler.fit_transform(data)
