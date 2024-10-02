@@ -70,7 +70,7 @@ class PPO(AlgorithmAbstract):
             for early stopping. (Usually small, 0.01 or 0.05.)
 
     """
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, seed: int = hyperparams['seed'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
                  gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
                  pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
@@ -95,10 +95,9 @@ class PPO(AlgorithmAbstract):
         self._vf_optimizer = Adam(self._model.v.parameters(), lr=vf_lr)
 
         # set up logger
-        current_dir = os.getcwd()
-        log_data_dir = os.path.join(current_dir, './logs/')
+        log_data_dir = os.path.join(env_dir, './logs/')
         logger_kwargs = setup_logger_kwargs(
-            "rl4sys-ppo-scheduler", seed=seed, data_dir=log_data_dir)
+            "rl4sys-ppo-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
         self.logger.setup_pytorch_saver(self._model)

@@ -136,7 +136,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
                 f.write(model_bytes)
 
             with self._lock:
-                self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'))
+                self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
 
             print("[RLSysAgent - loop_for_updated_model] loaded the new model")
 

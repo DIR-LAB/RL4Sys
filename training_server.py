@@ -42,8 +42,8 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams: hyperparameters specific to algorithm. Keys/flags correspond to algorithm class constructor.
 
     """
-    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]]):
-        super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams)
+    def __init__(self, algorithm_name: str, env_dir: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]]):
+        super().__init__(algorithm_name, env_dir=env_dir, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams)
         # get algorithm class
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)
@@ -55,7 +55,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('kernel_size', 'kernel_dim', 'self')
+            no_parse = ('env_dir','kernel_size', 'kernel_dim', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -74,6 +74,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
             hyperparams = vars(args) # convert to dict
 
         # add TrainingServer args to algorithm parameters
+        hyperparams['env_dir'] = env_dir
         hyperparams['kernel_size'] = kernel_size
         hyperparams['kernel_dim'] = kernel_dim
 

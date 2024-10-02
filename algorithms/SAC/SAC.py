@@ -28,7 +28,7 @@ save_model_path = config_loader.save_model_path
 
 
 class SAC(AlgorithmAbstract):
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
                  discrete: bool = hyperparams['discrete'], adaptive_alpha: bool = hyperparams['adaptive_alpha'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], log_std_min: int = hyperparams['log_std_min'],
@@ -76,8 +76,7 @@ class SAC(AlgorithmAbstract):
             self._alpha = self._log_alpha.exp().detach()
             self._alpha_optimizer = Adam([self._log_alpha], lr=lr)
 
-        current_dir = os.getcwd()
-        log_data_dir = os.path.join(current_dir, './logs/')
+        log_data_dir = os.path.join(env_dir, './logs/')
         logger_kwargs = setup_logger_kwargs("rl4sys-sac-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())

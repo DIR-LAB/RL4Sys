@@ -1,17 +1,18 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from _common._examples.BaseApplication import ApplicationAbstract
 
 import numpy as np
 import random
 import time
-import os
-import sys
 
 import math
 import torch
 
 import pygame
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from agent import RL4SysAgent
 from training_server import TrainingServer
 
@@ -581,15 +582,16 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent per level')
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     args, extras = parser.parse_known_args()
 
     # start training server
+    app_dir = os.path.dirname(os.path.abspath(__file__))
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras)
+        rl_training_server = TrainingServer(args.algorithm, app_dir, MAX_SIZE, FEATURES, extras)
         print('[maze.py] Created Training Server')
 
     # load model if applicable
@@ -612,4 +614,4 @@ if __name__ == '__main__':
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
     maze_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
-                      play_new_levels=args.play_new_levels)
+                              play_new_levels=args.play_new_levels)
