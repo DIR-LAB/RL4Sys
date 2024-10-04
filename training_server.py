@@ -10,6 +10,7 @@ import inspect
 from typing import Union
 from typing import NoReturn as Never
 
+from training_tensorboard import TensorboardWriter
 from conf_loader import ConfigLoader
 
 ALGORITHMS_PATH = 'algorithms'
@@ -42,8 +43,10 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams: hyperparameters specific to algorithm. Keys/flags correspond to algorithm class constructor.
 
     """
-    def __init__(self, algorithm_name: str, env_dir: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]]):
-        super().__init__(algorithm_name, env_dir=env_dir, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams)
+    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]],
+                 env_dir: str = os.getcwd(), tensorboard: bool = False):
+        super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams,
+                         env_dir=env_dir)
         # get algorithm class
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)
@@ -55,7 +58,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('env_dir','kernel_size', 'kernel_dim', 'self')
+            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -71,7 +74,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             args = parser.parse_args(hyperparams) # Raises error if any hyperparams are unrecognized in algorithm class
             
-            hyperparams = vars(args) # convert to dict
+            hyperparams = vars(args)  # convert to dict
 
         # add TrainingServer args to algorithm parameters
         hyperparams['env_dir'] = env_dir
@@ -80,6 +83,9 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
         # instantiate algorithm class
         self._algorithm = algorithm_class(**hyperparams)
+
+        if tensorboard:
+            self._tensorboard = TensorboardWriter(env_dir=env_dir)
 
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
@@ -142,6 +148,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
         socket.close()
         context.term()
+
 
 if __name__ == "__main__":
 

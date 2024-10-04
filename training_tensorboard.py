@@ -31,14 +31,13 @@ class TensorboardWriter:
     Manually launch tensorboard
     """
 
-    def __init__(self, tb_log_dir=str(tb_params['tb_log_dir']), data_log_dir=tb_params['data_log_dir'],
-                 scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
-                 global_step_tag=tb_params['global_step_tag']):
+    def __init__(self, scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
+                 global_step_tag=tb_params['global_step_tag'], env_dir=os.getcwd()):
         self.writer = None
-        self._tb_log_dir = tb_log_dir + f'/tb_run_{int(time.time())}'
+        self._tb_log_dir = env_dir + '/tensorboards' + f'/tb_run_{int(time.time())}'
 
         self.data_queue = queue.Queue()
-        self._data_log_dir = data_log_dir
+        self._data_log_dir = env_dir + '/logs'
         self._file_root = get_newest_dataset(self._data_log_dir, return_file_root=True)
         self._file = self._file_root + '/progress.txt'
 

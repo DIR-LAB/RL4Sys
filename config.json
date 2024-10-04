@@ -78,8 +78,6 @@
     },
     "tensorboard": {
         "tensorboard_writer": {
-          "tb_log_dir": "examples/maze-game/tensorboards",
-          "data_log_dir": "examples/maze-game/logs",
           "scalar_tags": "AverageEpRet",
           "max_count_per_scalar": 100,
           "global_step_tag": "Epoch"

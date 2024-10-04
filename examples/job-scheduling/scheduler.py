@@ -353,7 +353,7 @@ class BatchSchedSim(ApplicationAbstract):
         seed_seq = np.random.SeedSequence(seed)
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
-        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
+        self.rlagent = RL4SysAgent(model=model)
 
     def f1_score(self, job):
         submit_time = job.submit_time
@@ -857,7 +857,7 @@ if __name__ == "__main__":
         # buffer size for this environment should be JOB_SEQUENCE_SIZE * 100
         extras.append('--buf_size')
         extras.append(str(JOB_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, app_dir, MAX_QUEUE_SIZE, JOB_FEATURES, extras)
+        rl_training_server = TrainingServer(args.algorithm, MAX_QUEUE_SIZE, JOB_FEATURES, extras, app_dir, args.tensorboard)
         print("[schedule.py] Created Training Server")
 
     # load model if applicable
@@ -865,7 +865,7 @@ if __name__ == "__main__":
 
     # create simulation environment
     sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
-                        backfil=args.backfil, model=model_arg, tensorboard=args.tensorboard)
+                        backfil=args.backfil, model=model_arg)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations

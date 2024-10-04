@@ -232,7 +232,7 @@ class MazeGameSim(ApplicationAbstract):
         self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
         pygame.display.set_caption('Maze Game Simulator')
 
-        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
+        self.rlagent = RL4SysAgent(model=model)
         self.agent_properties = None
 
         self.simulator_stats = {'moves': 0, 'action_rewards': [], 'performance_rewards': [], 'success_count': 0,
@@ -591,7 +591,7 @@ if __name__ == '__main__':
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, app_dir, MAX_SIZE, FEATURES, extras)
+        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras, app_dir, args.tensorboard)
         print('[maze.py] Created Training Server')
 
     # load model if applicable
@@ -608,8 +608,7 @@ if __name__ == '__main__':
     # create simulation environment
     maze_game = MazeGameSim(args.seed, model=model_arg, maze=loaded_maze, area_dimensions=args.area_dimensions,
                             static_area_dimensions=args.static_area_dimensions, enable_pitfalls=args.enable_pitfalls,
-                            play_new_levels=args.play_new_levels, performance_metric=args.score_type,
-                            tensorboard=args.tensorboard)
+                            play_new_levels=args.play_new_levels, performance_metric=args.score_type)
 
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
