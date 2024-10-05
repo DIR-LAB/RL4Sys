@@ -28,7 +28,7 @@ class TensorboardWriter:
 
     Can only write scalars to tensorboard (for now).
 
-    Manually launch_tensorboard() or,
+    Manually launch_tensorboard(logdir) or,
     cmd:
         tensorboard --logdir <path_to_tensorboard_logs>
 
@@ -178,21 +178,17 @@ class TensorboardWriter:
             return
 
 
-def launch_tensorboard():
+def launch_tensorboard(logdir: str):
     """
         Launches tensorboard process in the background.
         Uses tb_log_dir parameter from config.json for log pathing.
     :return:
     """
-    if not os.path.exists(tb_params['tb_log_dir']):
-        print("[launch_tensorboard] Directory not found. Tensorboard not started.")
-        return
-
     import subprocess
     try:
         print("[launch_tensorboard] Starting Tensorboard.")
         top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))
-        subprocess.run(["tensorboard", "--logdir", os.path.join(top_dir, tb_params['log_dir'])])
+        subprocess.run(["tensorboard", "--logdir", logdir])
     except Exception as e:
         print(f"[launch_tensorboard] Error: {e}")
     finally:
