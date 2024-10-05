@@ -49,7 +49,7 @@ class C51(AlgorithmAbstract):
             q_lr: learning rate for Q network, passed to Adam optimizer
             train_q_iters: number of iterations for training Q network
     """
-    def __init__(self, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], n_atoms: int = hyperparams['n_atoms'],
                  v_min: int = hyperparams['v_min'], v_max: int = hyperparams['v_max'],
@@ -91,10 +91,8 @@ class C51(AlgorithmAbstract):
         self._delta_z = (self._v_max - self._v_min) / (self._n_atoms - 1)
 
         # set up logger
-        current_dir = os.getcwd()
-        log_data_dir = os.path.join(current_dir, './logs/')
-        logger_kwargs = setup_logger_kwargs(
-            "rl4sys-c51-scheduler", seed=seed, data_dir=log_data_dir)
+        log_data_dir = os.path.join(env_dir, './logs/')
+        logger_kwargs = setup_logger_kwargs("rl4sys-c51-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
         self.logger.setup_pytorch_saver(self._model)
