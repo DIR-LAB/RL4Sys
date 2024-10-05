@@ -589,7 +589,7 @@ if __name__ == '__main__':
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
     parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
-                        help='run a local training server, using a specific algorithm')
+                        help='run a local training server, using a specific algorithm, possible options are "DQN" "PPO" "SAC"')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the pygame maze game environment')
     args, extras = parser.parse_known_args()
