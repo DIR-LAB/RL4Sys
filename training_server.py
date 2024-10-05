@@ -85,7 +85,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         self._algorithm = algorithm_class(**hyperparams)
 
         if tensorboard:
-            self._tensorboard = TensorboardWriter(env_dir=env_dir)
+            self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
 
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
