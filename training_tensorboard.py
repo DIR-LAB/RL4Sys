@@ -28,19 +28,21 @@ class TensorboardWriter:
 
     Can only write scalars to tensorboard (for now).
 
-    Manually launch tensorboard
+    Manually launch_tensorboard(logdir) or,
+    cmd:
+        tensorboard --logdir <path_to_tensorboard_logs>
+
     """
 
-    def __init__(self, tb_log_dir=str(tb_params['tb_log_dir']), data_log_dir=tb_params['data_log_dir'],
-                 scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
-                 global_step_tag=tb_params['global_step_tag']):
+    def __init__(self, scalar_tags=tb_params['scalar_tags'], max_count_per_scalar=tb_params['max_count_per_scalar'],
+                 global_step_tag=tb_params['global_step_tag'], env_dir=os.getcwd(), algorithm_name: str = 'run'):
         self.writer = None
-        self._tb_log_dir = tb_log_dir + f'/tb_run_{int(time.time())}'
+        self._data_log_dir = env_dir + '/logs'
+        self._file_root = get_newest_dataset(self._data_log_dir, return_file_root=True)
+        self._tb_log_dir = self._file_root + f'/tb_' + algorithm_name.lower() + f'_{int(time.time())}'
+        self._file = self._file_root + '/progress.txt'
 
         self.data_queue = queue.Queue()
-        self._data_log_dir = data_log_dir
-        self._file_root = get_newest_dataset(self._data_log_dir, return_file_root=True)
-        self._file = self._file_root + '/progress.txt'
 
         self.valid_tags = False
         self.scalar_tags = scalar_tags.split(';')
@@ -176,21 +178,17 @@ class TensorboardWriter:
             return
 
 
-def launch_tensorboard():
+def launch_tensorboard(logdir: str):
     """
         Launches tensorboard process in the background.
         Uses tb_log_dir parameter from config.json for log pathing.
     :return:
     """
-    if not os.path.exists(tb_params['tb_log_dir']):
-        print("[launch_tensorboard] Directory not found. Tensorboard not started.")
-        return
-
     import subprocess
     try:
         print("[launch_tensorboard] Starting Tensorboard.")
         top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))
-        subprocess.run(["tensorboard", "--logdir", os.path.join(top_dir, tb_params['log_dir'])])
+        subprocess.run(["tensorboard", "--logdir", logdir])
     except Exception as e:
         print(f"[launch_tensorboard] Error: {e}")
     finally:

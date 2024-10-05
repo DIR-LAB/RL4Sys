@@ -128,15 +128,11 @@ class ConfigLoader:
         except KeyError:
             print("[ConfigLoader] Failed to load tensorboard parameters, loading defaults.")
             tb_params = {
-                'tb_log_dir': 'utils/tb_runs',
-                'data_log_dir': 'data',
                 'scalar_tags': 'AverageEpRet;StdEpRet',
                 'max_count_per_scalar': 100,
                 'global_step_tag': 'Epoch'
             }
-        
-        tb_params['tb_log_dir'] = os.path.join(top_dir, tb_params['tb_log_dir'])
-        tb_params['data_log_dir'] = os.path.join(top_dir, tb_params['data_log_dir'])
+
         return tb_params
     
     def get_load_model_path(self):
