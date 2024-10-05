@@ -403,6 +403,9 @@ class MazeGameSim(ApplicationAbstract):
                         break
         if play_new_levels:
             self.play_new_level(num_iterations, num_moves)
+        
+        # stop trainning server 
+        rl_training_server.joins()
 
     def play_new_level(self, num_iterations: int = 1, num_moves: int = 500):
         """

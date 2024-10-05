@@ -68,12 +68,12 @@
         "training_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5560" 
+            "port": ":5558" 
         },
         "trajectory_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5559"
+            "port": ":5557"
         }
     },
     "tensorboard": {

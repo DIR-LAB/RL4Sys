@@ -51,7 +51,7 @@ class TensorboardWriter:
         self._global_step_tag = global_step_tag
         self._recent_global_step = 0
 
-        self._loop_stop_signal = threading.Event()
+        self._loop_stop_signal = threading.Event() # make sure to set this on app sim
         self._tb_thread = threading.Thread(target=self._tensorboard_writer_processes)
         self._tb_thread.daemon = False
         self._tb_thread.start()
@@ -174,7 +174,7 @@ class TensorboardWriter:
                 else:
                     time.sleep(10)
             self.writer.close()
-            self._tb_thread.join()
+            # self._tb_thread.join() # ??? why join itself, dead lock
             return
 
 

@@ -93,10 +93,12 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         self.initial_send_thread.start()
 
         # start listener in a seperate thread
+        self._loop_thread_stop_signal = threading.Event()
         self.loop_thread = threading.Thread(target=self.start_loop)
         self.loop_thread.start()
 
     # TODO ask why this exists
+    # TODO this doesn't work if recv is blocking
     def joins(self) -> None:
         """Wait until both of the following threads complete.
 
@@ -104,6 +106,9 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         * listener thread
         """
         self.initial_send_thread.join()
+        # stop tensorboard thread and recv loop thread
+        self._tensorboard._loop_stop_signal.set()
+        self._loop_thread_stop_signal.set()
         self.loop_thread.join()
 
     def send_model(self) -> None:
@@ -135,10 +140,16 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         socket = context.socket(zmq.PULL)
         address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
         socket.bind(address)
+        socket.setsockopt(zmq.RCVTIMEO, 5000) # make sure recv will not block forever
 
-        while True:
+        print('does it stop? ',self._loop_thread_stop_signal.is_set())
+        while not self._loop_thread_stop_signal.is_set():
             print("[training_server.py - start_loop - blocking for new trajectory]")
-            trajectory_data = socket.recv()
+            try:
+               trajectory_data = socket.recv()
+            except zmq.Again:
+                print('[training_server.py - start_loop - recv timeout]')
+                continue
             trajectory = pickle.loads(trajectory_data)
             print("[training_server.py - start_loop - received traj #{}]".format(self._algorithm.traj))
 
