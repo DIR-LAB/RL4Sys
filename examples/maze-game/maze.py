@@ -202,7 +202,7 @@ MOVE_SEQUENCE_SIZE = 500
 class MazeGameSim(ApplicationAbstract):
     def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
-                 performance_metric: int = 0, tensorboard: bool = False):
+                 performance_metric: int = 0, render_game: bool = False):
         super().__init__()
         self._area_dimensions = area_dimensions
         self._seed = seed
@@ -210,6 +210,8 @@ class MazeGameSim(ApplicationAbstract):
         self._enable_pitfalls = enable_pitfalls
         self._static_area_dimensions = static_area_dimensions
         self._performance_metric = performance_metric
+
+        self._render_game = render_game
 
         self._MAX_NEW_MAZE_SIZE = 20
 
@@ -229,8 +231,9 @@ class MazeGameSim(ApplicationAbstract):
         else:
             self.maze, self._area_dimensions, self._start_position, self._goal_position, self._pitfall_prob = maze.get()
 
-        self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
-        pygame.display.set_caption('Maze Game Simulator')
+        if self._render_game:
+            self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
+            pygame.display.set_caption('Maze Game Simulator')
 
         self.rlagent = RL4SysAgent(model=model)
         self.agent_properties = None
@@ -273,7 +276,9 @@ class MazeGameSim(ApplicationAbstract):
         self._pitfall_prob = random.uniform(0.1, 0.333) if self._enable_pitfalls else 0
         self.maze, _, _, _, _ = MazeGenerator(self._area_dimensions, self._start_position, self._goal_position,
                                               self._pitfall_prob).get()
-        self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
+
+        if self._render_game:
+            self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
 
     def draw_sim(self):
         self._screen.fill((0, 0, 0))
@@ -332,12 +337,13 @@ class MazeGameSim(ApplicationAbstract):
                     write_maze_to_log_dir(self.maze, newest_log_dir)
                     maze_logged = True
 
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        pygame.quit()
-                        sys.exit()
-
-                self.draw_sim()
+                # Render game
+                if self._render_game:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                    self.draw_sim()
 
                 # Make initial move
                 start_time = clock.get_time()
@@ -389,8 +395,8 @@ class MazeGameSim(ApplicationAbstract):
                         rew = -rl_total
                         self.simulator_stats['performance_rewards'].append(rew)
                         self.rlagent.flag_last_action(rew)
-
-                    self.draw_sim()
+                    if self._render_game:
+                        self.draw_sim()
                     reset = check_win(new_position) or check_death(new_position)
                     if reset:
                         reset_agent()
@@ -551,7 +557,7 @@ if __name__ == '__main__':
     or
     python maze.py --tensorboard=True --enable-pitfalls=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 6 6
     or
-    python maze.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 10 10
+    python maze.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 10 10 --render=False
     
     """
     import argparse
@@ -570,11 +576,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--enable-pitfalls', type=bool, default=False,
+    parser.add_argument('--enable-pitfalls', type=bool, default=True,
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
                         help='Generate and cycle through new mazes after each episode')
-    parser.add_argument('--area-dimensions', nargs='+', type=int, default=(10, 10),
+    parser.add_argument('--area-dimensions', nargs='+', type=int, default=(6, 6),
                         help='dimensions of the maze area')
     parser.add_argument('--static-area-dimensions', type=bool, default=True,
                         help='Use static area dimensions for maze generation when playing new levels')
@@ -582,8 +588,10 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent per level')
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
                         help='run a local training server, using a specific algorithm')
+    parser.add_argument('--render', type=bool, default=False,
+                        help='render the pygame maze game environment')
     args, extras = parser.parse_known_args()
 
     # start training server
@@ -608,7 +616,8 @@ if __name__ == '__main__':
     # create simulation environment
     maze_game = MazeGameSim(args.seed, model=model_arg, maze=loaded_maze, area_dimensions=args.area_dimensions,
                             static_area_dimensions=args.static_area_dimensions, enable_pitfalls=args.enable_pitfalls,
-                            play_new_levels=args.play_new_levels, performance_metric=args.score_type)
+                            play_new_levels=args.play_new_levels, performance_metric=args.score_type,
+                            render_game=args.render)
 
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
