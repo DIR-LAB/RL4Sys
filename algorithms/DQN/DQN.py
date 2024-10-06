@@ -48,13 +48,10 @@ class DQN:
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, kernel_size: int, kernel_dim: int,
-                 buf_size: int, act_dim: int = 1, batch_size: int = hyperparams['batch_size'],
-                 seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
-                 gamma: float = hyperparams['gamma'],
-                 epsilon: float = hyperparams['epsilon'],
-                 epsilon_min: float = hyperparams['epsilon_min'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+                 batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
+                 epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
                  epsilon_decay: float = hyperparams['epsilon_decay'],
                  train_update_freq: float = hyperparams['train_update_freq'],
                  q_lr: float = hyperparams['q_lr'],
@@ -85,10 +82,9 @@ class DQN:
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
 
         # set up logger
-        current_dir = os.getcwd()
-        log_data_dir = os.path.join(current_dir, './logs/')
+        log_data_dir = os.path.join(env_dir, './logs/')
         logger_kwargs = setup_logger_kwargs(
-            "rl4sys-dqn-scheduler", seed=seed, data_dir=log_data_dir)
+            "rl4sys-dqn-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
         self.logger.setup_pytorch_saver(self._model)

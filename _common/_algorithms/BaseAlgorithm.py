@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
-
 from _common._rl4sys.BaseTrajectory import RL4SysTrajectoryAbstract
+
+from abc import ABC, abstractmethod
 
 
 class AlgorithmAbstract(ABC):

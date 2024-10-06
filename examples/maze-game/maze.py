@@ -1,17 +1,18 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from _common._examples.BaseApplication import ApplicationAbstract
 
 import numpy as np
 import random
 import time
-import os
-import sys
 
 import math
 import torch
 
 import pygame
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from agent import RL4SysAgent
 from training_server import TrainingServer
 
@@ -43,10 +44,11 @@ def read_maze_from_file(file_address: str):
 
 
 class MazeGenerator:
-    def __init__(self, area_dimensions: tuple[int, int]=(10, 10), start_position: tuple[int, int]=(0, 0),
-                 goal_position: tuple[int, int]=(9, 9), pitfall_prob: float = 0.1, maze: np.ndarray = None):
+    def __init__(self, area_dimensions: tuple[int, int] = (10, 10), start_position: tuple[int, int] = (0, 0),
+                 goal_position: tuple[int, int] = (9, 9), pitfall_prob: float = 0.1, maze: np.ndarray = None):
         if maze is not None:
-            self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(maze)
+            self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(
+                maze)
             assert self._area_dimensions[0] > 0 and self._area_dimensions[1] > 0
             assert self._start is not None
             assert self._goal is not None
@@ -167,17 +169,17 @@ class AgentProperties:
                     (abs(nx - start_x) + abs(ny - start_y) > abs(px - start_x) + abs(py - start_y))
 
             if towards_goal():
-                return .02
+                return .01
             else:
-                return -.01
+                return -.05
 
         def element_reward():
             if not (0 <= nx < self.maze.shape[0] and 0 <= ny < self.maze.shape[1]):
-                return -0.5
+                return -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['wall']:
-                return -0.5
+                return -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['pitfall']:
-                return -1
+                return -2.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['goal']:
                 return self.GOAL_REWARD
             else:
@@ -200,7 +202,7 @@ MOVE_SEQUENCE_SIZE = 500
 class MazeGameSim(ApplicationAbstract):
     def __init__(self, seed, model=None, maze: MazeGenerator = None, area_dimensions: tuple[int, int] = (6, 6),
                  static_area_dimensions: bool = False, play_new_levels: int = 0, enable_pitfalls: bool = False,
-                 performance_metric: int = 0, tensorboard: bool = False):
+                 performance_metric: int = 0, render_game: bool = False):
         super().__init__()
         self._area_dimensions = area_dimensions
         self._seed = seed
@@ -208,6 +210,8 @@ class MazeGameSim(ApplicationAbstract):
         self._enable_pitfalls = enable_pitfalls
         self._static_area_dimensions = static_area_dimensions
         self._performance_metric = performance_metric
+
+        self._render_game = render_game
 
         self._MAX_NEW_MAZE_SIZE = 20
 
@@ -227,10 +231,11 @@ class MazeGameSim(ApplicationAbstract):
         else:
             self.maze, self._area_dimensions, self._start_position, self._goal_position, self._pitfall_prob = maze.get()
 
-        self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
-        pygame.display.set_caption('Maze Game Simulator')
+        if self._render_game:
+            self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
+            pygame.display.set_caption('Maze Game Simulator')
 
-        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
+        self.rlagent = RL4SysAgent(model=model)
         self.agent_properties = None
 
         self.simulator_stats = {'moves': 0, 'action_rewards': [], 'performance_rewards': [], 'success_count': 0,
@@ -271,7 +276,9 @@ class MazeGameSim(ApplicationAbstract):
         self._pitfall_prob = random.uniform(0.1, 0.333) if self._enable_pitfalls else 0
         self.maze, _, _, _, _ = MazeGenerator(self._area_dimensions, self._start_position, self._goal_position,
                                               self._pitfall_prob).get()
-        self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
+
+        if self._render_game:
+            self._screen = pygame.display.set_mode((self.maze.shape[0] * 20, self.maze.shape[1] * 20))
 
     def draw_sim(self):
         self._screen.fill((0, 0, 0))
@@ -324,18 +331,19 @@ class MazeGameSim(ApplicationAbstract):
             moves, rl_runs = 0, 0
             print(f"[maze.py - simulator] Game Iteration {iteration}")
             while moves < num_moves:
-                if not maze_logged and moves / (MOVE_SEQUENCE_SIZE/4) >= 1:
+                if not maze_logged and moves / (MOVE_SEQUENCE_SIZE / 4) >= 1:
                     log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'logs'))
                     newest_log_dir = get_newest_dataset(log_dir, return_file_root=True)
                     write_maze_to_log_dir(self.maze, newest_log_dir)
                     maze_logged = True
 
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        pygame.quit()
-                        sys.exit()
-
-                self.draw_sim()
+                # Render game
+                if self._render_game:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                    self.draw_sim()
 
                 # Make initial move
                 start_time = clock.get_time()
@@ -387,8 +395,8 @@ class MazeGameSim(ApplicationAbstract):
                         rew = -rl_total
                         self.simulator_stats['performance_rewards'].append(rew)
                         self.rlagent.flag_last_action(rew)
-
-                    self.draw_sim()
+                    if self._render_game:
+                        self.draw_sim()
                     reset = check_win(new_position) or check_death(new_position)
                     if reset:
                         reset_agent()
@@ -495,7 +503,7 @@ class MazeGameSim(ApplicationAbstract):
         nearby_wall_prob = nearby_wall_count / 4
         global_obs[9] = nearby_wall_prob
 
-        # Calculate distance vector to goal from agent
+        # Calculate distance to goal from agent
         manhattan_distance = -(abs(agent_x - goal_x) + abs(agent_y - goal_y))
         global_obs[10] = manhattan_distance
 
@@ -513,25 +521,25 @@ class MazeGameSim(ApplicationAbstract):
         Calculate performance score based on performance metric using captured simulator elements
         :return: returns calculated performance score
         """
-        move_sequence_count = elements['moves'] / MOVE_SEQUENCE_SIZE
         if self._performance_metric == 0:
-            # cumulative reward per n move sequences
-            return float(sum(elements['action_rewards']) / move_sequence_count)
+            # avg cumulative reward per reward count
+            return float(sum(elements['action_rewards']) / len(elements['action_rewards']))
         elif self._performance_metric == 1:
-            # cumulative performance rewards per n move sequences
-            return float(sum(elements['performance_rewards']) / move_sequence_count)
+            # avg cumulative reward per success rate
+            return float(elements['action_rewards'] / len(elements['success_count']))
         elif self._performance_metric == 2:
-            # success rate per n move sequences
-            return float(elements['success_count'] / move_sequence_count)
+            # avg cumulative reward per death rate
+            return -float(elements['action_rewards'] / len(elements['death_count']))
         elif self._performance_metric == 3:
-            # failure rate per n move sequences
-            return -float(elements['death_count'] / move_sequence_count)
+            # avg cumulative reward per collision rate
+            return -float(elements['action_rewards'] / len(elements['collision_count']))
         elif self._performance_metric == 4:
-            # collision rate per n move sequences
-            return -float(elements['collision_count'] / move_sequence_count)
+            # avg cumulative reward per failure rate
+            return float(sum(elements['action_rewards']) /
+                         (elements['collision_count'] + elements['death_count']))
         elif self._performance_metric == 5:
-            # time-to-goal per success
-            return float(sum(elements['time_to_goal']) / elements['success_count'])
+            # avg cumulative time-to-goal per success
+            return float((sum(elements['time_to_goal']) / elements['success_count']))
         elif self._performance_metric == 6:
             # time-to-death per death (ONLY makes sense when pitfalls are enabled)
             return -float(sum(elements['time_to_death']) / elements['death_count'])
@@ -549,10 +557,11 @@ if __name__ == '__main__':
     or
     python maze.py --tensorboard=True --enable-pitfalls=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 6 6
     or
-    python maze.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 10 10
+    python maze.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --area-dimensions 10 10 --render=False
     
     """
     import argparse
+
     parser = argparse.ArgumentParser(prog="RL4Sys Maze Game Simulator",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--model-path', type=str, default=None,
@@ -565,14 +574,13 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0,
                         help='seed for random number generation in maze')
     parser.add_argument('--score-type', type=int, default=0,
-                        help='0. Cumulative Action Reward, 1. Cumulative Performance Reward\n' +
-                             '2. Success Rate, 3. Death Rate, 4. Collision Rate\n' +
-                             '5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--enable-pitfalls', type=bool, default=False,
+                        help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
+                             '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
+    parser.add_argument('--enable-pitfalls', type=bool, default=True,
                         help='enable pitfall generation in maze. NOTE: increases complexity/convergence difficulty')
     parser.add_argument('--play-new-levels', type=bool, default=False,
                         help='Generate and cycle through new mazes after each episode')
-    parser.add_argument('--area-dimensions', nargs='+', type=int, default=(10, 10),
+    parser.add_argument('--area-dimensions', nargs='+', type=int, default=(6, 6),
                         help='dimensions of the maze area')
     parser.add_argument('--static-area-dimensions', type=bool, default=True,
                         help='Use static area dimensions for maze generation when playing new levels')
@@ -580,15 +588,18 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent per level')
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
                         help='run a local training server, using a specific algorithm')
+    parser.add_argument('--render', type=bool, default=False,
+                        help='render the pygame maze game environment')
     args, extras = parser.parse_known_args()
 
     # start training server
+    app_dir = os.path.dirname(os.path.abspath(__file__))
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras)
+        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras, app_dir, args.tensorboard)
         print('[maze.py] Created Training Server')
 
     # load model if applicable
@@ -606,9 +617,9 @@ if __name__ == '__main__':
     maze_game = MazeGameSim(args.seed, model=model_arg, maze=loaded_maze, area_dimensions=args.area_dimensions,
                             static_area_dimensions=args.static_area_dimensions, enable_pitfalls=args.enable_pitfalls,
                             play_new_levels=args.play_new_levels, performance_metric=args.score_type,
-                            tensorboard=args.tensorboard)
+                            render_game=args.render)
 
     # run simulation
     print(f"[maze.py] Running {args.number_of_iterations} iterations for each level...")
     maze_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves,
-                      play_new_levels=args.play_new_levels)
+                              play_new_levels=args.play_new_levels)

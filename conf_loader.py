@@ -24,7 +24,7 @@ class ConfigLoader:
             return {}
 
     def get_algorithm_params(self, algo: str):
-        available_algorithms = ['DQN', 'PPO']
+        available_algorithms = ['DQN', 'PPO', 'SAC']
         if algo is None or algo not in available_algorithms:
             return None
         try:
@@ -56,6 +56,24 @@ class ConfigLoader:
                     "train_pi_iters": 80,
                     "train_v_iters": 80,
                     "target_kl": 0.01,
+                }
+            elif algo == 'SAC':
+                algorithm_params = {
+                    "discrete": True,
+                    "adaptive_alpha": True,
+                    "act_dim": 4,
+                    "batch_size": 32,
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "log_std_min": -20,
+                    "log_std_max": 2,
+                    "gamma": 0.95,
+                    "polyak": 0.995,
+                    "alpha": 0.2,
+                    "lr": 1e-3,
+                    "clip_grad_norm": 1,
+                    "train_update_freq": 4,
+                    "train_iters": 80
                 }
             else:
                 algorithm_params = None
@@ -92,15 +110,11 @@ class ConfigLoader:
         except KeyError:
             print("[ConfigLoader] Failed to load tensorboard parameters, loading defaults.")
             tb_params = {
-                'tb_log_dir': 'utils/tb_runs',
-                'data_log_dir': 'data',
                 'scalar_tags': 'AverageEpRet;StdEpRet',
                 'max_count_per_scalar': 100,
                 'global_step_tag': 'Epoch'
             }
-        
-        tb_params['tb_log_dir'] = os.path.join(top_dir, tb_params['tb_log_dir'])
-        tb_params['data_log_dir'] = os.path.join(top_dir, tb_params['data_log_dir'])
+
         return tb_params
     
     def get_load_model_path(self):

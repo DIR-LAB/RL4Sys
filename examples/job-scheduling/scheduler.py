@@ -1,3 +1,7 @@
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from _common._examples.BaseApplication import ApplicationAbstract
 
 import numpy as np
@@ -6,12 +10,8 @@ import math
 import random
 import torch
 
-import os
-import sys
-
 import re
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from agent import RL4SysAgent
 from training_server import TrainingServer
 
@@ -353,7 +353,7 @@ class BatchSchedSim(ApplicationAbstract):
         seed_seq = np.random.SeedSequence(seed)
         self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
-        self.rlagent = RL4SysAgent(model=model, tensorboard=tensorboard)
+        self.rlagent = RL4SysAgent(model=model)
 
     def f1_score(self, job):
         submit_time = job.submit_time
@@ -846,18 +846,18 @@ if __name__ == "__main__":
     args, extras = parser.parse_known_args()
     
     # get workload file's absolute location if user-specified
+    app_dir = os.path.dirname(os.path.abspath(__file__))
     if args.workload == 'DEFAULT':
-        workload_file = "data/lublin_256.swf"
+        workload_file = os.path.join(app_dir, "data", "lublin_256.swf")
     else:
-        current_dir = os.getcwd()
-        workload_file = os.path.join(current_dir, args.workload)
+        workload_file = os.path.join(app_dir, args.workload)
 
     # start training server
     if args.algorithm != "No Server":
         # buffer size for this environment should be JOB_SEQUENCE_SIZE * 100
         extras.append('--buf_size')
         extras.append(str(JOB_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, MAX_QUEUE_SIZE, JOB_FEATURES, extras)
+        rl_training_server = TrainingServer(args.algorithm, MAX_QUEUE_SIZE, JOB_FEATURES, extras, app_dir, args.tensorboard)
         print("[schedule.py] Created Training Server")
 
     # load model if applicable
@@ -865,7 +865,7 @@ if __name__ == "__main__":
 
     # create simulation environment
     sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
-                        backfil=args.backfil, model=model_arg, tensorboard=args.tensorboard)
+                        backfil=args.backfil, model=model_arg)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations
