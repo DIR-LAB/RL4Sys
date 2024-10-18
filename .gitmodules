@@ -1,0 +1,3 @@
+[submodule "algorithms/pretrained-PPO/mae"]
+	path = algorithms/pretrained-PPO/mae
+	url = https://github.com/facebookresearch/mae
