@@ -44,6 +44,22 @@ class ConfigLoader:
                     "q_lr": 1e-3,
                     "train_q_iters": 80
                 }
+            elif algo == 'Pretrained-PPO':
+                algorithm_params = {
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "clip_ratio": 0.2,
+                    "gamma": 0.99,
+                    "lam": 0.97,
+                    "pi_lr": 3e-4,
+                    "vf_lr": 1e-3,
+                    "train_pi_iters": 80,
+                    "train_v_iters": 80,
+                    "fine_tune_iters": 100,
+                    "tune_per_epoch": 12,
+                    "beta": 0.01,
+                    "target_kl": 0.01,
+                }
             elif algo == 'PPO':
                 algorithm_params = {
                     "seed": 0,

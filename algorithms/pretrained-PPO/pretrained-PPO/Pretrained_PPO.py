@@ -1,8 +1,10 @@
+from torch import nn
+
 from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
 
 import numpy as np
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 
 from .kernel import RLActorCritic
 from .replay_buffer import ReplayBuffer
@@ -12,14 +14,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.logger import EpochLogger, setup_logger_kwargs
 from trajectory import RL4SysTrajectory
 
-
 from conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
 the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-config_loader = ConfigLoader(algorithm='PPO')
+config_loader = ConfigLoader(algorithm='Pretrained-PPO')
 hyperparams = config_loader.algorithm_params
 save_model_path = config_loader.save_model_path
 
@@ -70,12 +71,13 @@ class Pretrained_PPO(AlgorithmAbstract):
             for early stopping. (Usually small, 0.01 or 0.05.)
 
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, seed: int = hyperparams['seed'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, custom_policy: nn.Sequential, encoder: nn.Module, seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
                  gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
                  pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
                  train_pi_iters: int = hyperparams['train_pi_iters'], train_v_iters: int = hyperparams['train_v_iters'],
-                 target_kl: float = hyperparams['target_kl']):
+                 target_kl: float = hyperparams['target_kl'], fine_tune_iters: int = hyperparams['fine_tune_iters'], tune_per_epoch: int = hyperparams['tune_per_epoch'],
+                 beta: float = hyperparams['beta']):
 
         super().__init__()
         seed += 10000 * os.getpid()
@@ -87,10 +89,14 @@ class Pretrained_PPO(AlgorithmAbstract):
         self._clip_ratio = clip_ratio
         self._train_pi_iters = train_pi_iters
         self._train_v_iters = train_v_iters
+        self._fine_tune_iters = fine_tune_iters
+        self._tune_per_epoch = tune_per_epoch
+        self._beta = beta
         self._target_kl = target_kl
         
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, lam=lam)
-        self._model = RLActorCritic(kernel_size, kernel_dim)
+        self._model = RLActorCritic(kernel_size, kernel_dim, custom_policy, encoder)
+        self._encoder_optimizer = AdamW(self._model.pi.encoder.parameters(), lr=pi_lr)
         self._pi_optimizer = Adam(self._model.pi.parameters(), lr=pi_lr)
         self._vf_optimizer = Adam(self._model.v.parameters(), lr=vf_lr)
 
@@ -183,6 +189,13 @@ class Pretrained_PPO(AlgorithmAbstract):
             loss_v.backward()
             self._vf_optimizer.step()
 
+        if self.epoch % self._tune_per_epoch == 0:
+            for i in range(self._fine_tune_iters):
+                self._encoder_optimizer.zero_grad()
+                fine_tune_loss = self.compute_fine_tune(data)
+                fine_tune_loss.backward()
+                self._encoder_optimizer.step()
+
         # Log changes from update
         kl, ent, cf = pi_info['kl'], pi_info_old['ent'], pi_info['cf']
         self.logger.store(LossPi=pi_l_old, LossV=v_l_old,
@@ -243,3 +256,21 @@ class Pretrained_PPO(AlgorithmAbstract):
         """
         obs, ret, mask = data['obs'], data['ret'], data['mask']
         return ((self._model.v(obs, mask) - ret)**2).mean()
+
+    def compute_fine_tune(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
+        """Compute fine-tuning loss for encoder.
+            This is bound to be changed a trillion times
+        Args:
+            data: properties from each timestep in replay buffer
+        Returns:
+            loss
+        """
+        obs, mask, adv = data['obs'], data['mask'], data['adv']
+
+        latents = self._model.pi.encoder(obs, mask)
+        latent_obs = self._model.pi.decoder(latents)
+
+        latent_loss = ((obs - latent_obs)**2).mean()
+        aux_loss = -torch.sum(latents * adv) / latents.size(0)
+
+        return latent_loss + self._beta * aux_loss

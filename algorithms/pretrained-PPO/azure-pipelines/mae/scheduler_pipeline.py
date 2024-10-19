@@ -11,11 +11,11 @@ from mldesigner import command_component, Input, Output
 from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
-    """
+    """start scheduler MAE training pipeline
     
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("-data", type=str, help="Path to input data", default='<YOUR_INPUT_DATA_PATH>')
+    parser.add_argument("-job_data", type=str, help="Path to input job_data", default='<YOUR_INPUT_DATA_PATH>')
     parser.add_argument('-id', type=str, help="Azure ML workspace id", default='<YOUR_SUBSCRIPTION_ID>')
     parser.add_argument('-rg', type=str, help="Azure ML resource group", default='<YOUR_RESOURCE_GROUP>')
     parser.add_argument('-name', type=str, help="Azure ML workspace name", default='<YOUR_WORKSPACE_NAME>')
@@ -27,14 +27,14 @@ if __name__ == '__main__':
 
     credential = DefaultAzureCredential()
 
-    ml_client = MLClient(TokenCredential(credential), subscription_id, resource_group, workspace_name)
+    ml_client = MLClient(TokenCredential(credentials), subscription_id, resource_group, workspace_name)
 
 
     @command_component(
         name="prep_data",
         version="1",
         display_name="Prep Data",
-        description="Convert data to CSV file, and split to training and test data",
+        description="Convert job_data to CSV file, and split to training and test job_data",
         environment=dict(
             conda_file=Path(__file__).parent / "env.yml",
             image="mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04",
@@ -44,7 +44,7 @@ if __name__ == '__main__':
         raw_data_files = glob.glob(os.path.join(input_data, "*.swf"))
         all_data = []
 
-        # Load and preprocess SWF data from all files
+        # Load and preprocess SWF job_data from all files
         for raw_data_path in raw_data_files:
             with open(raw_data_path, 'r') as f:
                 lines = f.readlines()
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         name="train_mae",
         version="1",
         display_name="Train MAE",
-        description="Training Masked Autoencoder Model on job-scheduling data",
+        description="Training Masked Autoencoder Model on job-scheduling job_data",
         environment=dict(
             conda_file=Path(__file__).parent / "env.yml",
             image="mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04",

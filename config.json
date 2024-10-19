@@ -43,6 +43,8 @@
             "vf_lr": 3e-4,
             "train_pi_iters": 40,
             "train_v_iters": 40,
+            "fine_tune_iters": 10,
+            "tune_per_epoch": 15,
             "target_kl": 0.01
         },
         "SAC": {

@@ -47,8 +47,12 @@ class RLActor(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int, custom_network: nn.Sequential = None):
+    def __init__(self, kernel_size: int, kernel_dim: int, custom_network: nn.Sequential = None, encoder: nn.Module = None, encoder_dim: int = 18, encoder_out: int = 18):
         super().__init__()
+        self.obs4encoder = nn.Linear(kernel_dim, encoder_dim)
+        self.encoder = encoder
+        self.projection = nn.Linear(encoder_out, kernel_dim)
+
         if custom_network is None:
             self.pi_network = nn.Sequential(
                 nn.Linear(kernel_dim, 32),
@@ -64,6 +68,12 @@ class RLActor(ForwardKernelAbstract):
 
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
+        self.encoder_dim = encoder_dim
+        self.encoder_out = encoder_out
+
+        for params in zip(self.obs4encoder.parameters(), self.projection.parameters()):
+            params[0].requires_grad = False
+            params[1].requires_grad = False
 
     def _distribution(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> Categorical:
         """Get actor policy for a given observation.
@@ -78,6 +88,9 @@ class RLActor(ForwardKernelAbstract):
 
         """
         x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
+        x = self.obs4encoder(x)
+        x = self.encoder(x, mask)
+        x = self.projection(x)
         x = self.pi_network(x)
         logits = torch.squeeze(x, -1) # each action has only one feature now
         logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
@@ -186,14 +199,14 @@ class RLActorCritic(StepKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int):
+    def __init__(self, kernel_size: int, kernel_dim: int, custom_policy: nn.Sequential, encoder: nn.Module, encoder_dim: int = 18, encoder_out: int = 18):
         super().__init__()
         self.flatten_obs_dim = kernel_size * kernel_dim
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
 
         # build actor function
-        self.pi = RLActor(kernel_size, kernel_dim)
+        self.pi = RLActor(kernel_size, kernel_dim, custom_policy, encoder, encoder_dim, encoder_out)
         # build value function
         self.v = RLCritic(self.flatten_obs_dim)
 
