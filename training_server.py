@@ -90,17 +90,19 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
         self.initial_send_thread = threading.Thread(target=self.send_model)
+        self.initial_send_thread.daemon = True
         self.initial_send_thread.start()
 
         # start listener in a seperate thread
         self._loop_thread_stop_signal = threading.Event()
         self.loop_thread = threading.Thread(target=self.start_loop)
+        self.loop_thread.daemon = True
         self.loop_thread.start()
 
     # TODO ask why this exists
-    # TODO this doesn't work if recv is blocking
     def joins(self) -> None:
-        """Wait until both of the following threads complete.
+        """Terminate all recving and threading in Training Server
+        Wait until both of the following threads complete.
 
         * initial send thread
         * listener thread
@@ -147,6 +149,9 @@ class TrainingServer(RL4SysTrainingServerAbstract):
             print("[training_server.py - start_loop - blocking for new trajectory]")
             try:
                trajectory_data = socket.recv()
+            except zmq.error: 
+                print('[training_server.py - start_loop - error detected, end progcess')
+                continue
             except zmq.Again:
                 print('[training_server.py - start_loop - recv timeout]')
                 continue

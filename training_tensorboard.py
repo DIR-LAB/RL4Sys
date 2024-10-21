@@ -53,7 +53,7 @@ class TensorboardWriter:
 
         self._loop_stop_signal = threading.Event() # make sure to set this on app sim
         self._tb_thread = threading.Thread(target=self._tensorboard_writer_processes)
-        self._tb_thread.daemon = False
+        self._tb_thread.daemon = True # edit to 'True' for end properly
         self._tb_thread.start()
 
         print("[TensorboardWriter] Initialized")
