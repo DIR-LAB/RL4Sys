@@ -68,18 +68,18 @@
         "training_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5558" 
+            "port": ":5556" 
         },
         "trajectory_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5557"
+            "port": ":5555"
         }
     },
     "tensorboard": {
         "tensorboard_writer": {
           "scalar_tags": "AverageEpRet",
-          "max_count_per_scalar": 100,
+          "max_count_per_scalar": 10000,
           "global_step_tag": "Epoch"
         }
     }

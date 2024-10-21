@@ -79,6 +79,10 @@ class DQN(AlgorithmAbstract):
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
         self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        # TODO add a target_net -----------------------------
+
+        # ---------------------------------------------------
+
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
 
         # set up logger
@@ -185,7 +189,7 @@ class DQN(AlgorithmAbstract):
         obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
 
         # Q loss
-        q_val = self._model.forward(obs, mask)
+        q_val = self._model.forward(obs, mask) # TODO issue here, no target_net. It keep using self.model 
         with torch.no_grad():
             next_q_val = self._model.forward(next_obs, mask)
             q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]

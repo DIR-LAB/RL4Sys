@@ -167,7 +167,7 @@ class TensorboardWriter:
                         self.writer.flush()
                     except queue.Empty:
                         continue
-                    finally:
+                    finally: # TODO why writer have limit
                         if self._total_scalar_count <= 0:
                             print("[TensorboardWriter - _tensorboard_processes] Max scalar count per tag reached. Stopping.")
                             self._loop_stop_signal.set()

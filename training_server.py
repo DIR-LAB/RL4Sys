@@ -63,14 +63,14 @@ class TrainingServer(RL4SysTrainingServerAbstract):
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
                 flag = '--' + parameter.name
-                type = parameter.annotation
+                type1 = parameter.annotation
                 default = parameter.default
-                if type is inspect.Parameter.empty:
-                    type = None # if no type was hinted, cause a problem
+                if type1 is inspect.Parameter.empty:
+                    type1 = None # if no type was hinted, cause a problem
                 if default is inspect.Parameter.empty:
-                    parser.add_argument(flag, type=type, required=True)
+                    parser.add_argument(flag, type=type1, required=True)
                 else:
-                    parser.add_argument(flag, type=type, default=default)
+                    parser.add_argument(flag, type=type1, default=default)
 
             args = parser.parse_args(hyperparams) # Raises error if any hyperparams are unrecognized in algorithm class
             
@@ -144,7 +144,6 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         socket.bind(address)
         socket.setsockopt(zmq.RCVTIMEO, 5000) # make sure recv will not block forever
 
-        print('does it stop? ',self._loop_thread_stop_signal.is_set())
         while not self._loop_thread_stop_signal.is_set():
             print("[training_server.py - start_loop - blocking for new trajectory]")
             try:

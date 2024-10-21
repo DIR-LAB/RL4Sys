@@ -169,21 +169,21 @@ class AgentProperties:
                     (abs(nx - start_x) + abs(ny - start_y) > abs(px - start_x) + abs(py - start_y))
 
             if towards_goal():
-                return .01
+                return 1.0 # Modified from 0.01
             else:
-                return -.05
+                return -.1 # Modified from -0.05
 
         def element_reward():
             if not (0 <= nx < self.maze.shape[0] and 0 <= ny < self.maze.shape[1]):
-                return -1.0
+                return -1.0 
             elif self.maze[nx, ny] == GAME_ELEMENTS['wall']:
-                return -1.0
+                return -1.0 # TODO modified from -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['pitfall']:
                 return -2.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['goal']:
                 return self.GOAL_REWARD
             else:
-                return 0.1
+                return 0.5 # TODO modified from 0.1
 
         return granular_move_reward() + element_reward()
 
