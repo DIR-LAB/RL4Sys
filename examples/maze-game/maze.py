@@ -169,7 +169,7 @@ class AgentProperties:
                     (abs(nx - start_x) + abs(ny - start_y) > abs(px - start_x) + abs(py - start_y))
 
             if towards_goal():
-                return 1.0 # Modified from 0.01
+                return 0.3 # Modified from 0.01
             else:
                 return -.1 # Modified from -0.05
 
@@ -177,13 +177,13 @@ class AgentProperties:
             if not (0 <= nx < self.maze.shape[0] and 0 <= ny < self.maze.shape[1]):
                 return -1.0 
             elif self.maze[nx, ny] == GAME_ELEMENTS['wall']:
-                return -1.0 # TODO modified from -1.0
+                return -0.3 # TODO modified from -1.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['pitfall']:
                 return -2.0
             elif self.maze[nx, ny] == GAME_ELEMENTS['goal']:
                 return self.GOAL_REWARD
             else:
-                return 0.5 # TODO modified from 0.1
+                return 0.1 # TODO modified from 0.1
 
         return granular_move_reward() + element_reward()
 
@@ -593,7 +593,7 @@ if __name__ == '__main__':
                         help='maximum number of moves allowed per iteration')
     parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
                         help='run a local training server, using a specific algorithm, possible options are "DQN" "PPO" "SAC"')
-    parser.add_argument('--render', type=bool, default=False,
+    parser.add_argument('--render', type=bool, default=False, # open for debug
                         help='render the pygame maze game environment')
     args, extras = parser.parse_known_args()
 
