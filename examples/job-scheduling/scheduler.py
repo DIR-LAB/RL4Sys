@@ -17,7 +17,7 @@ from training_server import TrainingServer
 
 """
 Environment script: Batch Job Scheduling
-
+x
 Training server parameters:
     kernel_size | MAX_QUEUE_SIZE = 128
     kernel_dim  | JOB_FEATURES = 8
@@ -155,6 +155,11 @@ class Workloads:
                         self.max_procs = int(line.split(":")[1].strip())
                     continue
 
+                # if max_procs = 0, it means node/proc are the same.
+                if self.max_procs == 0:
+                    self.max_procs = self.max_nodes
+
+
                 j = Job(line)
                 if j.run_time > self.max_exec_time:
                     self.max_exec_time = j.run_time
@@ -173,14 +178,18 @@ class Workloads:
                 if j.run_time < 0:
                     j.run_time = 10
                 if j.run_time > 0:
-                    self.all_jobs.append(j)
+                    #job has to pass checks below before adding to the list
+
+                    if j.request_number_of_processors > self.max_procs:
+                        j.request_number_of_processors = self.max_procs
+                        #makes sure no job has more than file set max procs
 
                     if j.request_number_of_processors > self.max:
                         self.max = j.request_number_of_processors
+                        #self.max = largest processor request seen so far
+                    
+                    self.all_jobs.append(j)
 
-        # if max_procs = 0, it means node/proc are the same.
-        if self.max_procs == 0:
-            self.max_procs = self.max_nodes
 
         print("Max Allocated Processors:", str(self.max), "; max node:", self.max_nodes,
               "; max procs:", self.max_procs,
@@ -827,7 +836,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--model_path', type=str, default=None,
                         help="path to pre-existing model to be loaded by agent")
-    parser.add_argument('--tensorboard', type=bool, default=False,
+    parser.add_argument('--tensorboard', type=bool, default=True,
                         help="enable tensorboard logging for training observations and insights")
     parser.add_argument('--workload', type=str, default='DEFAULT',  # RICC-2010-2
                         help="workload file, with SWF format")
