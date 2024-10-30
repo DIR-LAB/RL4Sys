@@ -3,13 +3,14 @@ import gym
 from gym import spaces
 import numpy as np
 import random
-import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 import pygame
 import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Initialize Pygame
 pygame.init()
@@ -18,8 +19,8 @@ pygame.init()
 GAME_ELEMENTS = {'path': 0, 'wall': 1, 'pitfall': 2, 'start': 3, 'goal': 4}
 
 class MazeGenerator:
-    def __init__(self, area_dimensions=(10, 10), start_position=(0, 0),
-                 goal_position=(9, 9), pitfall_prob=0.1, maze=None):
+    def __init__(self, area_dimensions=(10, 10), start_position=None,
+                 goal_position=None, pitfall_prob=0.1, maze=None):
         if maze is not None:
             self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob = self._maze_element_search(maze)
             assert self._area_dimensions[0] > 0 and self._area_dimensions[1] > 0
@@ -28,8 +29,25 @@ class MazeGenerator:
         else:
             self._maze = np.ones(area_dimensions, dtype=int)  # sets maze to all walls
             self._area_dimensions = area_dimensions
-            self._start = start_position
-            self._goal = goal_position
+
+            # Set default start and goal positions if not provided
+            if start_position is None:
+                self._start = (0, 0)
+            else:
+                self._start = start_position
+
+            if goal_position is None:
+                self._goal = (area_dimensions[0] - 1, area_dimensions[1] - 1)
+            else:
+                self._goal = goal_position
+
+            # Ensure start and goal positions are within bounds
+            max_x, max_y = area_dimensions[0] - 1, area_dimensions[1] - 1
+            if not (0 <= self._start[0] <= max_x and 0 <= self._start[1] <= max_y):
+                raise ValueError(f"Start position {self._start} is out of maze bounds.")
+            if not (0 <= self._goal[0] <= max_x and 0 <= self._goal[1] <= max_y):
+                raise ValueError(f"Goal position {self._goal} is out of maze bounds.")
+
             self._pitfall_prob = pitfall_prob
             self._carve_paths()
             self._place_pitfalls()
@@ -85,7 +103,8 @@ class MazeGenerator:
 
         # Ensure the goal position has at least one adjacent path
         goal_x, goal_y = self._goal
-        adjacent_positions = [(goal_x - 1, goal_y), (goal_x + 1, goal_y), (goal_x, goal_y - 1), (goal_x, goal_y + 1)]
+        adjacent_positions = [(goal_x - 1, goal_y), (goal_x + 1, goal_y),
+                              (goal_x, goal_y - 1), (goal_x, goal_y + 1)]
         for x, y in adjacent_positions:
             if 0 <= x < self._area_dimensions[0] and 0 <= y < self._area_dimensions[1]:
                 if self._maze[x, y] == GAME_ELEMENTS['path']:
@@ -98,6 +117,7 @@ class MazeGenerator:
 
     def get(self):
         return self._maze, self._area_dimensions, self._start, self._goal, self._pitfall_prob
+
 
 class AgentProperties:
     def __init__(self, maze, start_position, goal_position, play_new_levels=False):
@@ -501,16 +521,31 @@ class DQNAgent:
             self.epsilon *= self.epsilon_decay
 
 def main():
-    parser = argparse.ArgumentParser(description="Train DQN on Maze Environment")
-    parser.add_argument('--render', type=bool, default=True, help='Render the environment using GUI')
+    parser = argparse.ArgumentParser(description="Train RL agent on Maze Environment")
+    parser.add_argument('--algorithm', type=str, default='SAC', choices=['DQN', 'PPO', 'SAC'],
+                        help='Select the algorithm to use: DQN, PPO, SAC')
+    parser.add_argument('--render', action='store_false', help='Render the environment using GUI')
     parser.add_argument('--episodes', type=int, default=1000, help='Number of episodes to train')
     args = parser.parse_args()
 
-    env = MazeEnv(area_dimensions=(10, 10), enable_pitfalls=True, render_mode=args.render)
+    # Initialize the environment
+    env = MazeEnv(area_dimensions=(6, 6), enable_pitfalls=True, render_mode=args.render)
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
 
-    agent = DQNAgent(state_size, action_size, render=args.render)
+    # Select the agent based on the algorithm argument
+    if args.algorithm == 'DQN':
+        from algorithms_baseline.DQN_baseline import DQNAgent
+        agent = DQNAgent(state_size, action_size)
+    elif args.algorithm == 'PPO':
+        from algorithms_baseline.PPO_baseline import PPOAgent
+        agent = PPOAgent(state_size, action_size)
+    elif args.algorithm == 'SAC':
+        from algorithms_baseline.SAC_baseline import SACAgent
+        agent = SACAgent(state_size, action_size)
+    else:
+        print(f"Unsupported algorithm: {args.algorithm}")
+        sys.exit(1)
 
     num_episodes = args.episodes
     max_steps = env._max_episode_steps
@@ -518,30 +553,25 @@ def main():
     for episode in range(num_episodes):
         state = env.reset()
         total_reward = 0
-        for t in range(max_steps):
+        for step in range(max_steps):
+            if args.render:
+                env.render()
+
             action = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
             total_reward += reward
 
-            # Store transition in replay buffer
-            agent.memory.push((state, action, reward, next_state, done))
+            agent.store_transition(state, action, reward, next_state, done)
+            agent.optimize_model()
 
             state = next_state
-
-            # Optimize the model
-            agent.optimize_model()
 
             if done:
                 break
 
-        # Update target network
-        if episode % agent.target_update_freq == 0:
-            agent.target_net.load_state_dict(agent.policy_net.state_dict())
+        agent.update()
 
-        # Decay epsilon
-        agent.update_epsilon()
-
-        print(f"Episode {episode+1}/{num_episodes}, Total Reward: {total_reward}, Epsilon: {agent.epsilon:.4f}")
+        print(f"Episode {episode+1}/{num_episodes}, Total Reward: {total_reward}")
 
     env.close()
 
