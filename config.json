@@ -19,7 +19,8 @@
             "epsilon_decay": 0.001,
             "train_update_freq": 8,
             "q_lr": 5e-4,
-            "train_q_iters": 80
+            "train_q_iters": 80,
+            "target_net_update_frequency": 1000
         },
         "PPO": {
             "seed": 0,
@@ -68,7 +69,7 @@
         "training_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5556"
+            "port": ":5556" 
         },
         "trajectory_server": {
             "prefix": "tcp://",
@@ -79,7 +80,7 @@
     "tensorboard": {
         "tensorboard_writer": {
           "scalar_tags": "AverageEpRet",
-          "max_count_per_scalar": 100,
+          "max_count_per_scalar": 10000,
           "global_step_tag": "Epoch"
         }
     }

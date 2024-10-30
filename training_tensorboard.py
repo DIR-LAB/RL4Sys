@@ -51,9 +51,9 @@ class TensorboardWriter:
         self._global_step_tag = global_step_tag
         self._recent_global_step = 0
 
-        self._loop_stop_signal = threading.Event()
+        self._loop_stop_signal = threading.Event() # make sure to set this on app sim
         self._tb_thread = threading.Thread(target=self._tensorboard_writer_processes)
-        self._tb_thread.daemon = False
+        self._tb_thread.daemon = True # edit to 'True' for end properly
         self._tb_thread.start()
 
         print("[TensorboardWriter] Initialized")
@@ -167,14 +167,14 @@ class TensorboardWriter:
                         self.writer.flush()
                     except queue.Empty:
                         continue
-                    finally:
+                    finally: # TODO why writer have limit
                         if self._total_scalar_count <= 0:
                             print("[TensorboardWriter - _tensorboard_processes] Max scalar count per tag reached. Stopping.")
                             self._loop_stop_signal.set()
                 else:
                     time.sleep(10)
             self.writer.close()
-            self._tb_thread.join()
+            # self._tb_thread.join() # ??? why join itself, dead lock
             return
 
 

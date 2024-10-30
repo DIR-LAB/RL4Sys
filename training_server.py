@@ -63,14 +63,14 @@ class TrainingServer(RL4SysTrainingServerAbstract):
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
                 flag = '--' + parameter.name
-                type = parameter.annotation
+                type1 = parameter.annotation
                 default = parameter.default
-                if type is inspect.Parameter.empty:
-                    type = None # if no type was hinted, cause a problem
+                if type1 is inspect.Parameter.empty:
+                    type1 = None # if no type was hinted, cause a problem
                 if default is inspect.Parameter.empty:
-                    parser.add_argument(flag, type=type, required=True)
+                    parser.add_argument(flag, type=type1, required=True)
                 else:
-                    parser.add_argument(flag, type=type, default=default)
+                    parser.add_argument(flag, type=type1, default=default)
 
             args = parser.parse_args(hyperparams) # Raises error if any hyperparams are unrecognized in algorithm class
             
@@ -90,20 +90,27 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
         self.initial_send_thread = threading.Thread(target=self.send_model)
+        self.initial_send_thread.daemon = True
         self.initial_send_thread.start()
 
         # start listener in a seperate thread
+        self._loop_thread_stop_signal = threading.Event()
         self.loop_thread = threading.Thread(target=self.start_loop)
+        self.loop_thread.daemon = True
         self.loop_thread.start()
 
     # TODO ask why this exists
     def joins(self) -> None:
-        """Wait until both of the following threads complete.
+        """Terminate all recving and threading in Training Server
+        Wait until both of the following threads complete.
 
         * initial send thread
         * listener thread
         """
         self.initial_send_thread.join()
+        # stop tensorboard thread and recv loop thread
+        self._tensorboard._loop_stop_signal.set()
+        self._loop_thread_stop_signal.set()
         self.loop_thread.join()
 
     def send_model(self) -> None:
@@ -135,10 +142,18 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         socket = context.socket(zmq.PULL)
         address = f"{traj_server['prefix']}{traj_server['host']}{traj_server['port']}"
         socket.bind(address)
+        socket.setsockopt(zmq.RCVTIMEO, 5000) # make sure recv will not block forever
 
-        while True:
+        while not self._loop_thread_stop_signal.is_set():
             print("[training_server.py - start_loop - blocking for new trajectory]")
-            trajectory_data = socket.recv()
+            try:
+               trajectory_data = socket.recv()
+            except zmq.error: 
+                print('[training_server.py - start_loop - error detected, end progcess')
+                continue
+            except zmq.Again:
+                print('[training_server.py - start_loop - recv timeout]')
+                continue
             trajectory = pickle.loads(trajectory_data)
             print("[training_server.py - start_loop - received traj #{}]".format(self._algorithm.traj))
 

@@ -1,0 +1,19 @@
+D: & cd D:\Projects\0_Udel\RL4Sys & conda activate udel
+
+python examples/maze-game/maze.py -s SAC
+
+python examples/maze-game/maze.py -s PPO
+
+python examples/maze-game/maze.py -s DQN
+
+## debuging ##
+python examples/maze-game/maze.py -s PPO --number-of-moves 5000
+
+python examples/maze-game/maze.py -s PPO --number-of-moves 5000 --number-of-iterations 100
+# 10 iteration lead to error
+
+
+## Tensorboard ## 
+tensorboard --logdir examples/maze-game/logs
+
+# tensor board have bug on epoch writing
