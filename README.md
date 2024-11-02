@@ -121,3 +121,7 @@ By using template classes and common functions found in `_common`, the user can 
     - RL4SysTrainingServerAbstract(ABC)
   - `BaseAction.py`
     - RL4SysActionAbstract(ABC)
+
+# Installation Notes
+If using python 3.7 or earlier, you will need to install pickle as it is not included as part of the python standard library until python 3.8
+You can uncomment the lines for pickle in setup.py or requirements.txt
