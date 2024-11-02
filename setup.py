@@ -16,7 +16,7 @@ setup(
         'numpy',
         'torch',
         'pyzmq',
-        'pickle',
+        # 'pickle',
         # Add other dependencies required by your package
     ],
     classifiers=[

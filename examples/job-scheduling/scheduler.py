@@ -327,12 +327,12 @@ MAX_RUN_TIME = 12 * 60 * 60  # assume maximal runtime is 12 hours
 JOB_FEATURES = 8
 DEBUG = False
 
-JOB_SEQUENCE_SIZE = 256
+# JOB_SEQUENCE_SIZE = 256
 SKIP_TIME = 360  # skip 60 seconds
 
 
 class BatchSchedSim(ApplicationAbstract):
-    def __init__(self, workload_file, seed, job_score_type=0, backfil=False, model=None, tensorboard=False):
+    def __init__(self, workload_file, seed, job_score_type=0, backfil=False, model=None, tensorboard=False, sequence_length=256, batch_job_slice=0):
         super().__init__()
         print("Initialize Batch Job Scheduler Simulator from dataset:", workload_file)
 
@@ -344,23 +344,47 @@ class BatchSchedSim(ApplicationAbstract):
         self.visible_jobs = []
         self.pairs = []
 
-        self.current_timestamp = 0
-        self.start = 0
-        self.next_arriving_job_idx = 0
+        self.sequence_length = sequence_length
+        self.batch_job_slice = batch_job_slice
+
+
+        if seed < 0:
+            print(f"Seed must be a non-negative integer or omitted, not {seed}")
+        
+        seed_seq = np.random.SeedSequence(seed)
+        self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
+
+        #have to set up randomnness seed before we do random start, as it will affect the randomness seed and we wont get consistent results
+
+        if self.batch_job_slice == 0: #if the user does not specify a slice, use the entire workload
+            self.start = self.np_random.integers(
+            low=self.sequence_length,
+            high=(self.loads.size() - self.sequence_length - 1) + 1,
+            endpoint=True
+        ) #ensures the we can fit the sequence length
+        else:
+            assert batch_job_slice > self.sequence_length, "Slice must be larger than sequence length"
+            self.start = self.np_random.integers(
+            low=self.sequence_length,
+            high=(self.batch_job_slice - self.sequence_length - 1) + 1,
+            endpoint=True
+        ) #ensures the slice can fit the sequence length
+
+        self.next_arriving_job_idx = self.start + 1
         # just avoid hitting the end of the workloads. 
-        self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
-        self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
+        self.last_job_in_batch = self.start + self.sequence_length
+        self.num_job_in_batch = self.sequence_length
+        self.current_timestamp = self.loads[self.start].submit_time
+
+
+
         # 0: Average bounded slowdown, 1: Average waiting time
         # 2: Average turnaround time, 3: Resource utilization
         # 4: Average slowdown
         self.job_score_type = job_score_type
         self.backfil = backfil
     
-        if seed < 0:
-            print(f"Seed must be a non-negative integer or omitted, not {seed}")
         
-        seed_seq = np.random.SeedSequence(seed)
-        self.np_random = np.random.Generator(np.random.PCG64(seed_seq))
 
         self.rlagent = RL4SysAgent(model=model)
 
@@ -437,11 +461,25 @@ class BatchSchedSim(ApplicationAbstract):
         self.visible_jobs = []
         self.pairs = []
 
-        self.current_timestamp = 0
-        self.start = 0
-        self.next_arriving_job_idx = 0
-        self.last_job_in_batch = self.start + self.loads.size() - JOB_SEQUENCE_SIZE
-        self.num_job_in_batch = self.loads.size() - JOB_SEQUENCE_SIZE
+        if self.batch_job_slice == 0: #if the user does not specify a slice, use the entire workload
+            self.start = self.np_random.integers(
+            low=self.sequence_length,
+            high=(self.loads.size() - self.sequence_length - 1) + 1,
+            endpoint=True
+        ) #ensures the we can fit the sequence length
+        else:
+            assert batch_job_slice > self.sequence_length, "Slice must be larger than sequence length"
+            self.start = self.np_random.integers(
+            low=self.sequence_length,
+            high=(self.batch_job_slice - self.sequence_length - 1) + 1,
+            endpoint=True
+        ) #ensures the slice can fit the sequence length
+
+        self.next_arriving_job_idx = self.start + 1
+        # just avoid hitting the end of the workloads. 
+        self.last_job_in_batch = self.start + self.sequence_length
+        self.num_job_in_batch = self.sequence_length
+        self.current_timestamp = self.loads[self.start].submit_time
         print("[schedule.py - reset()]")
 
     """
@@ -490,7 +528,7 @@ class BatchSchedSim(ApplicationAbstract):
 
                 self.rl_scheduled_jobs.append(job_for_scheduling)
                 print("[schedule.py - schedule_whole_trace()]: ",job_for_scheduling)
-                if rl_runs > JOB_SEQUENCE_SIZE:
+                if rl_runs > self.sequence_length:
                     rl_runs = 0
                     rl_working = False
                     rl_total = self.calculate_performance_return(self.rl_scheduled_jobs)
@@ -836,7 +874,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--model_path', type=str, default=None,
                         help="path to pre-existing model to be loaded by agent")
-    parser.add_argument('--tensorboard', type=bool, default=True,
+    parser.add_argument('--tensorboard', type=bool, default=False,
                         help="enable tensorboard logging for training observations and insights")
     parser.add_argument('--workload', type=str, default='DEFAULT',  # RICC-2010-2
                         help="workload file, with SWF format")
@@ -852,7 +890,10 @@ if __name__ == "__main__":
                         help="number of iterations of entire workload to train model on")
     parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default="PPO",
                         help="run a local training server, using specified algorithm")
+    parser.add_argument('--sequence_length', '-l', type=int, default=256, help="sequence length to use from the workload")
+    parser.add_argument('--batch_job_slice', '-slice', type=int, default=0, help="slice of the workload to sample from during training")
     args, extras = parser.parse_known_args()
+    
     
     # get workload file's absolute location if user-specified
     app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -863,9 +904,9 @@ if __name__ == "__main__":
 
     # start training server
     if args.algorithm != "No Server":
-        # buffer size for this environment should be JOB_SEQUENCE_SIZE * 100
+        # buffer size for this environment should be sequence_length * 100
         extras.append('--buf_size')
-        extras.append(str(JOB_SEQUENCE_SIZE * 100))
+        extras.append(str(args.sequence_length * 100))
         rl_training_server = TrainingServer(args.algorithm, MAX_QUEUE_SIZE, JOB_FEATURES, extras, app_dir, args.tensorboard)
         print("[schedule.py] Created Training Server")
 
@@ -874,7 +915,7 @@ if __name__ == "__main__":
 
     # create simulation environment
     sim = BatchSchedSim(workload_file=workload_file, seed=args.seed, job_score_type=args.job_score_type,
-                        backfil=args.backfil, model=model_arg)
+                        backfil=args.backfil, model=model_arg, sequence_length=args.sequence_length, batch_job_slice=args.batch_job_slice)
 
     # iterate multiple rounds to train the models, default 100
     iters = args.number_of_iterations

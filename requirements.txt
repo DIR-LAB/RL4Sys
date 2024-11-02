@@ -1,5 +1,7 @@
 numpy
 torch
 pyzmq
-pickle
+# pickle
 tensorboard
+seaborn
+scipy
