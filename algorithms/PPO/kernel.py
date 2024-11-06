@@ -51,13 +51,13 @@ class RLActor(ForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(kernel_dim, 32),
+                nn.Linear(kernel_dim*kernel_size, 32),
                 nn.ReLU(),
                 nn.Linear(32, 16),
                 nn.ReLU(),
                 nn.Linear(16, 8),
                 nn.ReLU(),
-                nn.Linear(8, 1)
+                nn.Linear(8, kernel_dim)
             )
         else:
             self.pi_network = custom_network
@@ -220,7 +220,8 @@ class RLActorCritic(StepKernelAbstract):
         if flattened_obs is not None and mask is not None:
             with torch.no_grad():
                 # actor
-                pi, _ = self.pi(flattened_obs, mask)
+                print(flattened_obs.shape)
+                pi, _ = self.pi(flattened_obs.T, mask)
                 a = pi.sample()
                 logp_a = self.pi._log_prob_from_distribution(pi, a)
                 # critic
