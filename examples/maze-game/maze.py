@@ -588,7 +588,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent per level')
     parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the pygame maze game environment')

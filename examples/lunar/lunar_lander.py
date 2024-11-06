@@ -141,10 +141,10 @@ class LunarLanderSim(ApplicationAbstract):
         We'll also create a mask for action space.
         """
         # Convert observation to tensor
-        obs_tensor = torch.as_tensor(obs, dtype=torch.float32)
+        obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
 
         # Create mask for action space (discrete actions from 0 to 3)
-        mask = torch.zeros(MAX_SIZE, dtype=torch.float32)
+        mask = torch.zeros(MAX_SIZE, dtype=torch.float32).unsqueeze(0)
 
         return obs_tensor, mask
 
