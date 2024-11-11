@@ -77,9 +77,12 @@ class RLActor(ForwardKernelAbstract):
             torch Categorical distribution correpsonding to action probabilities
 
         """
+        
         # x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
         x = self.pi_network(flattened_obs)
+        print('X is ',x)
         logits = torch.squeeze(x, -1) # each action has only one feature now
+        print('X is now ',logits)
         logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
         return Categorical(logits=logits)
 

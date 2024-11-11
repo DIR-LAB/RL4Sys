@@ -1,6 +1,12 @@
-numpy
+numpy==1.24.4
 torch
 pyzmq
 tensorboard
 gym
 scipy
+pygame
+seaborn
+tensorflow
+joblib
+psutil
+tqdm

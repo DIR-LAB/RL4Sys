@@ -351,6 +351,7 @@ class MazeGameSim(ApplicationAbstract):
                 rew = self.agent_properties.calculate_reward(current_position, current_position)
                 self.simulator_stats['action_rewards'].append(rew)
                 obs, mask = self.build_observation(current_position)
+                print('mask is ',mask)
                 rl4sys_action = self.rlagent.request_for_action(obs, mask, rew)
                 rl_runs += 1
                 moves += 1
@@ -512,7 +513,7 @@ class MazeGameSim(ApplicationAbstract):
         obs = torch.as_tensor(combined_observation, dtype=torch.float32)
 
         # Make mask :^)
-        mask = np.zeros(MAX_SIZE, dtype=float)
+        mask = np.zeros(FEATURES, dtype=float)
         mask = torch.as_tensor(mask, dtype=torch.float32)
         return obs, mask
 

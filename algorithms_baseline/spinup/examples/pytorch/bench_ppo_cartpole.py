@@ -1,5 +1,11 @@
-from spinup.utils.run_utils import ExperimentGrid
-from spinup import ppo_pytorch
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+
+from algorithms_baseline.spinup.utils.run_utils import ExperimentGrid
+from algorithms_baseline.spinup import ppo_pytorch
 import torch
 
 if __name__ == '__main__':

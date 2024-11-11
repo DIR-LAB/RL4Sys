@@ -1,0 +1,43 @@
+{
+    "ac_kwargs":	{
+        "activation":	"Tanh",
+        "hidden_sizes":	[
+            32
+        ]
+    },
+    "actor_critic":	"MLPActorCritic",
+    "clip_ratio":	0.2,
+    "env_fn":	"<function call_experiment.<locals>.thunk_plus.<locals>.<lambda> at 0x70ab977da830>",
+    "epochs":	10,
+    "exp_name":	"ppo-pyt-bench_cartpole-v0_hid32_tanh",
+    "gamma":	0.99,
+    "lam":	0.97,
+    "logger":	{
+        "<algorithms_baseline.spinup.utils.logx.EpochLogger object at 0x70ab97559150>":	{
+            "epoch_dict":	{},
+            "exp_name":	"ppo-pyt-bench_cartpole-v0_hid32_tanh",
+            "first_row":	true,
+            "log_current_row":	{},
+            "log_headers":	[],
+            "output_dir":	"/home/girigiri-linux/Project/RL4Sys/algorithms_baseline/data/ppo-pyt-bench_cartpole-v0_hid32_tanh/ppo-pyt-bench_cartpole-v0_hid32_tanh_s20",
+            "output_file":	{
+                "<_io.TextIOWrapper name='/home/girigiri-linux/Project/RL4Sys/algorithms_baseline/data/ppo-pyt-bench_cartpole-v0_hid32_tanh/ppo-pyt-bench_cartpole-v0_hid32_tanh_s20/progress.txt' mode='w' encoding='UTF-8'>":	{
+                    "mode":	"w"
+                }
+            }
+        }
+    },
+    "logger_kwargs":	{
+        "exp_name":	"ppo-pyt-bench_cartpole-v0_hid32_tanh",
+        "output_dir":	"/home/girigiri-linux/Project/RL4Sys/algorithms_baseline/data/ppo-pyt-bench_cartpole-v0_hid32_tanh/ppo-pyt-bench_cartpole-v0_hid32_tanh_s20"
+    },
+    "max_ep_len":	1000,
+    "pi_lr":	0.0003,
+    "save_freq":	10,
+    "seed":	20,
+    "steps_per_epoch":	4000,
+    "target_kl":	0.01,
+    "train_pi_iters":	80,
+    "train_v_iters":	80,
+    "vf_lr":	0.001
+}
