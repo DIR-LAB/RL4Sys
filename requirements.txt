@@ -1,4 +1,4 @@
-numpy==1.24.4
+numpy
 torch
 pyzmq
 tensorboard
@@ -10,3 +10,4 @@ tensorflow
 joblib
 psutil
 tqdm
+box2d

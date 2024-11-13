@@ -11,8 +11,8 @@ import time
 import math
 import torch
 
-import gym
-import gym.spaces
+import gymnasium as gym
+import gymnasium.spaces
 
 from agent import RL4SysAgent
 from training_server import TrainingServer
@@ -42,7 +42,7 @@ class LunarLanderSim(ApplicationAbstract):
         self._render_game = render_game
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v2')
+        self.env = gym.make('LunarLander-v3')
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -124,6 +124,12 @@ class LunarLanderSim(ApplicationAbstract):
                     self.rlagent.flag_last_action(rew)
 
                 if done:
+                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                    self.simulator_stats['moves'] = moves
+                    rl_runs = 0
+                    rl_total = self.calculate_performance_return(self.simulator_stats)
+                    rew = -rl_total
+                    self.rlagent.flag_last_action(rew)
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
                         self.simulator_stats['time_to_goal'].append(time.time() - start_time)
