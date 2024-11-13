@@ -351,7 +351,6 @@ class MazeGameSim(ApplicationAbstract):
                 rew = self.agent_properties.calculate_reward(current_position, current_position)
                 self.simulator_stats['action_rewards'].append(rew)
                 obs, mask = self.build_observation(current_position)
-                print('mask is ',mask)
                 rl4sys_action = self.rlagent.request_for_action(obs, mask, rew)
                 rl_runs += 1
                 moves += 1

@@ -51,13 +51,13 @@ class RLActor(ForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(kernel_dim*kernel_size, 32),
+                nn.Linear(kernel_dim, 32),
                 nn.ReLU(),
                 nn.Linear(32, 16),
                 nn.ReLU(),
                 nn.Linear(16, 8),
                 nn.ReLU(),
-                nn.Linear(8, kernel_dim)
+                nn.Linear(8, kernel_size)
             )
         else:
             self.pi_network = custom_network
@@ -78,12 +78,12 @@ class RLActor(ForwardKernelAbstract):
 
         """
 
-        print('whats flattened obs? ', flattened_obs)
+        #print('whats flattened obs? ', flattened_obs)
         x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
         x = self.pi_network(flattened_obs)
-        print('what is result after network?', x)
+        #print('what is result after network?', x)
         logits = torch.squeeze(x, -1) # each action has only one feature now
-        print('what is x now:',logits)
+        #print('what is x now:',logits)
 
         logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
         return Categorical(logits=logits)

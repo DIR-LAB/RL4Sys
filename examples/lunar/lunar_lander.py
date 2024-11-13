@@ -243,7 +243,7 @@ if __name__ == '__main__':
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(args.algorithm, FEATURES, MAX_SIZE, extras, app_dir, args.tensorboard)
+        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras, app_dir, args.tensorboard)
         print('[lunar_lander.py] Created Training Server')
 
     # load model if applicable
