@@ -77,9 +77,11 @@ class RLActor(ForwardKernelAbstract):
             torch Categorical distribution correpsonding to action probabilities
 
         """
-   
+
+        print('whats flattened obs? ', flattened_obs)
         x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
         x = self.pi_network(flattened_obs)
+        print('what is result after network?', x)
         logits = torch.squeeze(x, -1) # each action has only one feature now
         print('what is x now:',logits)
 
