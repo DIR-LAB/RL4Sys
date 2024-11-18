@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
 import time
 import joblib
 import os
@@ -6,6 +10,7 @@ import tensorflow as tf
 import torch
 from algorithms_baseline.spinup import EpochLogger
 from algorithms_baseline.spinup.utils.logx import restore_tf_graph
+import gym
 
 
 def load_policy_and_env(fpath, itr='last', deterministic=False):
@@ -61,6 +66,8 @@ def load_policy_and_env(fpath, itr='last', deterministic=False):
     except:
         env = None
 
+    # add to resolve env spec is none issue
+    env = gym.make(env.unwrapped.__class__.__name__, render_mode='human')
     return env, get_action
 
 
@@ -115,21 +122,23 @@ def run_policy(env, get_action, max_ep_len=None, num_episodes=100, render=True):
         "page on Experiment Outputs for how to handle this situation."
 
     logger = EpochLogger()
-    o, r, d, ep_ret, ep_len, n = env.reset(), 0, False, 0, 0, 0
+    o, _ = env.reset()
+    r, d, ep_ret, ep_len, n = 0, False, 0, 0, 0 # once env.reset, it return (o,_) make sure unpack it
     while n < num_episodes:
         if render:
             env.render()
             time.sleep(1e-3)
 
         a = get_action(o)
-        o, r, d, _ = env.step(a)
-        ep_ret += r
+        o, r, d, _, _ = env.step(a) # an extra value wil be returned, ignore it
+        ep_ret += r 
         ep_len += 1
 
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             print('Episode %d \t EpRet %.3f \t EpLen %d'%(n, ep_ret, ep_len))
-            o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
+            o, _ = env.reset()
+            r, d, ep_ret, ep_len = 0, False, 0, 0
             n += 1
 
     logger.log_tabular('EpRet', with_min_and_max=True)
