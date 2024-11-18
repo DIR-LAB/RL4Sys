@@ -79,7 +79,7 @@
     "tensorboard": {
         "tensorboard_writer": {
           "scalar_tags": "AverageEpRet",
-          "max_count_per_scalar": 100,
+          "max_count_per_scalar": 10000,
           "global_step_tag": "Epoch"
         }
     }

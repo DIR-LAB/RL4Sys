@@ -28,8 +28,8 @@ Training server parameters:
     buf_size    | MOVE_SEQUENCE_SIZE * 100 = 500000
 """
 
-FEATURES = 8
-MAX_SIZE = 1
+FEATURES = 4
+MAX_SIZE = 2
 
 MOVE_SEQUENCE_SIZE = 500
 
@@ -139,6 +139,8 @@ class LunarLanderSim(ApplicationAbstract):
 
             if self._render_game:
                 self.env.close()
+        
+        
 
     def build_observation(self, obs):
         """

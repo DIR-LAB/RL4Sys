@@ -51,7 +51,7 @@ class RLActor(ForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(kernel_dim, 32),
+                nn.Linear(kernel_dim*kernel_size, 32),
                 nn.ReLU(),
                 nn.Linear(32, 16),
                 nn.ReLU(),
