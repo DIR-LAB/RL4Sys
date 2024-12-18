@@ -42,7 +42,7 @@ class LunarLanderSim(ApplicationAbstract):
         self._render_game = render_game
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3')
+        self.env = gym.make('LunarLander-v3', render_mode='human' if self._render_game else 'rgb_array')
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -66,6 +66,7 @@ class LunarLanderSim(ApplicationAbstract):
         }
 
     def run_application(self, num_iterations=1, num_moves=500):
+        total_moves: int = 0
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
@@ -82,9 +83,6 @@ class LunarLanderSim(ApplicationAbstract):
             obs_tensor, mask = self.build_observation(obs)
 
             while not done and moves < num_moves:
-                if self._render_game:
-                    self.env.render()
-
                 # Get action from agent
                 rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask, cumulative_reward)
                 action = rl4sys_action.act
@@ -108,6 +106,7 @@ class LunarLanderSim(ApplicationAbstract):
                 self.rlagent.request_for_action(next_obs_tensor, mask, reward)
                 rl_runs += 1
                 moves += 1
+                total_moves += 1
                 self.simulator_stats['moves'] += 1
                 self.simulator_stats['action_rewards'].append(reward)
 
@@ -115,7 +114,7 @@ class LunarLanderSim(ApplicationAbstract):
 
                 if rl_runs >= MOVE_SEQUENCE_SIZE:
                     # Flag last action
-                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}, total moves: {total_moves}')
                     self.simulator_stats['moves'] = moves
                     rl_runs = 0
                     rl_total = self.calculate_performance_return(self.simulator_stats)
@@ -124,7 +123,7 @@ class LunarLanderSim(ApplicationAbstract):
                     self.rlagent.flag_last_action(rew)
 
                 if done:
-                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}, total moves: {total_moves}')
                     self.simulator_stats['moves'] = moves
                     rl_runs = 0
                     rl_total = self.calculate_performance_return(self.simulator_stats)
@@ -137,10 +136,8 @@ class LunarLanderSim(ApplicationAbstract):
                         self.simulator_stats['death_count'] += 1
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
 
-            if self._render_game:
-                self.env.close()
-        
-        
+        if self._render_game:
+            self.env.close()
 
     def build_observation(self, obs):
         """
@@ -230,11 +227,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=1000,
+    parser.add_argument('--number-of-iterations', type=int, default=100000,
                         help='number of iterations to train the agent')
-    parser.add_argument('--number-of-moves', type=int, default=10000,
+    parser.add_argument('--number-of-moves', type=int, default=100000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')

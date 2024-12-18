@@ -54,3 +54,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+/examples/job-scheduling/logs/rl4sys-ppo-info
+/examples/maze-game/logs/rl4sys-ppo-info
+/examples/lunar/logs/rl4sys-ppo-info

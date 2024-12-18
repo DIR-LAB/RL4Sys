@@ -2,10 +2,12 @@ from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
 
 import numpy as np
 import torch
-from torch.optim import Adam
+import torch.nn.functional as F
+from torch.optim import Adam, RMSprop
 
 from .kernel import DeepQNetwork
 from .replay_buffer import ReplayBuffer
+from .stale_replay_buffer import StaleReplayBuffer
 
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -48,13 +50,14 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = hyperparams['act_dim'],
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
                  epsilon_decay: float = hyperparams['epsilon_decay'],
                  train_update_freq: float = hyperparams['train_update_freq'], q_lr: float = hyperparams['q_lr'],
-                 train_q_iters: int = hyperparams['train_q_iters']):
+                 train_q_iters: int = hyperparams['train_q_iters'],
+                 target_net_update_freq: int = hyperparams['target_net_update_freq']):
 
         super().__init__()
         seed += 10000 * os.getpid()
@@ -76,10 +79,18 @@ class DQN(AlgorithmAbstract):
         self._epsilon_decay = epsilon_decay
         self._train_update_freq = train_update_freq
         self._train_q_iters = train_q_iters
+        self._target_net_update_freq = target_net_update_freq
 
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
+        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size)
         self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._target_model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._target_model.load_state_dict(self._model.state_dict())
+        self._target_model.eval()
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
+
+        # set devices
+        self._model.to("cpu")
+        self._target_model.to("cpu")
 
         # set up logger
         log_data_dir = os.path.join(env_dir, './logs/')
@@ -124,10 +135,9 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.done)
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
-                self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
 
         # get enough trajectories for training the model
@@ -135,6 +145,9 @@ class DQN(AlgorithmAbstract):
             if self.traj % self._train_update_freq == 0:
                 self.epoch += 1
                 self.train_model()
+                # self._replay_buffer.set_training_markers() # Used in stale_replay_buffer.py
+                if self.epoch % self._target_net_update_freq == 0:
+                    self._target_model.load_state_dict(self._model.state_dict())
                 self.log_epoch()
                 return True
 
@@ -143,17 +156,19 @@ class DQN(AlgorithmAbstract):
     def train_model(self) -> None:
         """Train model on data from DQN replay_buffer.
         """
-        data, batch = self._replay_buffer.get(self._batch_size)
+        data, _, batch_age = self._replay_buffer.get(self._batch_size)
 
-        q_l_old = self.compute_loss_q(data)[0]
+        q_l_old = self.compute_loss_q(data, batch_age)[0]
         q_l_old = q_l_old.item()
 
         # Train Q network for n iterations of gradient descent
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
-            loss_q, q_target = self.compute_loss_q(data)
+            loss_q, q_target = self.compute_loss_q(data, batch_age)
             loss_q.backward()
             self._q_optimizer.step()
+
+        self._model._epsilon = max(self._epsilon_min, self._epsilon - self._epsilon_decay)
 
         self.logger.store(StopIter=i)
 
@@ -173,7 +188,7 @@ class DQN(AlgorithmAbstract):
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_q(self, data: dict[str, torch.Tensor], batch_age) -> tuple[torch.Tensor, dict[str, float]]:
         """Compute loss for Q function.
 
         Args:
@@ -182,15 +197,24 @@ class DQN(AlgorithmAbstract):
             Loss for Q function, Q target for logging
 
         """
-        obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
+        obs, mask, rew, act, next_obs, dones = data['obs'], data['mask'], data['rew'], data['act'], data['next_obs'], data['done']
+
+        obs = obs.to("cpu")
+        act = act.unsqueeze(1).to("cpu")
+        rew = rew.unsqueeze(1).to("cpu")
+        next_obs = next_obs.to("cpu")
+        dones = dones.unsqueeze(1).to("cpu")
 
         # Q loss
-        q_val = self._model.forward(obs, mask)
+        q_val = self._model.forward(obs, mask).gather(1, act.long())
+
         with torch.no_grad():
-            next_q_val = self._model.forward(next_obs, mask)
-            q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
+            next_q_val = self._target_model.forward(next_obs).max(dim=1)[0].unsqueeze(1)
+            q_target = rew + (self._gamma * (~dones)) * next_q_val
 
         # Mean Square Error (MSE) loss
-        loss_q = ((q_val - q_target)**2).mean()
+        # loss_q = (q_target - q_val)**2
+        # loss_q = (loss_q * batch_age).mean()
+        loss_q = torch.nn.MSELoss()(q_val, q_target)
 
         return loss_q, q_target.detach().numpy()
