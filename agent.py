@@ -58,6 +58,9 @@ class RL4SysAgent(RL4SysAgentAbstract):
         self._listen_thread.daemon = True
         self._listen_thread.start()
 
+        self.stop_thread = threading.Thread(target=self.stop_listener)
+        self.stop_thread.start()
+
         self._model = model
         self._current_traj = RL4SysTrajectory()
 
@@ -69,6 +72,18 @@ class RL4SysAgent(RL4SysAgentAbstract):
                 break
 
         print("[RLSysAgent] Model Initialized")
+
+    
+    def stop_listener(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.PULL)  # REP socket for replies
+        socket.bind("tcp://127.0.0.1:5554")
+        print("Listening stop signal on port 5554...")
+        while True: 
+            message = socket.recv_string()
+            if message == 'stop':
+                print('Received Stop signal from server on port 5554, stop collect trajectories')
+                self._current_traj.stop_collecting = True
 
     def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward, *args, **kwargs) -> RL4SysAction:
         """Produce action based on trained model and given observation.
@@ -132,6 +147,9 @@ class RL4SysAgent(RL4SysAgentAbstract):
 
             with self._lock:
                 self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
+
+            # resume collecting trajectories
+            self._current_traj.stop_collecting = False 
 
             print("[RLSysAgent - loop_for_updated_model] loaded the new model")
 

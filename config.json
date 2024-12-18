@@ -10,7 +10,7 @@
 
         },
         "DQN": {
-            "batch_size": 32,
+            "batch_size": 12,
             "seed": 0,
             "traj_per_epoch": 3,
             "gamma": 0.95,

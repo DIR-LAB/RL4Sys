@@ -14,6 +14,8 @@ from trajectory import RL4SysTrajectory
 
 from conf_loader import ConfigLoader
 
+import zmq
+
 """
 Import and load RL4Sys/config.json DQN Agent configurations and applies them to
 the current instance.
@@ -134,11 +136,27 @@ class DQN(AlgorithmAbstract):
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             if self.traj % self._train_update_freq == 0:
                 self.epoch += 1
+                # TODO send client a signal to tell client ingore all trajectory collected. Resume after client model update
+                self.client_stop_collect_traj('stop')
+
                 self.train_model()
                 self.log_epoch()
                 return True
 
         return False
+
+    def client_stop_collect_traj(self, msg):
+        """
+        msg = "stop" means stop collecting staled traj during model training
+        """
+        context = zmq.Context()
+        socket = context.socket(zmq.PUSH)  # REP socket for replies
+        socket.connect("tcp://127.0.0.1:5554") # TODO fix after
+        print("Server told Client stop collecting on port 5554")
+        socket.send_string(msg)
+
+        socket.close()
+        context.term()
 
     def train_model(self) -> None:
         """Train model on data from DQN replay_buffer.
@@ -190,6 +208,8 @@ class DQN(AlgorithmAbstract):
             next_q_val = self._model.forward(next_obs, mask)
             q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
 
+        #print("what is q_val: ",q_val)
+        #print("target_q: ",q_target)
         # Mean Square Error (MSE) loss
         loss_q = ((q_val - q_target)**2).mean()
 

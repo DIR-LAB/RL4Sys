@@ -11,3 +11,4 @@ joblib
 psutil
 tqdm
 box2d
+gymnasium

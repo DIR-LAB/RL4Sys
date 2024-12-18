@@ -230,11 +230,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=1000,
+    parser.add_argument('--number-of-iterations', type=int, default=10000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -244,7 +244,7 @@ if __name__ == '__main__':
     app_dir = os.path.dirname(os.path.abspath(__file__))
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
-        extras.append(str(MOVE_SEQUENCE_SIZE * 100))
+        extras.append(str(MOVE_SEQUENCE_SIZE * 10))
         rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras, app_dir, args.tensorboard)
         print('[lunar_lander.py] Created Training Server')
 

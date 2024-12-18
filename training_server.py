@@ -12,6 +12,7 @@ from typing import NoReturn as Never
 
 from training_tensorboard import TensorboardWriter
 from conf_loader import ConfigLoader
+from time import time
 
 ALGORITHMS_PATH = 'algorithms'
 
@@ -87,6 +88,10 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         if tensorboard:
             self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
 
+        
+        # add a trajectory buffer to asynchronizly store trajs and then dispatch to agent
+        self.server_traj_buffer = [] # queue, FIFO
+
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
         self.initial_send_thread = threading.Thread(target=self.send_model)
@@ -95,6 +100,8 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         # start listener in a seperate thread
         self.loop_thread = threading.Thread(target=self.start_loop)
         self.loop_thread.start()
+
+
 
     # TODO ask why this exists
     def joins(self) -> None:
@@ -145,9 +152,11 @@ class TrainingServer(RL4SysTrainingServerAbstract):
             updated = self._algorithm.receive_trajectory(trajectory)
             if updated:
                 self.send_model()
-
+            
         socket.close()
         context.term()
+
+            
 
 
 if __name__ == "__main__":
