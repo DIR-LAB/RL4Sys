@@ -135,7 +135,7 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.done)
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.done, r4a.version)
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
@@ -143,28 +143,28 @@ class DQN(AlgorithmAbstract):
         # get enough trajectories for training the model
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             if self.traj % self._train_update_freq == 0:
-                self.epoch += 1
-                self.train_model()
-                # self._replay_buffer.set_training_markers() # Used in stale_replay_buffer.py
-                if self.epoch % self._target_net_update_freq == 0:
-                    self._target_model.load_state_dict(self._model.state_dict())
-                self.log_epoch()
-                return True
+                if np.where(self._replay_buffer.relevant_version_buf)[0].shape[0] >= self._batch_size:
+                    self.epoch += 1
+                    self.train_model()
+                    if self.epoch % self._target_net_update_freq == 0:
+                        self._target_model.load_state_dict(self._model.state_dict())
+                    self.log_epoch()
+                    return True
 
         return False
 
     def train_model(self) -> None:
         """Train model on data from DQN replay_buffer.
         """
-        data, _, batch_age = self._replay_buffer.get(self._batch_size)
+        data, _ = self._replay_buffer.get(self._batch_size)
 
-        q_l_old = self.compute_loss_q(data, batch_age)[0]
+        q_l_old = self.compute_loss_q(data)[0]
         q_l_old = q_l_old.item()
 
         # Train Q network for n iterations of gradient descent
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
-            loss_q, q_target = self.compute_loss_q(data, batch_age)
+            loss_q, q_target = self.compute_loss_q(data)
             loss_q.backward()
             self._q_optimizer.step()
 
@@ -188,7 +188,7 @@ class DQN(AlgorithmAbstract):
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor], batch_age) -> tuple[torch.Tensor, dict[str, float]]:
+    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
         """Compute loss for Q function.
 
         Args:

@@ -18,20 +18,28 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.done_buf = np.zeros(buf_size, dtype=np.bool_)
+        self.relevant_version_buf = np.zeros(buf_size, dtype=np.bool_)
         self.ptr, self.full, self.max_size = 0, False, buf_size
         self.capacity = buf_size
+        self.current_version = 1
 
-    def store(self, obs, act, mask, rew, q_val):
+    def store(self, obs, act, mask, rew, done, version):
         """
         Append one timestep of agent-environment interaction to the buffer.
         Stores this observation as the next observation of the previous transition.
         """
         assert self.ptr < self.max_size
+
+        if version != self.current_version:
+            self.current_version = version
+            self.relevant_version_buf[:] = False
+
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
-        self.done_buf[self.ptr] = q_val
+        self.done_buf[self.ptr] = done
+        self.relevant_version_buf[self.ptr] = True
         # most accurate way to retrieve next observation, I imagine.
         if self.ptr == 0 and self.full:
             self.next_obs_buf[self.max_size - 1] = obs
@@ -46,9 +54,7 @@ class ReplayBuffer(ReplayBufferAbstract):
 
     def finish_path(self, last_val=0):
         """
-        Call this at the end of a trajectory, or when one gets cut off by an epoch ending.
-        Looks back in buffer to where the trajectory started, and uses the rewards found there to
-        calculate the reward-to-go for each state in the trajectory.
+        Unused in DQN
         """
         pass
 
@@ -64,14 +70,20 @@ class ReplayBuffer(ReplayBufferAbstract):
                 next_obs: the next observation
                 act: the action
                 rew: the reward
+                done: done flag
 
         """
+        size = self.capacity if self.full else self.ptr
         assert self.ptr < self.max_size
         # random sample of indices
-        batch = random.sample(range(self.ptr), batch_size)
+        current_version_indices = np.where(self.relevant_version_buf[:size])[0]
+
+        assert len(current_version_indices) >= batch_size, "Not enough relevant samples for requested batch_size."
+
+        batch = random.sample(current_version_indices.tolist(), batch_size)
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     mask=self.mask_buf[batch], rew=self.rew_buf[batch],
                     done=self.done_buf[batch])
 
-        return {k: torch.as_tensor(v) for k, v in data.items()}, batch, 1
+        return {k: torch.as_tensor(v) for k, v in data.items()}, batch

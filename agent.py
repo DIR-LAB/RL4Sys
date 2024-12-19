@@ -59,6 +59,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
         self._listen_thread.start()
 
         self._model = model
+        self._model_version = 0
         self._current_traj = RL4SysTrajectory()
 
         # Receive one model to initialize
@@ -92,7 +93,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
 
             a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
 
-            r4sa = RL4SysAction(obs, a, mask, reward, data, done=False)
+            r4sa = RL4SysAction(obs, a, mask, reward, data, done=False, model_version=self._model_version)
             self._current_traj.add_action(r4sa)
 
             return r4sa
@@ -108,7 +109,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
             Selected action in an RL4SysAction object.
 
         """
-        r4sa = RL4SysAction(None, None, None, reward, None, True)
+        r4sa = RL4SysAction(None, None, None, reward, None, True, self._model_version)
         self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
 
     def _loop_for_updated_model(self) -> Never:
@@ -132,8 +133,9 @@ class RL4SysAgent(RL4SysAgentAbstract):
 
             with self._lock:
                 self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
+                self._model_version = self._model_version+1 if self._model_version <= 100000 else 0
 
-            print("[RLSysAgent - loop_for_updated_model] loaded the new model")
+            print(f"[RLSysAgent - loop_for_updated_model] loaded the new model with version {self._model_version}")
 
         socket.close()
         context.term()
