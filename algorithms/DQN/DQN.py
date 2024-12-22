@@ -122,6 +122,7 @@ class DQN(AlgorithmAbstract):
         ep_ret, ep_len = 0, 0
 
         for r4a in trajectory.actions:
+            print(r4a.data)
             # Process each RL4SysAction in the trajectory
             ep_ret += r4a.rew
             ep_len += 1

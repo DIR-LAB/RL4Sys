@@ -15,6 +15,9 @@ import threading
 
 from conf_loader import ConfigLoader
 
+
+from stable_baselines3 import DQN
+
 """Import and load RL4Sys/config.json server configurations and applies them to
 the current instance.
 
@@ -105,7 +108,8 @@ class RL4SysAgent(RL4SysAgentAbstract):
         with self._lock:
             assert self._model is not None
 
-            a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+            #a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+            a, data = self._model.predict(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
 
             r4sa = RL4SysAction(obs, a, mask, reward, data, done=False)
             self._current_traj.add_action(r4sa)
@@ -146,7 +150,8 @@ class RL4SysAgent(RL4SysAgentAbstract):
                 f.write(model_bytes)
 
             with self._lock:
-                self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
+                #self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
+                self._model = DQN.load('examples/maze-game/model.zip')
 
             # resume collecting trajectories
             self._current_traj.stop_collecting = False 
