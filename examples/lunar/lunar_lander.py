@@ -234,7 +234,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN_stable',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')

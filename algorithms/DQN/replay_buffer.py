@@ -95,7 +95,8 @@ class ReplayBuffer(ReplayBufferAbstract):
         # random sample of indices
         batch = random.sample(range(self.ptr), batch_size)
         # self.ptr, self.path_start_idx = 0, 0 # TODO debug try use all traj, not first 32
-
+        print("what is batch? ",batch)
+        print("what is self.obs_buf[batch]:", self.obs_buf[batch])
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     mask=self.mask_buf[batch], rew=self.rew_buf[batch], ret=self.ret_buf[batch],
                     q_val=self.q_val_buf[batch])

@@ -1,0 +1,973 @@
+{
+    "__class__":	"PPO_stable",
+    "act_dim":	1,
+    "batch_size":	12,
+    "buf_size":	5000,
+    "clip_ratio":	0.1,
+    "dummy_env":	{
+        "<stable_baselines3.common.vec_env.dummy_vec_env.DummyVecEnv object at 0x000002E3FF2A22F0>":	{
+            "_options":	[
+                {}
+            ],
+            "_seeds":	[
+                42240000
+            ],
+            "action_space":	{
+                "Discrete(1)":	{
+                    "_np_random":	"Generator(PCG64)",
+                    "_shape":	[],
+                    "dtype":	"int64",
+                    "n":	"1",
+                    "start":	"0"
+                }
+            },
+            "buf_dones":	"[False]",
+            "buf_infos":	[
+                {}
+            ],
+            "buf_obs":	{
+                "null":	"[[0. 0. 0. 0. 0. 0. 0. 0.]]"
+            },
+            "buf_rews":	"[0.]",
+            "envs":	[
+                {
+                    "<DummyEnv instance>":	{
+                        "action_space":	{
+                            "Discrete(1)":	{
+                                "_np_random":	"Generator(PCG64)",
+                                "_shape":	[],
+                                "dtype":	"int64",
+                                "n":	"1",
+                                "start":	"0"
+                            }
+                        },
+                        "n_actions":	1,
+                        "obs_dim":	8,
+                        "observation_space":	{
+                            "Box(-inf, inf, (8,), float32)":	{
+                                "_np_random":	null,
+                                "_shape":	[
+                                    8
+                                ],
+                                "bounded_above":	"[False False False False False False False False]",
+                                "bounded_below":	"[False False False False False False False False]",
+                                "dtype":	"float32",
+                                "high":	"[inf inf inf inf inf inf inf inf]",
+                                "high_repr":	"inf",
+                                "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                "low_repr":	"-inf"
+                            }
+                        }
+                    }
+                }
+            ],
+            "keys":	[
+                null
+            ],
+            "metadata":	{
+                "render_modes":	[]
+            },
+            "num_envs":	1,
+            "observation_space":	{
+                "Box(-inf, inf, (8,), float32)":	{
+                    "_np_random":	null,
+                    "_shape":	[
+                        8
+                    ],
+                    "bounded_above":	"[False False False False False False False False]",
+                    "bounded_below":	"[False False False False False False False False]",
+                    "dtype":	"float32",
+                    "high":	"[inf inf inf inf inf inf inf inf]",
+                    "high_repr":	"inf",
+                    "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                    "low_repr":	"-inf"
+                }
+            },
+            "render_mode":	null,
+            "reset_infos":	[
+                {}
+            ]
+        }
+    },
+    "env_dir":	"d:\\Projects\\0_Udel\\RL4Sys\\examples\\lunar",
+    "exp_name":	"rl4sys-ppo-info",
+    "gamma":	0.99,
+    "kernel_dim":	4,
+    "kernel_size":	2,
+    "lam":	0.97,
+    "log_data_dir":	"d:\\Projects\\0_Udel\\RL4Sys\\examples\\lunar\\./logs/",
+    "logger_kwargs":	{
+        "exp_name":	"rl4sys-ppo-info",
+        "output_dir":	"d:\\Projects\\0_Udel\\RL4Sys\\examples\\lunar\\./logs/rl4sys-ppo-info\\rl4sys-ppo-info_s42240000"
+    },
+    "obs_dim":	8,
+    "pi_lr":	0.0003,
+    "seed":	42240000,
+    "self":	{
+        "<algorithms.PPO_stable.PPO_stable.PPO_stable object at 0x000002E3D2D072E0>":	{
+            "_act_dim":	1,
+            "_batch_size":	12,
+            "_buf_size":	5000,
+            "_clip_ratio":	0.1,
+            "_gamma":	0.99,
+            "_kernel_dim":	4,
+            "_kernel_size":	2,
+            "_lam":	0.97,
+            "_pi_lr":	0.0003,
+            "_target_kl":	0.01,
+            "_train_pi_iters":	40,
+            "_train_v_iters":	40,
+            "_traj_per_epoch":	5,
+            "_vf_lr":	0.0003,
+            "logger":	{
+                "<utils.logger.EpochLogger object at 0x000002E3D2D07580>":	{
+                    "epoch_dict":	{},
+                    "exp_name":	"rl4sys-ppo-info",
+                    "first_row":	true,
+                    "log_current_row":	{},
+                    "log_headers":	[],
+                    "output_dir":	"d:\\Projects\\0_Udel\\RL4Sys\\examples\\lunar\\./logs/rl4sys-ppo-info\\rl4sys-ppo-info_s42240000",
+                    "output_file":	{
+                        "<_io.TextIOWrapper name='d:\\\\Projects\\\\0_Udel\\\\RL4Sys\\\\examples\\\\lunar\\\\./logs/rl4sys-ppo-info\\\\rl4sys-ppo-info_s42240000\\\\progress.txt' mode='w' encoding='cp936'>":	{
+                            "mode":	"w"
+                        }
+                    }
+                }
+            },
+            "model":	{
+                "<stable_baselines3.ppo.ppo.PPO object at 0x000002E3D2D071C0>":	{
+                    "_current_progress_remaining":	1.0,
+                    "_custom_logger":	false,
+                    "_episode_num":	0,
+                    "_last_episode_starts":	null,
+                    "_last_obs":	null,
+                    "_last_original_obs":	null,
+                    "_n_updates":	0,
+                    "_num_timesteps_at_start":	0,
+                    "_stats_window_size":	100,
+                    "_total_timesteps":	0,
+                    "_vec_normalize_env":	null,
+                    "action_noise":	null,
+                    "action_space":	{
+                        "Discrete(1)":	{
+                            "_np_random":	"Generator(PCG64)",
+                            "_shape":	[],
+                            "dtype":	"int64",
+                            "n":	"1",
+                            "start":	"0"
+                        }
+                    },
+                    "batch_size":	12,
+                    "clip_range":	"<function get_schedule_fn.<locals>.<lambda> at 0x000002E402170CA0>",
+                    "clip_range_vf":	null,
+                    "device":	"cpu",
+                    "ent_coef":	0.0,
+                    "env":	{
+                        "<stable_baselines3.common.vec_env.dummy_vec_env.DummyVecEnv object at 0x000002E3FF2A22F0>":	{
+                            "_options":	[
+                                {}
+                            ],
+                            "_seeds":	[
+                                42240000
+                            ],
+                            "action_space":	{
+                                "Discrete(1)":	{
+                                    "_np_random":	"Generator(PCG64)",
+                                    "_shape":	[],
+                                    "dtype":	"int64",
+                                    "n":	"1",
+                                    "start":	"0"
+                                }
+                            },
+                            "buf_dones":	"[False]",
+                            "buf_infos":	[
+                                {}
+                            ],
+                            "buf_obs":	{
+                                "null":	"[[0. 0. 0. 0. 0. 0. 0. 0.]]"
+                            },
+                            "buf_rews":	"[0.]",
+                            "envs":	[
+                                {
+                                    "<DummyEnv instance>":	{
+                                        "action_space":	{
+                                            "Discrete(1)":	{
+                                                "_np_random":	"Generator(PCG64)",
+                                                "_shape":	[],
+                                                "dtype":	"int64",
+                                                "n":	"1",
+                                                "start":	"0"
+                                            }
+                                        },
+                                        "n_actions":	1,
+                                        "obs_dim":	8,
+                                        "observation_space":	{
+                                            "Box(-inf, inf, (8,), float32)":	{
+                                                "_np_random":	null,
+                                                "_shape":	[
+                                                    8
+                                                ],
+                                                "bounded_above":	"[False False False False False False False False]",
+                                                "bounded_below":	"[False False False False False False False False]",
+                                                "dtype":	"float32",
+                                                "high":	"[inf inf inf inf inf inf inf inf]",
+                                                "high_repr":	"inf",
+                                                "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                                "low_repr":	"-inf"
+                                            }
+                                        }
+                                    }
+                                }
+                            ],
+                            "keys":	[
+                                null
+                            ],
+                            "metadata":	{
+                                "render_modes":	[]
+                            },
+                            "num_envs":	1,
+                            "observation_space":	{
+                                "Box(-inf, inf, (8,), float32)":	{
+                                    "_np_random":	null,
+                                    "_shape":	[
+                                        8
+                                    ],
+                                    "bounded_above":	"[False False False False False False False False]",
+                                    "bounded_below":	"[False False False False False False False False]",
+                                    "dtype":	"float32",
+                                    "high":	"[inf inf inf inf inf inf inf inf]",
+                                    "high_repr":	"inf",
+                                    "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                    "low_repr":	"-inf"
+                                }
+                            },
+                            "render_mode":	null,
+                            "reset_infos":	[
+                                {}
+                            ]
+                        }
+                    },
+                    "ep_info_buffer":	null,
+                    "ep_success_buffer":	null,
+                    "gae_lambda":	0.97,
+                    "gamma":	0.99,
+                    "learning_rate":	0.0003,
+                    "lr_schedule":	"<function get_schedule_fn.<locals>.<lambda> at 0x000002E3D2DABE20>",
+                    "max_grad_norm":	0.5,
+                    "n_envs":	1,
+                    "n_epochs":	40,
+                    "n_steps":	2048,
+                    "normalize_advantage":	true,
+                    "num_timesteps":	0,
+                    "observation_space":	{
+                        "Box(-inf, inf, (8,), float32)":	{
+                            "_np_random":	null,
+                            "_shape":	[
+                                8
+                            ],
+                            "bounded_above":	"[False False False False False False False False]",
+                            "bounded_below":	"[False False False False False False False False]",
+                            "dtype":	"float32",
+                            "high":	"[inf inf inf inf inf inf inf inf]",
+                            "high_repr":	"inf",
+                            "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                            "low_repr":	"-inf"
+                        }
+                    },
+                    "policy":	{
+                        "ActorCriticPolicy(\n  (features_extractor): FlattenExtractor(\n    (flatten): Flatten(start_dim=1, end_dim=-1)\n  )\n  (pi_features_extractor): FlattenExtractor(\n    (flatten): Flatten(start_dim=1, end_dim=-1)\n  )\n  (vf_features_extractor): FlattenExtractor(\n    (flatten): Flatten(start_dim=1, end_dim=-1)\n  )\n  (mlp_extractor): MlpExtractor(\n    (policy_net): Sequential(\n      (0): Linear(in_features=8, out_features=64, bias=True)\n      (1): Tanh()\n      (2): Linear(in_features=64, out_features=64, bias=True)\n      (3): Tanh()\n    )\n    (value_net): Sequential(\n      (0): Linear(in_features=8, out_features=64, bias=True)\n      (1): Tanh()\n      (2): Linear(in_features=64, out_features=64, bias=True)\n      (3): Tanh()\n    )\n  )\n  (action_net): Linear(in_features=64, out_features=1, bias=True)\n  (value_net): Linear(in_features=64, out_features=1, bias=True)\n)":	{
+                            "_backward_hooks":	{},
+                            "_backward_pre_hooks":	{},
+                            "_buffers":	{},
+                            "_forward_hooks":	{},
+                            "_forward_hooks_always_called":	{},
+                            "_forward_hooks_with_kwargs":	{},
+                            "_forward_pre_hooks":	{},
+                            "_forward_pre_hooks_with_kwargs":	{},
+                            "_is_full_backward_hook":	null,
+                            "_load_state_dict_post_hooks":	{},
+                            "_load_state_dict_pre_hooks":	{},
+                            "_modules":	{
+                                "action_net":	{
+                                    "Linear(in_features=64, out_features=1, bias=True)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{},
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_parameters":	{
+                                            "bias":	"Parameter containing:\ntensor([0.], requires_grad=True)",
+                                            "weight":	"Parameter containing:\ntensor([[ 2.9561e-03,  5.8912e-04,  3.2549e-04,  3.4767e-04,  5.7235e-04,\n         -4.6374e-04,  9.0011e-04, -7.9142e-04, -8.8492e-04, -3.9589e-04,\n          2.1773e-03,  2.5522e-04, -1.5887e-03,  4.7794e-04, -5.5559e-04,\n          2.5554e-04,  1.2946e-03, -1.0731e-03,  1.9754e-03, -1.9942e-03,\n          8.3846e-04, -1.2833e-03,  5.2820e-04, -1.0148e-03,  2.5217e-03,\n          4.1859e-04,  1.2942e-04, -2.4732e-04,  2.8314e-03, -1.6303e-04,\n         -6.6909e-04, -2.8686e-04,  1.4814e-04,  5.7451e-04,  1.4359e-03,\n          8.2483e-04,  3.0943e-04,  8.6976e-04,  1.8843e-03, -1.3163e-03,\n         -6.3532e-04,  7.1803e-04,  2.2948e-04,  2.3189e-03,  1.5247e-03,\n         -6.3788e-04, -9.9539e-04, -2.0692e-03,  8.9441e-05,  1.5980e-03,\n          1.3052e-03,  1.6142e-03,  2.7233e-04,  4.7374e-04, -1.3416e-03,\n         -2.0755e-03,  1.0676e-04,  1.1517e-03, -5.1904e-04,  4.5522e-04,\n          1.5410e-03, -1.2165e-03,  2.3731e-03,  1.4580e-03]],\n       requires_grad=True)"
+                                        },
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "in_features":	64,
+                                        "out_features":	1,
+                                        "training":	true
+                                    }
+                                },
+                                "features_extractor":	{
+                                    "FlattenExtractor(\n  (flatten): Flatten(start_dim=1, end_dim=-1)\n)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_features_dim":	8,
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{
+                                            "flatten":	{
+                                                "Flatten(start_dim=1, end_dim=-1)":	{
+                                                    "_backward_hooks":	{},
+                                                    "_backward_pre_hooks":	{},
+                                                    "_buffers":	{},
+                                                    "_forward_hooks":	{},
+                                                    "_forward_hooks_always_called":	{},
+                                                    "_forward_hooks_with_kwargs":	{},
+                                                    "_forward_pre_hooks":	{},
+                                                    "_forward_pre_hooks_with_kwargs":	{},
+                                                    "_is_full_backward_hook":	null,
+                                                    "_load_state_dict_post_hooks":	{},
+                                                    "_load_state_dict_pre_hooks":	{},
+                                                    "_modules":	{},
+                                                    "_non_persistent_buffers_set":	"set()",
+                                                    "_parameters":	{},
+                                                    "_state_dict_hooks":	{},
+                                                    "_state_dict_pre_hooks":	{},
+                                                    "end_dim":	-1,
+                                                    "start_dim":	1,
+                                                    "training":	true
+                                                }
+                                            }
+                                        },
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_observation_space":	{
+                                            "Box(-inf, inf, (8,), float32)":	{
+                                                "_np_random":	null,
+                                                "_shape":	[
+                                                    8
+                                                ],
+                                                "bounded_above":	"[False False False False False False False False]",
+                                                "bounded_below":	"[False False False False False False False False]",
+                                                "dtype":	"float32",
+                                                "high":	"[inf inf inf inf inf inf inf inf]",
+                                                "high_repr":	"inf",
+                                                "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                                "low_repr":	"-inf"
+                                            }
+                                        },
+                                        "_parameters":	{},
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "training":	true
+                                    }
+                                },
+                                "mlp_extractor":	{
+                                    "MlpExtractor(\n  (policy_net): Sequential(\n    (0): Linear(in_features=8, out_features=64, bias=True)\n    (1): Tanh()\n    (2): Linear(in_features=64, out_features=64, bias=True)\n    (3): Tanh()\n  )\n  (value_net): Sequential(\n    (0): Linear(in_features=8, out_features=64, bias=True)\n    (1): Tanh()\n    (2): Linear(in_features=64, out_features=64, bias=True)\n    (3): Tanh()\n  )\n)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{
+                                            "policy_net":	{
+                                                "Sequential(\n  (0): Linear(in_features=8, out_features=64, bias=True)\n  (1): Tanh()\n  (2): Linear(in_features=64, out_features=64, bias=True)\n  (3): Tanh()\n)":	{
+                                                    "_backward_hooks":	{},
+                                                    "_backward_pre_hooks":	{},
+                                                    "_buffers":	{},
+                                                    "_forward_hooks":	{},
+                                                    "_forward_hooks_always_called":	{},
+                                                    "_forward_hooks_with_kwargs":	{},
+                                                    "_forward_pre_hooks":	{},
+                                                    "_forward_pre_hooks_with_kwargs":	{},
+                                                    "_is_full_backward_hook":	null,
+                                                    "_load_state_dict_post_hooks":	{},
+                                                    "_load_state_dict_pre_hooks":	{},
+                                                    "_modules":	{
+                                                        "0":	{
+                                                            "Linear(in_features=8, out_features=64, bias=True)":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{
+                                                                    "bias":	"Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                                    "weight":	"Parameter containing:\ntensor([[ 1.8840e-01, -3.4775e-02, -1.6073e-01,  3.6338e-02,  1.6063e-01,\n          4.1366e-02, -2.5419e-01, -2.5841e-01],\n        [-6.2995e-02, -2.1171e-01, -6.9729e-02,  2.0212e-01, -1.2258e-01,\n         -3.0615e-01, -4.6732e-02,  2.4573e-02],\n        [-2.5502e-02, -3.0105e-02, -2.4423e-01, -1.5277e-01, -7.2523e-02,\n         -1.8872e-02,  1.8862e-01, -1.7404e-01],\n        [-1.8127e-01,  3.0418e-01,  9.5346e-02, -2.5543e-01, -8.9733e-02,\n          1.7210e-02,  1.3932e-01, -2.0246e-01],\n        [ 1.3086e-01,  1.1953e-01,  1.7145e-02, -3.8668e-01, -6.4052e-02,\n          2.3684e-02,  4.2383e-02,  3.2646e-02],\n        [-2.9302e-02, -6.3580e-02,  2.9405e-01, -4.7876e-02,  1.9420e-02,\n         -4.3281e-02, -3.5690e-01, -5.0385e-02],\n        [ 1.3131e-01,  3.7150e-02,  5.9088e-02, -1.0325e-01, -2.9594e-03,\n         -6.6141e-03,  1.0548e-01, -2.1584e-02],\n        [ 1.5867e-01,  6.2500e-02, -1.1254e-01, -1.3459e-01, -3.5146e-01,\n         -4.6528e-01,  1.0633e-01, -2.2971e-01],\n        [ 1.9603e-02,  3.0557e-02,  8.2217e-02, -8.8967e-02,  2.5810e-02,\n          1.2349e-02,  8.0948e-02,  5.2636e-02],\n        [ 1.4472e-01, -4.6080e-02,  3.8932e-01,  5.9724e-02, -3.1233e-01,\n         -2.9357e-02,  1.8089e-01, -6.2256e-02],\n        [-1.0643e-01, -2.8584e-02, -1.8298e-01,  1.6685e-01,  4.1727e-02,\n         -1.1169e-01, -1.0069e-02,  3.0243e-01],\n        [-2.1667e-02,  2.6916e-01,  3.1909e-01, -1.9074e-01, -2.1094e-01,\n         -1.6502e-01, -1.2035e-01, -9.8782e-02],\n        [ 4.5995e-01,  3.0638e-02, -2.8769e-01, -4.4674e-01,  9.6235e-02,\n          3.1027e-02,  8.0248e-02,  1.9309e-01],\n        [ 2.6508e-01,  3.8853e-02, -1.5260e-01,  2.6466e-01, -1.0639e-02,\n          1.8752e-01,  2.3847e-02,  1.3503e-01],\n        [ 2.7874e-01, -2.9057e-02, -4.5319e-02,  5.6930e-02,  2.0724e-01,\n         -2.5498e-01,  1.8960e-01,  1.7938e-01],\n        [-1.8130e-01,  8.6320e-02,  6.6230e-02, -5.3200e-02,  2.3642e-01,\n         -6.8420e-02, -1.9023e-01, -3.8626e-01],\n        [-9.3385e-02, -8.4246e-02, -3.5060e-01,  7.8105e-03,  7.8894e-02,\n         -2.7118e-01, -7.1281e-02, -2.6756e-01],\n        [-1.4771e-01,  8.7873e-03,  3.7649e-02, -3.8265e-01, -3.0953e-01,\n         -1.8727e-02, -1.4920e-01,  2.0179e-02],\n        [ 2.1475e-01, -4.8913e-02,  9.8813e-02,  7.6776e-02,  6.6363e-02,\n         -1.7047e-01, -6.4236e-02,  2.1572e-02],\n        [ 2.7137e-02,  4.1710e-02, -6.3308e-02,  4.8838e-02,  2.5826e-01,\n          2.1199e-01,  1.8323e-01,  4.7566e-02],\n        [-1.8880e-01, -1.2777e-01, -2.6694e-01, -6.4515e-02, -7.7787e-02,\n          2.4358e-01,  1.5944e-01, -1.7494e-01],\n        [ 1.0340e-01,  8.2461e-02,  3.1251e-01, -3.9360e-02,  3.0006e-02,\n          3.9464e-01,  4.2392e-01,  1.2001e-01],\n        [-1.2533e-01, -2.2909e-01,  2.2158e-01, -6.4238e-02,  3.7934e-02,\n         -1.9701e-01,  8.8080e-02, -1.8803e-01],\n        [-2.0239e-01, -3.9793e-01,  9.8139e-02, -2.8060e-01,  6.0006e-02,\n          6.4477e-02, -1.4483e-01,  7.1409e-02],\n        [ 1.8083e-01,  2.0355e-01, -2.5551e-03, -6.3698e-02, -1.4220e-01,\n          2.9000e-01,  6.3904e-02, -1.8045e-01],\n        [ 7.2156e-02,  2.2704e-01,  5.2389e-02,  2.3575e-01, -3.8612e-01,\n          1.6033e-01,  3.4443e-02,  1.1370e-01],\n        [ 6.3015e-02,  1.7563e-01,  1.2420e-01, -4.7494e-02, -1.3718e-02,\n          4.1004e-03,  5.2463e-02,  1.9632e-01],\n        [ 1.1674e-01, -2.5136e-01, -1.3991e-01, -8.6766e-03,  3.4368e-01,\n         -1.3767e-01, -1.2114e-01,  2.0343e-02],\n        [ 3.5774e-01,  2.9664e-01, -3.3015e-01, -2.5763e-01, -6.7517e-02,\n          1.3938e-01, -2.8271e-01, -4.8404e-02],\n        [-4.7812e-02,  2.0114e-01,  1.4785e-01,  3.3137e-02, -4.2737e-02,\n          1.9090e-01,  3.5376e-01, -8.7297e-02],\n        [ 7.5977e-02,  6.8699e-02,  1.6240e-01,  2.3265e-01,  7.5125e-02,\n         -3.7748e-02, -3.8057e-02, -2.4056e-02],\n        [-1.3162e-01, -4.2634e-02, -4.3863e-02,  3.0446e-01, -2.0831e-01,\n         -2.4296e-03, -1.5321e-01, -1.0195e-01],\n        [-1.8426e-01, -9.8072e-02,  1.3065e-01, -4.3556e-02,  4.3746e-01,\n          3.0469e-01, -2.0932e-01,  1.7909e-01],\n        [ 1.6048e-01,  5.6547e-02,  3.4980e-01, -6.2422e-02,  7.1960e-02,\n         -6.7593e-02, -1.1816e-01, -2.0628e-01],\n        [-1.2645e-01, -1.8841e-01,  1.6148e-01, -2.7500e-02, -1.9795e-01,\n         -9.8916e-02,  5.9174e-02,  3.7718e-01],\n        [-8.6320e-02, -1.8995e-03,  2.7457e-01, -2.8502e-03,  2.0408e-02,\n          6.7758e-02, -1.1085e-01,  1.2015e-01],\n        [ 8.3545e-02, -5.0587e-02, -2.8296e-02,  1.0106e-01, -3.8493e-02,\n         -1.0781e-01, -9.3433e-02,  3.0599e-03],\n        [ 3.6481e-02,  1.0042e-02, -2.0633e-01,  1.1577e-01,  5.2441e-02,\n         -4.8894e-03, -3.6412e-02, -3.1480e-02],\n        [ 4.4240e-01, -3.2599e-01,  2.2125e-01,  1.0147e-01, -2.3020e-01,\n          8.1933e-02, -2.3492e-01,  8.9527e-02],\n        [ 3.7298e-01, -2.3609e-01,  1.0498e-01, -1.4524e-01, -5.9968e-02,\n          1.1744e-02, -4.1327e-02, -6.5015e-02],\n        [-9.6564e-02, -2.6995e-01, -3.9782e-02, -5.2778e-02, -2.9198e-01,\n          3.8856e-01, -6.3615e-02, -1.9191e-01],\n        [ 2.3638e-01, -3.6548e-01, -6.7003e-02,  4.3377e-02, -8.0637e-02,\n          1.4058e-01, -8.7327e-02, -1.5296e-01],\n        [ 1.6068e-01,  3.8694e-03,  5.5631e-02, -8.3427e-02,  1.8795e-01,\n          1.7217e-02,  1.7736e-01, -3.6143e-01],\n        [-8.1036e-02, -1.4750e-01,  1.0709e-01, -1.4810e-01,  3.2601e-02,\n         -2.3676e-01, -2.8499e-01, -8.5830e-02],\n        [ 5.2821e-02, -1.9122e-01,  9.5712e-02, -2.7361e-01, -9.5295e-03,\n          2.5064e-01, -1.2338e-01, -2.3248e-01],\n        [-1.2040e-01,  3.5491e-02,  5.9152e-02, -2.9608e-02,  1.8472e-02,\n          9.9591e-02, -1.7939e-01, -2.0451e-01],\n        [ 1.9499e-02, -5.3458e-02, -2.0164e-01, -1.0045e-01, -2.0942e-02,\n          2.1575e-01, -3.1002e-01, -1.9023e-01],\n        [-1.4663e-01, -2.8719e-02,  1.4007e-01,  1.5854e-01,  3.4466e-01,\n          4.0855e-01,  5.2338e-03, -1.4170e-01],\n        [ 4.0199e-02, -2.5694e-01,  3.3349e-02,  5.0192e-02, -1.5144e-01,\n          1.3515e-01,  1.0347e-01, -2.1897e-01],\n        [-7.4485e-02, -3.7464e-02,  1.2350e-01,  2.0980e-02, -1.1900e-01,\n         -6.4457e-02,  1.1421e-01, -3.8055e-03],\n        [ 3.1066e-01,  4.3900e-02,  8.6047e-02,  1.1523e-01,  9.2422e-02,\n         -5.8829e-02, -7.4534e-02,  1.9356e-01],\n        [ 1.0660e-02, -2.3956e-01, -3.4558e-02, -2.7406e-01,  4.1092e-02,\n          1.7119e-01,  3.5114e-01,  1.3597e-01],\n        [-2.3143e-01,  2.3177e-01, -2.3785e-01, -4.7898e-02,  3.0628e-02,\n          2.5443e-02,  4.5999e-03,  2.2688e-01],\n        [ 1.9805e-01, -3.6774e-02,  1.6634e-01,  9.1838e-02, -6.0604e-02,\n          3.8325e-02, -3.6022e-01,  3.8816e-01],\n        [ 5.5691e-02,  3.8564e-01, -2.8716e-01,  1.9882e-01, -2.9279e-01,\n          2.7640e-01, -3.3502e-01,  5.3090e-02],\n        [ 2.1422e-01, -4.0182e-02,  1.8231e-01,  2.1280e-01, -1.4045e-01,\n          1.3799e-01,  6.7372e-02, -2.5094e-01],\n        [ 1.4236e-01, -1.5111e-01, -1.3365e-01, -2.3258e-01,  2.7003e-02,\n         -2.1666e-01,  3.0015e-01, -3.4931e-02],\n        [-3.9839e-04,  2.6681e-01,  1.3217e-01, -1.3119e-01, -1.7096e-03,\n         -1.3700e-01, -1.4358e-01,  1.2131e-02],\n        [-4.4232e-02, -1.3645e-01,  1.5684e-01,  1.4249e-01, -2.0039e-02,\n         -2.7641e-02, -1.0424e-02, -4.9197e-02],\n        [ 1.4326e-01, -2.7485e-01, -1.7688e-01, -7.8328e-02, -7.3706e-02,\n          2.6802e-01, -1.1337e-01,  1.0393e-01],\n        [ 2.2363e-02,  2.3010e-01,  2.2225e-02,  2.2153e-01, -4.7313e-02,\n         -2.5688e-02, -9.7601e-02, -3.3759e-01],\n        [-2.6640e-01, -5.0778e-02, -7.1218e-02,  1.0275e-01,  5.1659e-02,\n          5.9398e-02, -3.4162e-02,  9.2612e-02],\n        [-3.2750e-01, -2.9260e-01, -1.9209e-01, -5.9341e-02, -5.6816e-01,\n          5.5841e-02,  2.0521e-02,  1.7208e-01],\n        [-1.4753e-01,  1.9601e-01,  1.8019e-01, -5.1360e-01,  2.4103e-02,\n          6.6894e-02, -3.1567e-01,  2.4627e-01]], requires_grad=True)"
+                                                                },
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "in_features":	8,
+                                                                "out_features":	64,
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "1":	{
+                                                            "Tanh()":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{},
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "2":	{
+                                                            "Linear(in_features=64, out_features=64, bias=True)":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{
+                                                                    "bias":	"Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                                    "weight":	"Parameter containing:\ntensor([[ 0.0238, -0.0529,  0.0550,  ..., -0.0690, -0.0802, -0.1592],\n        [-0.0802, -0.0299, -0.2278,  ...,  0.1705,  0.3019,  0.3238],\n        [-0.2248,  0.0596,  0.2071,  ...,  0.0579, -0.2433,  0.1781],\n        ...,\n        [-0.1184, -0.2048,  0.2240,  ...,  0.2263, -0.2292, -0.0219],\n        [-0.0155,  0.0627,  0.0244,  ...,  0.3809, -0.1344, -0.3604],\n        [ 0.1946, -0.0068,  0.3121,  ...,  0.2915,  0.0283, -0.0346]],\n       requires_grad=True)"
+                                                                },
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "in_features":	64,
+                                                                "out_features":	64,
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "3":	{
+                                                            "Tanh()":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{},
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "training":	true
+                                                            }
+                                                        }
+                                                    },
+                                                    "_non_persistent_buffers_set":	"set()",
+                                                    "_parameters":	{},
+                                                    "_state_dict_hooks":	{},
+                                                    "_state_dict_pre_hooks":	{},
+                                                    "training":	true
+                                                }
+                                            },
+                                            "value_net":	{
+                                                "Sequential(\n  (0): Linear(in_features=8, out_features=64, bias=True)\n  (1): Tanh()\n  (2): Linear(in_features=64, out_features=64, bias=True)\n  (3): Tanh()\n)":	{
+                                                    "_backward_hooks":	{},
+                                                    "_backward_pre_hooks":	{},
+                                                    "_buffers":	{},
+                                                    "_forward_hooks":	{},
+                                                    "_forward_hooks_always_called":	{},
+                                                    "_forward_hooks_with_kwargs":	{},
+                                                    "_forward_pre_hooks":	{},
+                                                    "_forward_pre_hooks_with_kwargs":	{},
+                                                    "_is_full_backward_hook":	null,
+                                                    "_load_state_dict_post_hooks":	{},
+                                                    "_load_state_dict_pre_hooks":	{},
+                                                    "_modules":	{
+                                                        "0":	{
+                                                            "Linear(in_features=8, out_features=64, bias=True)":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{
+                                                                    "bias":	"Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                                    "weight":	"Parameter containing:\ntensor([[-2.2116e-01,  1.1823e-01,  1.6274e-01, -1.5618e-01, -1.7950e-02,\n          2.3311e-02,  1.8785e-01, -2.6012e-01],\n        [-3.1553e-01, -1.4481e-01,  7.4056e-02,  1.5238e-01, -1.0420e-01,\n         -1.5727e-02, -1.9341e-02,  5.4780e-02],\n        [ 2.1707e-01,  3.9018e-02, -1.4848e-02, -2.3426e-01, -5.2646e-02,\n         -3.0671e-02, -5.0338e-01,  1.0105e-01],\n        [-1.0806e-01, -5.7136e-01, -1.2984e-01,  3.0007e-01,  3.4568e-01,\n          9.9306e-02, -2.0122e-01, -3.4037e-02],\n        [-2.3800e-02, -1.6384e-01,  1.3038e-02, -1.0977e-02, -1.4315e-01,\n         -8.6638e-02,  1.8232e-01, -1.3051e-02],\n        [-7.1953e-02,  1.4929e-02, -1.4905e-01, -2.3711e-02, -1.4972e-01,\n          2.3832e-02,  7.1188e-02,  2.8381e-01],\n        [-1.2588e-01, -1.5774e-01, -4.9335e-01, -1.2486e-02, -1.8112e-01,\n          4.9062e-02,  2.7634e-01, -1.6783e-01],\n        [ 1.8791e-01,  8.7291e-02, -2.0316e-01, -1.5205e-01,  1.2676e-01,\n         -7.8707e-02, -1.6859e-01, -1.8937e-01],\n        [-3.0874e-02,  1.0188e-02, -6.2631e-02,  2.9878e-02, -2.3456e-01,\n          1.9647e-01, -1.4296e-01,  6.4959e-02],\n        [-1.2849e-01, -9.4329e-03,  9.2238e-02, -4.8536e-01, -1.3388e-01,\n          1.2620e-01,  2.0190e-01,  1.9353e-01],\n        [ 1.3966e-01,  3.5089e-01, -2.1730e-01, -1.9732e-01, -9.1564e-02,\n          3.3281e-02, -1.1259e-01, -1.2137e-01],\n        [ 1.0179e-01, -4.4990e-02, -2.7591e-01,  2.5490e-01,  6.7436e-02,\n          3.4993e-02,  1.7643e-02,  2.1621e-01],\n        [ 5.1848e-02,  1.3228e-01,  3.1179e-01,  1.0684e-01, -1.7794e-01,\n         -2.3705e-01,  2.9550e-01, -1.9298e-02],\n        [-7.4088e-02,  7.2528e-02, -2.8872e-01,  6.2974e-02, -4.5249e-02,\n         -2.5692e-01, -2.0420e-02,  4.1506e-02],\n        [-1.4974e-01, -2.2582e-01,  2.5948e-02, -3.3232e-02,  1.0921e-01,\n          1.0990e-01,  1.0546e-01, -2.1031e-01],\n        [ 4.1246e-01, -1.8709e-01, -1.0918e-01,  6.3551e-02,  4.2827e-02,\n         -1.3351e-01,  3.6384e-01,  2.3025e-01],\n        [ 1.4047e-01, -2.1348e-02,  2.9928e-01, -1.0384e-01, -1.2315e-01,\n         -9.7855e-02, -1.3434e-01, -7.5269e-02],\n        [ 3.3462e-02,  6.1583e-02, -6.4465e-02,  1.5962e-02,  3.0994e-01,\n          4.5052e-02,  1.5922e-01, -3.8970e-02],\n        [ 1.6021e-01, -4.3000e-02, -5.9210e-02,  7.9941e-02,  1.6172e-01,\n         -2.7041e-02, -3.4491e-02, -1.3239e-01],\n        [-7.2925e-02, -9.3947e-02, -8.0100e-03,  1.2141e-02,  9.7325e-02,\n          1.3787e-01, -5.5293e-02,  1.8891e-02],\n        [ 1.2860e-01,  1.3991e-01, -5.7620e-02,  1.5786e-01,  2.0574e-01,\n          1.0162e-01, -1.7322e-01,  3.6540e-01],\n        [-7.7673e-02,  3.5955e-01, -1.7589e-04, -1.5488e-01,  1.2203e-01,\n         -9.9655e-02,  1.2110e-01,  4.0970e-02],\n        [-2.0190e-01,  1.5138e-01,  2.8900e-01,  2.0190e-01,  2.0152e-01,\n         -2.5170e-02, -2.3247e-01,  1.5394e-01],\n        [ 3.0691e-01,  2.1189e-02,  1.9308e-02,  5.0908e-02, -1.3874e-01,\n         -3.1450e-01, -4.0323e-01, -2.7969e-01],\n        [-5.5110e-02, -8.8822e-02, -1.2431e-01, -1.7981e-01,  1.0773e-01,\n         -2.9758e-01, -1.5532e-01, -2.9726e-02],\n        [-3.1991e-01,  1.0167e-01, -3.0080e-02,  1.4916e-01, -9.2894e-02,\n         -3.8855e-01,  2.9040e-02,  1.6124e-01],\n        [-1.9787e-01,  7.5253e-02, -2.7618e-01,  6.8998e-02,  9.3136e-02,\n          1.7149e-01, -9.5610e-02, -3.0552e-01],\n        [ 1.0981e-01, -2.5840e-02,  3.5118e-01, -1.3568e-01,  3.7920e-01,\n         -1.8682e-01,  9.3908e-02, -5.4207e-02],\n        [-2.6703e-02,  4.1785e-01, -1.0181e-01,  1.2587e-01, -1.7291e-02,\n         -1.4126e-02,  1.3451e-01, -1.8489e-02],\n        [-2.8601e-01, -2.4763e-01, -1.8130e-01, -6.0132e-02, -5.1985e-02,\n         -1.2826e-01, -4.2339e-01, -1.4856e-02],\n        [ 1.2024e-01, -1.2170e-01,  1.6329e-01, -7.9787e-02, -1.4614e-01,\n         -1.5829e-01, -1.1865e-01, -8.9861e-02],\n        [ 8.4480e-02,  1.3596e-01, -1.1667e-01, -5.5978e-02, -1.7150e-03,\n         -4.6184e-03, -2.5952e-01,  3.3858e-01],\n        [-3.1058e-01, -7.6144e-02, -4.4204e-02, -6.1832e-02, -3.2303e-01,\n          7.4002e-02,  5.8503e-02,  3.4599e-02],\n        [ 1.7400e-02,  1.7118e-01, -1.1841e-01,  1.2645e-01,  3.7361e-01,\n          9.1329e-02,  9.9962e-02, -2.2924e-01],\n        [ 3.5058e-01, -5.5341e-02, -2.6180e-01, -1.8849e-01,  4.5225e-02,\n          1.8185e-01,  7.0335e-02, -1.2998e-01],\n        [-2.9424e-02, -5.4006e-02,  1.6301e-02,  2.6856e-01,  1.5979e-01,\n         -2.2318e-01,  2.6217e-01,  1.1176e-01],\n        [ 8.7212e-02,  3.7573e-02,  4.8544e-02,  2.2539e-01, -9.7132e-02,\n          1.2210e-01,  8.1350e-02,  1.5256e-01],\n        [-1.3386e-01, -7.9694e-02,  1.1389e-02, -1.8514e-01,  2.7697e-01,\n         -4.0650e-02, -5.6296e-02, -1.0591e-01],\n        [ 4.3845e-03, -1.1811e-01, -1.7585e-02, -1.9105e-01,  2.2323e-01,\n         -2.4783e-02, -6.4843e-02,  3.0152e-01],\n        [-4.4574e-01,  3.6495e-02, -2.5709e-02, -5.1826e-01,  1.9104e-01,\n         -2.7464e-02,  9.8979e-02,  2.5360e-01],\n        [-1.6197e-02, -3.1147e-01,  3.6808e-01,  2.1270e-01, -2.5612e-01,\n         -1.8585e-01, -1.1327e-01,  2.2131e-01],\n        [ 3.1735e-02, -2.1495e-01,  1.0160e-01, -1.9713e-01, -2.0866e-01,\n          3.1130e-01,  5.1755e-03,  3.2152e-01],\n        [ 5.3316e-02,  8.8143e-02, -2.7302e-03,  2.2874e-01, -3.5531e-01,\n         -7.5166e-02, -8.2143e-02, -1.1353e-01],\n        [-1.9476e-01,  5.6569e-02, -3.9890e-02,  3.1877e-01,  3.0580e-01,\n         -1.5455e-01, -1.5056e-01,  1.0810e-01],\n        [-2.0718e-01, -8.8355e-02,  1.1851e-02,  1.0348e-01,  4.8900e-02,\n          7.0888e-02,  9.6827e-02,  1.8260e-01],\n        [ 2.0670e-01, -9.9770e-02, -2.9795e-01, -1.4569e-01, -8.8886e-02,\n         -3.1696e-01,  3.2567e-02,  1.0240e-02],\n        [-2.8556e-02,  1.7577e-02,  9.5552e-02,  3.7901e-01,  6.9242e-02,\n          7.3930e-02,  1.0183e-01,  6.2203e-02],\n        [-1.7433e-01, -2.8129e-02, -5.5097e-02, -2.6364e-01,  2.9590e-01,\n         -1.6351e-01,  8.8486e-04,  1.9889e-01],\n        [-1.6052e-01,  3.8269e-01,  6.4054e-02,  1.6846e-01, -1.2227e-02,\n         -1.0355e-01, -2.3720e-01, -1.4441e-01],\n        [ 6.4408e-02,  1.7505e-01,  3.0838e-02, -2.4061e-01, -6.7389e-02,\n         -1.6713e-01,  1.3302e-01,  1.4024e-01],\n        [-1.9055e-01,  4.5461e-02,  1.0057e-01, -1.1094e-01, -3.5976e-02,\n          4.3455e-01, -1.3670e-01, -1.8391e-01],\n        [-1.0894e-01, -1.0276e-01,  7.5177e-02,  7.8880e-02, -1.4470e-01,\n         -1.3648e-01, -3.7775e-02,  3.2066e-02],\n        [-4.5889e-01,  2.4349e-02, -3.2229e-01,  5.0686e-02, -2.0819e-01,\n         -8.4805e-02, -1.1579e-01, -2.0945e-01],\n        [ 6.3833e-02, -2.3368e-01, -1.5814e-03, -8.7832e-02,  2.1431e-02,\n          1.5410e-02, -4.2355e-01,  7.0021e-02],\n        [-7.0083e-02, -1.9085e-01, -1.1411e-01,  1.3115e-01, -2.7367e-02,\n          2.4039e-01,  3.1935e-02,  4.6254e-02],\n        [ 1.7623e-02,  2.7419e-02, -8.0565e-02,  7.7419e-02,  1.6157e-01,\n          3.5525e-01,  3.6209e-02,  1.5600e-01],\n        [-2.2284e-01, -9.4843e-02, -3.9602e-03,  2.7627e-02, -1.9735e-01,\n         -2.4136e-01,  1.9968e-01, -1.9043e-01],\n        [ 1.4712e-01, -4.6283e-01, -1.6428e-01, -7.3682e-02,  7.0545e-02,\n         -2.0211e-01,  2.2038e-01, -3.4954e-01],\n        [-1.0184e-01, -2.0987e-01,  1.2768e-01, -1.8609e-01,  5.5374e-02,\n          2.1203e-02, -1.2789e-01, -7.4937e-02],\n        [-8.9896e-02, -4.3438e-02,  7.0104e-02, -1.1068e-01, -1.5037e-02,\n         -3.4070e-01, -4.1145e-02,  3.9511e-02],\n        [-9.5802e-02,  2.5285e-01, -3.5726e-01,  6.4051e-02,  2.7768e-02,\n         -1.2914e-01, -9.0801e-02,  1.4374e-01],\n        [ 9.6011e-02,  3.7287e-02, -1.1560e-01,  9.3062e-02, -2.8327e-01,\n          2.4220e-01,  2.1867e-02,  1.3579e-01],\n        [ 4.8893e-02, -9.0190e-02, -3.4918e-01,  5.1442e-03,  1.1234e-02,\n         -3.3149e-01,  8.7741e-02,  3.9480e-01],\n        [ 7.4403e-02, -2.5117e-02, -1.9728e-01, -3.4379e-02, -2.8103e-01,\n          1.1988e-01, -7.2129e-02,  1.5569e-01]], requires_grad=True)"
+                                                                },
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "in_features":	8,
+                                                                "out_features":	64,
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "1":	{
+                                                            "Tanh()":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{},
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "2":	{
+                                                            "Linear(in_features=64, out_features=64, bias=True)":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{
+                                                                    "bias":	"Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                                    "weight":	"Parameter containing:\ntensor([[ 0.1537,  0.0228, -0.3578,  ..., -0.0275,  0.3482, -0.0915],\n        [-0.0876,  0.1681,  0.1818,  ..., -0.1083,  0.3808,  0.1598],\n        [ 0.1877,  0.0060, -0.0605,  ...,  0.1301,  0.2809,  0.1928],\n        ...,\n        [ 0.1834, -0.4158,  0.0452,  ..., -0.0658, -0.1997, -0.0627],\n        [ 0.0352, -0.1430, -0.2057,  ...,  0.0502,  0.1089, -0.0606],\n        [-0.0261, -0.0371,  0.0693,  ...,  0.0191,  0.1467, -0.0903]],\n       requires_grad=True)"
+                                                                },
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "in_features":	64,
+                                                                "out_features":	64,
+                                                                "training":	true
+                                                            }
+                                                        },
+                                                        "3":	{
+                                                            "Tanh()":	{
+                                                                "_backward_hooks":	{},
+                                                                "_backward_pre_hooks":	{},
+                                                                "_buffers":	{},
+                                                                "_forward_hooks":	{},
+                                                                "_forward_hooks_always_called":	{},
+                                                                "_forward_hooks_with_kwargs":	{},
+                                                                "_forward_pre_hooks":	{},
+                                                                "_forward_pre_hooks_with_kwargs":	{},
+                                                                "_is_full_backward_hook":	null,
+                                                                "_load_state_dict_post_hooks":	{},
+                                                                "_load_state_dict_pre_hooks":	{},
+                                                                "_modules":	{},
+                                                                "_non_persistent_buffers_set":	"set()",
+                                                                "_parameters":	{},
+                                                                "_state_dict_hooks":	{},
+                                                                "_state_dict_pre_hooks":	{},
+                                                                "training":	true
+                                                            }
+                                                        }
+                                                    },
+                                                    "_non_persistent_buffers_set":	"set()",
+                                                    "_parameters":	{},
+                                                    "_state_dict_hooks":	{},
+                                                    "_state_dict_pre_hooks":	{},
+                                                    "training":	true
+                                                }
+                                            }
+                                        },
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_parameters":	{},
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "latent_dim_pi":	64,
+                                        "latent_dim_vf":	64,
+                                        "training":	true
+                                    }
+                                },
+                                "pi_features_extractor":	{
+                                    "FlattenExtractor(\n  (flatten): Flatten(start_dim=1, end_dim=-1)\n)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_features_dim":	8,
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{
+                                            "flatten":	{
+                                                "Flatten(start_dim=1, end_dim=-1)":	{
+                                                    "_backward_hooks":	{},
+                                                    "_backward_pre_hooks":	{},
+                                                    "_buffers":	{},
+                                                    "_forward_hooks":	{},
+                                                    "_forward_hooks_always_called":	{},
+                                                    "_forward_hooks_with_kwargs":	{},
+                                                    "_forward_pre_hooks":	{},
+                                                    "_forward_pre_hooks_with_kwargs":	{},
+                                                    "_is_full_backward_hook":	null,
+                                                    "_load_state_dict_post_hooks":	{},
+                                                    "_load_state_dict_pre_hooks":	{},
+                                                    "_modules":	{},
+                                                    "_non_persistent_buffers_set":	"set()",
+                                                    "_parameters":	{},
+                                                    "_state_dict_hooks":	{},
+                                                    "_state_dict_pre_hooks":	{},
+                                                    "end_dim":	-1,
+                                                    "start_dim":	1,
+                                                    "training":	true
+                                                }
+                                            }
+                                        },
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_observation_space":	{
+                                            "Box(-inf, inf, (8,), float32)":	{
+                                                "_np_random":	null,
+                                                "_shape":	[
+                                                    8
+                                                ],
+                                                "bounded_above":	"[False False False False False False False False]",
+                                                "bounded_below":	"[False False False False False False False False]",
+                                                "dtype":	"float32",
+                                                "high":	"[inf inf inf inf inf inf inf inf]",
+                                                "high_repr":	"inf",
+                                                "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                                "low_repr":	"-inf"
+                                            }
+                                        },
+                                        "_parameters":	{},
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "training":	true
+                                    }
+                                },
+                                "value_net":	{
+                                    "Linear(in_features=64, out_features=1, bias=True)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{},
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_parameters":	{
+                                            "bias":	"Parameter containing:\ntensor([0.], requires_grad=True)",
+                                            "weight":	"Parameter containing:\ntensor([[ 0.1469, -0.0278, -0.0999, -0.1247,  0.0776,  0.0035, -0.2677,  0.1087,\n          0.0714,  0.2860,  0.0153, -0.0067,  0.1815,  0.0765, -0.0910, -0.1656,\n          0.0303,  0.0677,  0.1508, -0.0844,  0.0038, -0.0144,  0.0162,  0.1669,\n         -0.3155,  0.1975,  0.0500, -0.0786, -0.0442,  0.1664,  0.0313, -0.0405,\n          0.1743,  0.0487,  0.2114,  0.0140, -0.1767,  0.1366,  0.1402, -0.2045,\n          0.1349,  0.0450,  0.2161, -0.0736,  0.0185,  0.0619, -0.0632,  0.0503,\n         -0.1471, -0.0024,  0.0173,  0.1056,  0.1943, -0.0848, -0.0930, -0.0946,\n         -0.0156,  0.1607,  0.1552, -0.1314,  0.0641, -0.0580, -0.0719,  0.0998]],\n       requires_grad=True)"
+                                        },
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "in_features":	64,
+                                        "out_features":	1,
+                                        "training":	true
+                                    }
+                                },
+                                "vf_features_extractor":	{
+                                    "FlattenExtractor(\n  (flatten): Flatten(start_dim=1, end_dim=-1)\n)":	{
+                                        "_backward_hooks":	{},
+                                        "_backward_pre_hooks":	{},
+                                        "_buffers":	{},
+                                        "_features_dim":	8,
+                                        "_forward_hooks":	{},
+                                        "_forward_hooks_always_called":	{},
+                                        "_forward_hooks_with_kwargs":	{},
+                                        "_forward_pre_hooks":	{},
+                                        "_forward_pre_hooks_with_kwargs":	{},
+                                        "_is_full_backward_hook":	null,
+                                        "_load_state_dict_post_hooks":	{},
+                                        "_load_state_dict_pre_hooks":	{},
+                                        "_modules":	{
+                                            "flatten":	{
+                                                "Flatten(start_dim=1, end_dim=-1)":	{
+                                                    "_backward_hooks":	{},
+                                                    "_backward_pre_hooks":	{},
+                                                    "_buffers":	{},
+                                                    "_forward_hooks":	{},
+                                                    "_forward_hooks_always_called":	{},
+                                                    "_forward_hooks_with_kwargs":	{},
+                                                    "_forward_pre_hooks":	{},
+                                                    "_forward_pre_hooks_with_kwargs":	{},
+                                                    "_is_full_backward_hook":	null,
+                                                    "_load_state_dict_post_hooks":	{},
+                                                    "_load_state_dict_pre_hooks":	{},
+                                                    "_modules":	{},
+                                                    "_non_persistent_buffers_set":	"set()",
+                                                    "_parameters":	{},
+                                                    "_state_dict_hooks":	{},
+                                                    "_state_dict_pre_hooks":	{},
+                                                    "end_dim":	-1,
+                                                    "start_dim":	1,
+                                                    "training":	true
+                                                }
+                                            }
+                                        },
+                                        "_non_persistent_buffers_set":	"set()",
+                                        "_observation_space":	{
+                                            "Box(-inf, inf, (8,), float32)":	{
+                                                "_np_random":	null,
+                                                "_shape":	[
+                                                    8
+                                                ],
+                                                "bounded_above":	"[False False False False False False False False]",
+                                                "bounded_below":	"[False False False False False False False False]",
+                                                "dtype":	"float32",
+                                                "high":	"[inf inf inf inf inf inf inf inf]",
+                                                "high_repr":	"inf",
+                                                "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                                "low_repr":	"-inf"
+                                            }
+                                        },
+                                        "_parameters":	{},
+                                        "_state_dict_hooks":	{},
+                                        "_state_dict_pre_hooks":	{},
+                                        "training":	true
+                                    }
+                                }
+                            },
+                            "_non_persistent_buffers_set":	"set()",
+                            "_parameters":	{},
+                            "_squash_output":	false,
+                            "_state_dict_hooks":	{},
+                            "_state_dict_pre_hooks":	{},
+                            "action_dist":	{
+                                "<stable_baselines3.common.distributions.CategoricalDistribution object at 0x000002E3D2D07490>":	{
+                                    "action_dim":	1,
+                                    "distribution":	null
+                                }
+                            },
+                            "action_space":	{
+                                "Discrete(1)":	{
+                                    "_np_random":	"Generator(PCG64)",
+                                    "_shape":	[],
+                                    "dtype":	"int64",
+                                    "n":	"1",
+                                    "start":	"0"
+                                }
+                            },
+                            "activation_fn":	"Tanh",
+                            "dist_kwargs":	null,
+                            "features_dim":	8,
+                            "features_extractor_class":	"FlattenExtractor",
+                            "features_extractor_kwargs":	{},
+                            "log_std_init":	0.0,
+                            "net_arch":	{
+                                "pi":	[
+                                    64,
+                                    64
+                                ],
+                                "vf":	[
+                                    64,
+                                    64
+                                ]
+                            },
+                            "normalize_images":	true,
+                            "observation_space":	{
+                                "Box(-inf, inf, (8,), float32)":	{
+                                    "_np_random":	null,
+                                    "_shape":	[
+                                        8
+                                    ],
+                                    "bounded_above":	"[False False False False False False False False]",
+                                    "bounded_below":	"[False False False False False False False False]",
+                                    "dtype":	"float32",
+                                    "high":	"[inf inf inf inf inf inf inf inf]",
+                                    "high_repr":	"inf",
+                                    "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                    "low_repr":	"-inf"
+                                }
+                            },
+                            "optimizer":	{
+                                "Adam (\nParameter Group 0\n    amsgrad: False\n    betas: (0.9, 0.999)\n    capturable: False\n    differentiable: False\n    eps: 1e-05\n    foreach: None\n    fused: None\n    lr: 0.0003\n    maximize: False\n    weight_decay: 0\n)":	{
+                                    "_optimizer_load_state_dict_post_hooks":	{},
+                                    "_optimizer_load_state_dict_pre_hooks":	{},
+                                    "_optimizer_state_dict_post_hooks":	{},
+                                    "_optimizer_state_dict_pre_hooks":	{},
+                                    "_optimizer_step_post_hooks":	{},
+                                    "_optimizer_step_pre_hooks":	{},
+                                    "_warned_capturable_if_run_uncaptured":	true,
+                                    "_zero_grad_profile_name":	"Optimizer.zero_grad#Adam.zero_grad",
+                                    "defaults":	{
+                                        "amsgrad":	false,
+                                        "betas":	[
+                                            0.9,
+                                            0.999
+                                        ],
+                                        "capturable":	false,
+                                        "differentiable":	false,
+                                        "eps":	1e-05,
+                                        "foreach":	null,
+                                        "fused":	null,
+                                        "lr":	0.0003,
+                                        "maximize":	false,
+                                        "weight_decay":	0
+                                    },
+                                    "param_groups":	[
+                                        {
+                                            "amsgrad":	false,
+                                            "betas":	[
+                                                0.9,
+                                                0.999
+                                            ],
+                                            "capturable":	false,
+                                            "differentiable":	false,
+                                            "eps":	1e-05,
+                                            "foreach":	null,
+                                            "fused":	null,
+                                            "lr":	0.0003,
+                                            "maximize":	false,
+                                            "params":	[
+                                                "Parameter containing:\ntensor([[ 1.8840e-01, -3.4775e-02, -1.6073e-01,  3.6338e-02,  1.6063e-01,\n          4.1366e-02, -2.5419e-01, -2.5841e-01],\n        [-6.2995e-02, -2.1171e-01, -6.9729e-02,  2.0212e-01, -1.2258e-01,\n         -3.0615e-01, -4.6732e-02,  2.4573e-02],\n        [-2.5502e-02, -3.0105e-02, -2.4423e-01, -1.5277e-01, -7.2523e-02,\n         -1.8872e-02,  1.8862e-01, -1.7404e-01],\n        [-1.8127e-01,  3.0418e-01,  9.5346e-02, -2.5543e-01, -8.9733e-02,\n          1.7210e-02,  1.3932e-01, -2.0246e-01],\n        [ 1.3086e-01,  1.1953e-01,  1.7145e-02, -3.8668e-01, -6.4052e-02,\n          2.3684e-02,  4.2383e-02,  3.2646e-02],\n        [-2.9302e-02, -6.3580e-02,  2.9405e-01, -4.7876e-02,  1.9420e-02,\n         -4.3281e-02, -3.5690e-01, -5.0385e-02],\n        [ 1.3131e-01,  3.7150e-02,  5.9088e-02, -1.0325e-01, -2.9594e-03,\n         -6.6141e-03,  1.0548e-01, -2.1584e-02],\n        [ 1.5867e-01,  6.2500e-02, -1.1254e-01, -1.3459e-01, -3.5146e-01,\n         -4.6528e-01,  1.0633e-01, -2.2971e-01],\n        [ 1.9603e-02,  3.0557e-02,  8.2217e-02, -8.8967e-02,  2.5810e-02,\n          1.2349e-02,  8.0948e-02,  5.2636e-02],\n        [ 1.4472e-01, -4.6080e-02,  3.8932e-01,  5.9724e-02, -3.1233e-01,\n         -2.9357e-02,  1.8089e-01, -6.2256e-02],\n        [-1.0643e-01, -2.8584e-02, -1.8298e-01,  1.6685e-01,  4.1727e-02,\n         -1.1169e-01, -1.0069e-02,  3.0243e-01],\n        [-2.1667e-02,  2.6916e-01,  3.1909e-01, -1.9074e-01, -2.1094e-01,\n         -1.6502e-01, -1.2035e-01, -9.8782e-02],\n        [ 4.5995e-01,  3.0638e-02, -2.8769e-01, -4.4674e-01,  9.6235e-02,\n          3.1027e-02,  8.0248e-02,  1.9309e-01],\n        [ 2.6508e-01,  3.8853e-02, -1.5260e-01,  2.6466e-01, -1.0639e-02,\n          1.8752e-01,  2.3847e-02,  1.3503e-01],\n        [ 2.7874e-01, -2.9057e-02, -4.5319e-02,  5.6930e-02,  2.0724e-01,\n         -2.5498e-01,  1.8960e-01,  1.7938e-01],\n        [-1.8130e-01,  8.6320e-02,  6.6230e-02, -5.3200e-02,  2.3642e-01,\n         -6.8420e-02, -1.9023e-01, -3.8626e-01],\n        [-9.3385e-02, -8.4246e-02, -3.5060e-01,  7.8105e-03,  7.8894e-02,\n         -2.7118e-01, -7.1281e-02, -2.6756e-01],\n        [-1.4771e-01,  8.7873e-03,  3.7649e-02, -3.8265e-01, -3.0953e-01,\n         -1.8727e-02, -1.4920e-01,  2.0179e-02],\n        [ 2.1475e-01, -4.8913e-02,  9.8813e-02,  7.6776e-02,  6.6363e-02,\n         -1.7047e-01, -6.4236e-02,  2.1572e-02],\n        [ 2.7137e-02,  4.1710e-02, -6.3308e-02,  4.8838e-02,  2.5826e-01,\n          2.1199e-01,  1.8323e-01,  4.7566e-02],\n        [-1.8880e-01, -1.2777e-01, -2.6694e-01, -6.4515e-02, -7.7787e-02,\n          2.4358e-01,  1.5944e-01, -1.7494e-01],\n        [ 1.0340e-01,  8.2461e-02,  3.1251e-01, -3.9360e-02,  3.0006e-02,\n          3.9464e-01,  4.2392e-01,  1.2001e-01],\n        [-1.2533e-01, -2.2909e-01,  2.2158e-01, -6.4238e-02,  3.7934e-02,\n         -1.9701e-01,  8.8080e-02, -1.8803e-01],\n        [-2.0239e-01, -3.9793e-01,  9.8139e-02, -2.8060e-01,  6.0006e-02,\n          6.4477e-02, -1.4483e-01,  7.1409e-02],\n        [ 1.8083e-01,  2.0355e-01, -2.5551e-03, -6.3698e-02, -1.4220e-01,\n          2.9000e-01,  6.3904e-02, -1.8045e-01],\n        [ 7.2156e-02,  2.2704e-01,  5.2389e-02,  2.3575e-01, -3.8612e-01,\n          1.6033e-01,  3.4443e-02,  1.1370e-01],\n        [ 6.3015e-02,  1.7563e-01,  1.2420e-01, -4.7494e-02, -1.3718e-02,\n          4.1004e-03,  5.2463e-02,  1.9632e-01],\n        [ 1.1674e-01, -2.5136e-01, -1.3991e-01, -8.6766e-03,  3.4368e-01,\n         -1.3767e-01, -1.2114e-01,  2.0343e-02],\n        [ 3.5774e-01,  2.9664e-01, -3.3015e-01, -2.5763e-01, -6.7517e-02,\n          1.3938e-01, -2.8271e-01, -4.8404e-02],\n        [-4.7812e-02,  2.0114e-01,  1.4785e-01,  3.3137e-02, -4.2737e-02,\n          1.9090e-01,  3.5376e-01, -8.7297e-02],\n        [ 7.5977e-02,  6.8699e-02,  1.6240e-01,  2.3265e-01,  7.5125e-02,\n         -3.7748e-02, -3.8057e-02, -2.4056e-02],\n        [-1.3162e-01, -4.2634e-02, -4.3863e-02,  3.0446e-01, -2.0831e-01,\n         -2.4296e-03, -1.5321e-01, -1.0195e-01],\n        [-1.8426e-01, -9.8072e-02,  1.3065e-01, -4.3556e-02,  4.3746e-01,\n          3.0469e-01, -2.0932e-01,  1.7909e-01],\n        [ 1.6048e-01,  5.6547e-02,  3.4980e-01, -6.2422e-02,  7.1960e-02,\n         -6.7593e-02, -1.1816e-01, -2.0628e-01],\n        [-1.2645e-01, -1.8841e-01,  1.6148e-01, -2.7500e-02, -1.9795e-01,\n         -9.8916e-02,  5.9174e-02,  3.7718e-01],\n        [-8.6320e-02, -1.8995e-03,  2.7457e-01, -2.8502e-03,  2.0408e-02,\n          6.7758e-02, -1.1085e-01,  1.2015e-01],\n        [ 8.3545e-02, -5.0587e-02, -2.8296e-02,  1.0106e-01, -3.8493e-02,\n         -1.0781e-01, -9.3433e-02,  3.0599e-03],\n        [ 3.6481e-02,  1.0042e-02, -2.0633e-01,  1.1577e-01,  5.2441e-02,\n         -4.8894e-03, -3.6412e-02, -3.1480e-02],\n        [ 4.4240e-01, -3.2599e-01,  2.2125e-01,  1.0147e-01, -2.3020e-01,\n          8.1933e-02, -2.3492e-01,  8.9527e-02],\n        [ 3.7298e-01, -2.3609e-01,  1.0498e-01, -1.4524e-01, -5.9968e-02,\n          1.1744e-02, -4.1327e-02, -6.5015e-02],\n        [-9.6564e-02, -2.6995e-01, -3.9782e-02, -5.2778e-02, -2.9198e-01,\n          3.8856e-01, -6.3615e-02, -1.9191e-01],\n        [ 2.3638e-01, -3.6548e-01, -6.7003e-02,  4.3377e-02, -8.0637e-02,\n          1.4058e-01, -8.7327e-02, -1.5296e-01],\n        [ 1.6068e-01,  3.8694e-03,  5.5631e-02, -8.3427e-02,  1.8795e-01,\n          1.7217e-02,  1.7736e-01, -3.6143e-01],\n        [-8.1036e-02, -1.4750e-01,  1.0709e-01, -1.4810e-01,  3.2601e-02,\n         -2.3676e-01, -2.8499e-01, -8.5830e-02],\n        [ 5.2821e-02, -1.9122e-01,  9.5712e-02, -2.7361e-01, -9.5295e-03,\n          2.5064e-01, -1.2338e-01, -2.3248e-01],\n        [-1.2040e-01,  3.5491e-02,  5.9152e-02, -2.9608e-02,  1.8472e-02,\n          9.9591e-02, -1.7939e-01, -2.0451e-01],\n        [ 1.9499e-02, -5.3458e-02, -2.0164e-01, -1.0045e-01, -2.0942e-02,\n          2.1575e-01, -3.1002e-01, -1.9023e-01],\n        [-1.4663e-01, -2.8719e-02,  1.4007e-01,  1.5854e-01,  3.4466e-01,\n          4.0855e-01,  5.2338e-03, -1.4170e-01],\n        [ 4.0199e-02, -2.5694e-01,  3.3349e-02,  5.0192e-02, -1.5144e-01,\n          1.3515e-01,  1.0347e-01, -2.1897e-01],\n        [-7.4485e-02, -3.7464e-02,  1.2350e-01,  2.0980e-02, -1.1900e-01,\n         -6.4457e-02,  1.1421e-01, -3.8055e-03],\n        [ 3.1066e-01,  4.3900e-02,  8.6047e-02,  1.1523e-01,  9.2422e-02,\n         -5.8829e-02, -7.4534e-02,  1.9356e-01],\n        [ 1.0660e-02, -2.3956e-01, -3.4558e-02, -2.7406e-01,  4.1092e-02,\n          1.7119e-01,  3.5114e-01,  1.3597e-01],\n        [-2.3143e-01,  2.3177e-01, -2.3785e-01, -4.7898e-02,  3.0628e-02,\n          2.5443e-02,  4.5999e-03,  2.2688e-01],\n        [ 1.9805e-01, -3.6774e-02,  1.6634e-01,  9.1838e-02, -6.0604e-02,\n          3.8325e-02, -3.6022e-01,  3.8816e-01],\n        [ 5.5691e-02,  3.8564e-01, -2.8716e-01,  1.9882e-01, -2.9279e-01,\n          2.7640e-01, -3.3502e-01,  5.3090e-02],\n        [ 2.1422e-01, -4.0182e-02,  1.8231e-01,  2.1280e-01, -1.4045e-01,\n          1.3799e-01,  6.7372e-02, -2.5094e-01],\n        [ 1.4236e-01, -1.5111e-01, -1.3365e-01, -2.3258e-01,  2.7003e-02,\n         -2.1666e-01,  3.0015e-01, -3.4931e-02],\n        [-3.9839e-04,  2.6681e-01,  1.3217e-01, -1.3119e-01, -1.7096e-03,\n         -1.3700e-01, -1.4358e-01,  1.2131e-02],\n        [-4.4232e-02, -1.3645e-01,  1.5684e-01,  1.4249e-01, -2.0039e-02,\n         -2.7641e-02, -1.0424e-02, -4.9197e-02],\n        [ 1.4326e-01, -2.7485e-01, -1.7688e-01, -7.8328e-02, -7.3706e-02,\n          2.6802e-01, -1.1337e-01,  1.0393e-01],\n        [ 2.2363e-02,  2.3010e-01,  2.2225e-02,  2.2153e-01, -4.7313e-02,\n         -2.5688e-02, -9.7601e-02, -3.3759e-01],\n        [-2.6640e-01, -5.0778e-02, -7.1218e-02,  1.0275e-01,  5.1659e-02,\n          5.9398e-02, -3.4162e-02,  9.2612e-02],\n        [-3.2750e-01, -2.9260e-01, -1.9209e-01, -5.9341e-02, -5.6816e-01,\n          5.5841e-02,  2.0521e-02,  1.7208e-01],\n        [-1.4753e-01,  1.9601e-01,  1.8019e-01, -5.1360e-01,  2.4103e-02,\n          6.6894e-02, -3.1567e-01,  2.4627e-01]], requires_grad=True)",
+                                                "Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([[ 0.0238, -0.0529,  0.0550,  ..., -0.0690, -0.0802, -0.1592],\n        [-0.0802, -0.0299, -0.2278,  ...,  0.1705,  0.3019,  0.3238],\n        [-0.2248,  0.0596,  0.2071,  ...,  0.0579, -0.2433,  0.1781],\n        ...,\n        [-0.1184, -0.2048,  0.2240,  ...,  0.2263, -0.2292, -0.0219],\n        [-0.0155,  0.0627,  0.0244,  ...,  0.3809, -0.1344, -0.3604],\n        [ 0.1946, -0.0068,  0.3121,  ...,  0.2915,  0.0283, -0.0346]],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([[-2.2116e-01,  1.1823e-01,  1.6274e-01, -1.5618e-01, -1.7950e-02,\n          2.3311e-02,  1.8785e-01, -2.6012e-01],\n        [-3.1553e-01, -1.4481e-01,  7.4056e-02,  1.5238e-01, -1.0420e-01,\n         -1.5727e-02, -1.9341e-02,  5.4780e-02],\n        [ 2.1707e-01,  3.9018e-02, -1.4848e-02, -2.3426e-01, -5.2646e-02,\n         -3.0671e-02, -5.0338e-01,  1.0105e-01],\n        [-1.0806e-01, -5.7136e-01, -1.2984e-01,  3.0007e-01,  3.4568e-01,\n          9.9306e-02, -2.0122e-01, -3.4037e-02],\n        [-2.3800e-02, -1.6384e-01,  1.3038e-02, -1.0977e-02, -1.4315e-01,\n         -8.6638e-02,  1.8232e-01, -1.3051e-02],\n        [-7.1953e-02,  1.4929e-02, -1.4905e-01, -2.3711e-02, -1.4972e-01,\n          2.3832e-02,  7.1188e-02,  2.8381e-01],\n        [-1.2588e-01, -1.5774e-01, -4.9335e-01, -1.2486e-02, -1.8112e-01,\n          4.9062e-02,  2.7634e-01, -1.6783e-01],\n        [ 1.8791e-01,  8.7291e-02, -2.0316e-01, -1.5205e-01,  1.2676e-01,\n         -7.8707e-02, -1.6859e-01, -1.8937e-01],\n        [-3.0874e-02,  1.0188e-02, -6.2631e-02,  2.9878e-02, -2.3456e-01,\n          1.9647e-01, -1.4296e-01,  6.4959e-02],\n        [-1.2849e-01, -9.4329e-03,  9.2238e-02, -4.8536e-01, -1.3388e-01,\n          1.2620e-01,  2.0190e-01,  1.9353e-01],\n        [ 1.3966e-01,  3.5089e-01, -2.1730e-01, -1.9732e-01, -9.1564e-02,\n          3.3281e-02, -1.1259e-01, -1.2137e-01],\n        [ 1.0179e-01, -4.4990e-02, -2.7591e-01,  2.5490e-01,  6.7436e-02,\n          3.4993e-02,  1.7643e-02,  2.1621e-01],\n        [ 5.1848e-02,  1.3228e-01,  3.1179e-01,  1.0684e-01, -1.7794e-01,\n         -2.3705e-01,  2.9550e-01, -1.9298e-02],\n        [-7.4088e-02,  7.2528e-02, -2.8872e-01,  6.2974e-02, -4.5249e-02,\n         -2.5692e-01, -2.0420e-02,  4.1506e-02],\n        [-1.4974e-01, -2.2582e-01,  2.5948e-02, -3.3232e-02,  1.0921e-01,\n          1.0990e-01,  1.0546e-01, -2.1031e-01],\n        [ 4.1246e-01, -1.8709e-01, -1.0918e-01,  6.3551e-02,  4.2827e-02,\n         -1.3351e-01,  3.6384e-01,  2.3025e-01],\n        [ 1.4047e-01, -2.1348e-02,  2.9928e-01, -1.0384e-01, -1.2315e-01,\n         -9.7855e-02, -1.3434e-01, -7.5269e-02],\n        [ 3.3462e-02,  6.1583e-02, -6.4465e-02,  1.5962e-02,  3.0994e-01,\n          4.5052e-02,  1.5922e-01, -3.8970e-02],\n        [ 1.6021e-01, -4.3000e-02, -5.9210e-02,  7.9941e-02,  1.6172e-01,\n         -2.7041e-02, -3.4491e-02, -1.3239e-01],\n        [-7.2925e-02, -9.3947e-02, -8.0100e-03,  1.2141e-02,  9.7325e-02,\n          1.3787e-01, -5.5293e-02,  1.8891e-02],\n        [ 1.2860e-01,  1.3991e-01, -5.7620e-02,  1.5786e-01,  2.0574e-01,\n          1.0162e-01, -1.7322e-01,  3.6540e-01],\n        [-7.7673e-02,  3.5955e-01, -1.7589e-04, -1.5488e-01,  1.2203e-01,\n         -9.9655e-02,  1.2110e-01,  4.0970e-02],\n        [-2.0190e-01,  1.5138e-01,  2.8900e-01,  2.0190e-01,  2.0152e-01,\n         -2.5170e-02, -2.3247e-01,  1.5394e-01],\n        [ 3.0691e-01,  2.1189e-02,  1.9308e-02,  5.0908e-02, -1.3874e-01,\n         -3.1450e-01, -4.0323e-01, -2.7969e-01],\n        [-5.5110e-02, -8.8822e-02, -1.2431e-01, -1.7981e-01,  1.0773e-01,\n         -2.9758e-01, -1.5532e-01, -2.9726e-02],\n        [-3.1991e-01,  1.0167e-01, -3.0080e-02,  1.4916e-01, -9.2894e-02,\n         -3.8855e-01,  2.9040e-02,  1.6124e-01],\n        [-1.9787e-01,  7.5253e-02, -2.7618e-01,  6.8998e-02,  9.3136e-02,\n          1.7149e-01, -9.5610e-02, -3.0552e-01],\n        [ 1.0981e-01, -2.5840e-02,  3.5118e-01, -1.3568e-01,  3.7920e-01,\n         -1.8682e-01,  9.3908e-02, -5.4207e-02],\n        [-2.6703e-02,  4.1785e-01, -1.0181e-01,  1.2587e-01, -1.7291e-02,\n         -1.4126e-02,  1.3451e-01, -1.8489e-02],\n        [-2.8601e-01, -2.4763e-01, -1.8130e-01, -6.0132e-02, -5.1985e-02,\n         -1.2826e-01, -4.2339e-01, -1.4856e-02],\n        [ 1.2024e-01, -1.2170e-01,  1.6329e-01, -7.9787e-02, -1.4614e-01,\n         -1.5829e-01, -1.1865e-01, -8.9861e-02],\n        [ 8.4480e-02,  1.3596e-01, -1.1667e-01, -5.5978e-02, -1.7150e-03,\n         -4.6184e-03, -2.5952e-01,  3.3858e-01],\n        [-3.1058e-01, -7.6144e-02, -4.4204e-02, -6.1832e-02, -3.2303e-01,\n          7.4002e-02,  5.8503e-02,  3.4599e-02],\n        [ 1.7400e-02,  1.7118e-01, -1.1841e-01,  1.2645e-01,  3.7361e-01,\n          9.1329e-02,  9.9962e-02, -2.2924e-01],\n        [ 3.5058e-01, -5.5341e-02, -2.6180e-01, -1.8849e-01,  4.5225e-02,\n          1.8185e-01,  7.0335e-02, -1.2998e-01],\n        [-2.9424e-02, -5.4006e-02,  1.6301e-02,  2.6856e-01,  1.5979e-01,\n         -2.2318e-01,  2.6217e-01,  1.1176e-01],\n        [ 8.7212e-02,  3.7573e-02,  4.8544e-02,  2.2539e-01, -9.7132e-02,\n          1.2210e-01,  8.1350e-02,  1.5256e-01],\n        [-1.3386e-01, -7.9694e-02,  1.1389e-02, -1.8514e-01,  2.7697e-01,\n         -4.0650e-02, -5.6296e-02, -1.0591e-01],\n        [ 4.3845e-03, -1.1811e-01, -1.7585e-02, -1.9105e-01,  2.2323e-01,\n         -2.4783e-02, -6.4843e-02,  3.0152e-01],\n        [-4.4574e-01,  3.6495e-02, -2.5709e-02, -5.1826e-01,  1.9104e-01,\n         -2.7464e-02,  9.8979e-02,  2.5360e-01],\n        [-1.6197e-02, -3.1147e-01,  3.6808e-01,  2.1270e-01, -2.5612e-01,\n         -1.8585e-01, -1.1327e-01,  2.2131e-01],\n        [ 3.1735e-02, -2.1495e-01,  1.0160e-01, -1.9713e-01, -2.0866e-01,\n          3.1130e-01,  5.1755e-03,  3.2152e-01],\n        [ 5.3316e-02,  8.8143e-02, -2.7302e-03,  2.2874e-01, -3.5531e-01,\n         -7.5166e-02, -8.2143e-02, -1.1353e-01],\n        [-1.9476e-01,  5.6569e-02, -3.9890e-02,  3.1877e-01,  3.0580e-01,\n         -1.5455e-01, -1.5056e-01,  1.0810e-01],\n        [-2.0718e-01, -8.8355e-02,  1.1851e-02,  1.0348e-01,  4.8900e-02,\n          7.0888e-02,  9.6827e-02,  1.8260e-01],\n        [ 2.0670e-01, -9.9770e-02, -2.9795e-01, -1.4569e-01, -8.8886e-02,\n         -3.1696e-01,  3.2567e-02,  1.0240e-02],\n        [-2.8556e-02,  1.7577e-02,  9.5552e-02,  3.7901e-01,  6.9242e-02,\n          7.3930e-02,  1.0183e-01,  6.2203e-02],\n        [-1.7433e-01, -2.8129e-02, -5.5097e-02, -2.6364e-01,  2.9590e-01,\n         -1.6351e-01,  8.8486e-04,  1.9889e-01],\n        [-1.6052e-01,  3.8269e-01,  6.4054e-02,  1.6846e-01, -1.2227e-02,\n         -1.0355e-01, -2.3720e-01, -1.4441e-01],\n        [ 6.4408e-02,  1.7505e-01,  3.0838e-02, -2.4061e-01, -6.7389e-02,\n         -1.6713e-01,  1.3302e-01,  1.4024e-01],\n        [-1.9055e-01,  4.5461e-02,  1.0057e-01, -1.1094e-01, -3.5976e-02,\n          4.3455e-01, -1.3670e-01, -1.8391e-01],\n        [-1.0894e-01, -1.0276e-01,  7.5177e-02,  7.8880e-02, -1.4470e-01,\n         -1.3648e-01, -3.7775e-02,  3.2066e-02],\n        [-4.5889e-01,  2.4349e-02, -3.2229e-01,  5.0686e-02, -2.0819e-01,\n         -8.4805e-02, -1.1579e-01, -2.0945e-01],\n        [ 6.3833e-02, -2.3368e-01, -1.5814e-03, -8.7832e-02,  2.1431e-02,\n          1.5410e-02, -4.2355e-01,  7.0021e-02],\n        [-7.0083e-02, -1.9085e-01, -1.1411e-01,  1.3115e-01, -2.7367e-02,\n          2.4039e-01,  3.1935e-02,  4.6254e-02],\n        [ 1.7623e-02,  2.7419e-02, -8.0565e-02,  7.7419e-02,  1.6157e-01,\n          3.5525e-01,  3.6209e-02,  1.5600e-01],\n        [-2.2284e-01, -9.4843e-02, -3.9602e-03,  2.7627e-02, -1.9735e-01,\n         -2.4136e-01,  1.9968e-01, -1.9043e-01],\n        [ 1.4712e-01, -4.6283e-01, -1.6428e-01, -7.3682e-02,  7.0545e-02,\n         -2.0211e-01,  2.2038e-01, -3.4954e-01],\n        [-1.0184e-01, -2.0987e-01,  1.2768e-01, -1.8609e-01,  5.5374e-02,\n          2.1203e-02, -1.2789e-01, -7.4937e-02],\n        [-8.9896e-02, -4.3438e-02,  7.0104e-02, -1.1068e-01, -1.5037e-02,\n         -3.4070e-01, -4.1145e-02,  3.9511e-02],\n        [-9.5802e-02,  2.5285e-01, -3.5726e-01,  6.4051e-02,  2.7768e-02,\n         -1.2914e-01, -9.0801e-02,  1.4374e-01],\n        [ 9.6011e-02,  3.7287e-02, -1.1560e-01,  9.3062e-02, -2.8327e-01,\n          2.4220e-01,  2.1867e-02,  1.3579e-01],\n        [ 4.8893e-02, -9.0190e-02, -3.4918e-01,  5.1442e-03,  1.1234e-02,\n         -3.3149e-01,  8.7741e-02,  3.9480e-01],\n        [ 7.4403e-02, -2.5117e-02, -1.9728e-01, -3.4379e-02, -2.8103e-01,\n          1.1988e-01, -7.2129e-02,  1.5569e-01]], requires_grad=True)",
+                                                "Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([[ 0.1537,  0.0228, -0.3578,  ..., -0.0275,  0.3482, -0.0915],\n        [-0.0876,  0.1681,  0.1818,  ..., -0.1083,  0.3808,  0.1598],\n        [ 0.1877,  0.0060, -0.0605,  ...,  0.1301,  0.2809,  0.1928],\n        ...,\n        [ 0.1834, -0.4158,  0.0452,  ..., -0.0658, -0.1997, -0.0627],\n        [ 0.0352, -0.1430, -0.2057,  ...,  0.0502,  0.1089, -0.0606],\n        [-0.0261, -0.0371,  0.0693,  ...,  0.0191,  0.1467, -0.0903]],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,\n        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([[ 2.9561e-03,  5.8912e-04,  3.2549e-04,  3.4767e-04,  5.7235e-04,\n         -4.6374e-04,  9.0011e-04, -7.9142e-04, -8.8492e-04, -3.9589e-04,\n          2.1773e-03,  2.5522e-04, -1.5887e-03,  4.7794e-04, -5.5559e-04,\n          2.5554e-04,  1.2946e-03, -1.0731e-03,  1.9754e-03, -1.9942e-03,\n          8.3846e-04, -1.2833e-03,  5.2820e-04, -1.0148e-03,  2.5217e-03,\n          4.1859e-04,  1.2942e-04, -2.4732e-04,  2.8314e-03, -1.6303e-04,\n         -6.6909e-04, -2.8686e-04,  1.4814e-04,  5.7451e-04,  1.4359e-03,\n          8.2483e-04,  3.0943e-04,  8.6976e-04,  1.8843e-03, -1.3163e-03,\n         -6.3532e-04,  7.1803e-04,  2.2948e-04,  2.3189e-03,  1.5247e-03,\n         -6.3788e-04, -9.9539e-04, -2.0692e-03,  8.9441e-05,  1.5980e-03,\n          1.3052e-03,  1.6142e-03,  2.7233e-04,  4.7374e-04, -1.3416e-03,\n         -2.0755e-03,  1.0676e-04,  1.1517e-03, -5.1904e-04,  4.5522e-04,\n          1.5410e-03, -1.2165e-03,  2.3731e-03,  1.4580e-03]],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([0.], requires_grad=True)",
+                                                "Parameter containing:\ntensor([[ 0.1469, -0.0278, -0.0999, -0.1247,  0.0776,  0.0035, -0.2677,  0.1087,\n          0.0714,  0.2860,  0.0153, -0.0067,  0.1815,  0.0765, -0.0910, -0.1656,\n          0.0303,  0.0677,  0.1508, -0.0844,  0.0038, -0.0144,  0.0162,  0.1669,\n         -0.3155,  0.1975,  0.0500, -0.0786, -0.0442,  0.1664,  0.0313, -0.0405,\n          0.1743,  0.0487,  0.2114,  0.0140, -0.1767,  0.1366,  0.1402, -0.2045,\n          0.1349,  0.0450,  0.2161, -0.0736,  0.0185,  0.0619, -0.0632,  0.0503,\n         -0.1471, -0.0024,  0.0173,  0.1056,  0.1943, -0.0848, -0.0930, -0.0946,\n         -0.0156,  0.1607,  0.1552, -0.1314,  0.0641, -0.0580, -0.0719,  0.0998]],\n       requires_grad=True)",
+                                                "Parameter containing:\ntensor([0.], requires_grad=True)"
+                                            ],
+                                            "weight_decay":	0
+                                        }
+                                    ],
+                                    "state":	{}
+                                }
+                            },
+                            "optimizer_class":	"Adam",
+                            "optimizer_kwargs":	{
+                                "eps":	1e-05
+                            },
+                            "ortho_init":	true,
+                            "share_features_extractor":	true,
+                            "training":	true,
+                            "use_sde":	false
+                        }
+                    },
+                    "policy_class":	"ActorCriticPolicy",
+                    "policy_kwargs":	{},
+                    "rollout_buffer":	{
+                        "<stable_baselines3.common.buffers.RolloutBuffer object at 0x000002E3D2D07130>":	{
+                            "action_dim":	1,
+                            "action_space":	{
+                                "Discrete(1)":	{
+                                    "_np_random":	"Generator(PCG64)",
+                                    "_shape":	[],
+                                    "dtype":	"int64",
+                                    "n":	"1",
+                                    "start":	"0"
+                                }
+                            },
+                            "actions":	"[[[0.]]\n\n [[0.]]\n\n [[0.]]\n\n ...\n\n [[0.]]\n\n [[0.]]\n\n [[0.]]]",
+                            "advantages":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]",
+                            "buffer_size":	2048,
+                            "device":	"cpu",
+                            "episode_starts":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]",
+                            "full":	false,
+                            "gae_lambda":	0.97,
+                            "gamma":	0.99,
+                            "generator_ready":	false,
+                            "log_probs":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]",
+                            "n_envs":	1,
+                            "obs_shape":	[
+                                8
+                            ],
+                            "observation_space":	{
+                                "Box(-inf, inf, (8,), float32)":	{
+                                    "_np_random":	null,
+                                    "_shape":	[
+                                        8
+                                    ],
+                                    "bounded_above":	"[False False False False False False False False]",
+                                    "bounded_below":	"[False False False False False False False False]",
+                                    "dtype":	"float32",
+                                    "high":	"[inf inf inf inf inf inf inf inf]",
+                                    "high_repr":	"inf",
+                                    "low":	"[-inf -inf -inf -inf -inf -inf -inf -inf]",
+                                    "low_repr":	"-inf"
+                                }
+                            },
+                            "observations":	"[[[0. 0. 0. ... 0. 0. 0.]]\n\n [[0. 0. 0. ... 0. 0. 0.]]\n\n [[0. 0. 0. ... 0. 0. 0.]]\n\n ...\n\n [[0. 0. 0. ... 0. 0. 0.]]\n\n [[0. 0. 0. ... 0. 0. 0.]]\n\n [[0. 0. 0. ... 0. 0. 0.]]]",
+                            "pos":	0,
+                            "returns":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]",
+                            "rewards":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]",
+                            "values":	"[[0.]\n [0.]\n [0.]\n ...\n [0.]\n [0.]\n [0.]]"
+                        }
+                    },
+                    "rollout_buffer_class":	"RolloutBuffer",
+                    "rollout_buffer_kwargs":	{},
+                    "sde_sample_freq":	-1,
+                    "seed":	42240000,
+                    "start_time":	0.0,
+                    "target_kl":	0.01,
+                    "tensorboard_log":	null,
+                    "use_sde":	false,
+                    "verbose":	0,
+                    "vf_coef":	0.5
+                }
+            }
+        }
+    },
+    "target_kl":	0.01,
+    "train_pi_iters":	40,
+    "train_v_iters":	40,
+    "traj_per_epoch":	5,
+    "vf_lr":	0.0003
+}
