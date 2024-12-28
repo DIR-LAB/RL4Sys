@@ -61,7 +61,6 @@ class RL4SysTrajectory(RL4SysTrajectoryAbstract):
                 send_trajectory(self)
                 print("[BaseTrajectory.py - whole traj - send to Training Server]")
 
-            
             self.actions = [] # reset the trajectory
             if len(self.actions) >= self.max_length:
                 print("traj too long, ignored in current implementation") # TODO handle max traj length

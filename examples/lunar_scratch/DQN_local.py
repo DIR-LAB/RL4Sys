@@ -379,6 +379,9 @@ class DQNAgent:
 # ---------------------
 
 if __name__ == "__main__":
+    env = gym.make("LunarLander-v2")
+    print(env.action_space.n)
+    exit()
     agent = DQNAgent(
         env_name='LunarLander-v2',
         gamma=0.99,

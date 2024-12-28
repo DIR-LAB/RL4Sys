@@ -109,9 +109,14 @@ class RL4SysAgent(RL4SysAgentAbstract):
             assert self._model is not None
 
             a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
-            #a, data = self._model.predict(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+            return a, data
+        
+    def record_traj(self, obs: torch.Tensor, next_obs: torch.Tensor, mask: torch.Tensor, action, reward, data, *args, **kwargs):
 
-            r4sa = RL4SysAction(obs, a, mask, reward, data, done=False)
+        with self._lock:
+            assert self._model is not None
+
+            r4sa = RL4SysAction(obs, next_obs, action, mask, reward, data, done=False)
             self._current_traj.add_action(r4sa)
 
             return r4sa
@@ -127,7 +132,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
             Selected action in an RL4SysAction object.
 
         """
-        r4sa = RL4SysAction(None, None, None, reward, None, True)
+        r4sa = RL4SysAction(None, None, None,None, reward, None, True)
         self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
 
     def _loop_for_updated_model(self) -> Never:

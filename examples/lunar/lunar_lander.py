@@ -25,7 +25,7 @@ Environment script: Lunar Lander Simulator
 Training server parameters:
     kernel_size | MAX_SIZE = 1
     kernel_dim  | FEATURES = 8
-    buf_size    | MOVE_SEQUENCE_SIZE * 100 = 500000
+    buf_size    | MOVE_SEQUENCE_SIZE * 100 = 50000
 """
 
 FEATURES = 4
@@ -65,7 +65,7 @@ class LunarLanderSim(ApplicationAbstract):
             'total_iterations': 0
         }
 
-    def run_application(self, num_iterations=1, num_moves=500):
+    def run_application(self, num_iterations=1, num_moves=1000):
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
@@ -81,13 +81,13 @@ class LunarLanderSim(ApplicationAbstract):
             # Build initial observation
             obs_tensor, mask = self.build_observation(obs)
 
-            while not done and moves < num_moves:
+            # while not done and moves < num_moves: # Modified
+            while not done:  
                 if self._render_game:
                     self.env.render()
 
                 # Get action from agent
-                rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask, cumulative_reward)
-                action = rl4sys_action.act
+                action, data = self.rlagent.request_for_action(obs_tensor, mask, cumulative_reward)
 
                 # Ensure action is compatible
                 if isinstance(action, torch.Tensor):
@@ -104,8 +104,8 @@ class LunarLanderSim(ApplicationAbstract):
                 # Build next observation
                 next_obs_tensor, mask = self.build_observation(next_obs)
 
-                # Update agent
-                self.rlagent.request_for_action(next_obs_tensor, mask, reward)
+                # record trajectory
+                self.rlagent.record_traj(obs_tensor, next_obs_tensor, mask, action, reward, data)
                 rl_runs += 1
                 moves += 1
                 self.simulator_stats['moves'] += 1
@@ -113,6 +113,7 @@ class LunarLanderSim(ApplicationAbstract):
 
                 obs_tensor = next_obs_tensor  # Update current observation
 
+                
                 if rl_runs >= MOVE_SEQUENCE_SIZE:
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
@@ -122,6 +123,8 @@ class LunarLanderSim(ApplicationAbstract):
                     rew = -rl_total
                     self.simulator_stats['performance_rewards'].append(rew)
                     self.rlagent.flag_last_action(rew)
+                    break
+                
 
                 if done:
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
@@ -136,6 +139,7 @@ class LunarLanderSim(ApplicationAbstract):
                     else:
                         self.simulator_stats['death_count'] += 1
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
+                    break
 
             if self._render_game:
                 self.env.close()
@@ -225,7 +229,7 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard', type=bool, default=True,
                         help='enable tensorboard logging for training observations and insights.\n' +
                              'Make sure to properly configure tensorboard parameters in config.json before running.')
-    parser.add_argument('--seed', type=int, default=0,
+    parser.add_argument('--seed', type=int, default=1,
                         help='seed for random number generation in environment')
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +

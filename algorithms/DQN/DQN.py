@@ -50,7 +50,7 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 1,
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 4,
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
@@ -81,6 +81,9 @@ class DQN(AlgorithmAbstract):
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
         self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self.q_target = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self.q_target.load_state_dict(self._model.state_dict())
+        
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
 
         # set up logger
@@ -93,6 +96,10 @@ class DQN(AlgorithmAbstract):
 
         self.traj = 0
         self.epoch = 0
+
+        # ADDED: for q target network
+        self.target_update_freq = 500  # how often to sync weights
+        self.total_steps = 0
 
     def save(self, filename: str) -> None:
         """Save model as file.
@@ -126,7 +133,7 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
+                self._replay_buffer.store(r4a.obs, r4a.next_obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
@@ -134,14 +141,13 @@ class DQN(AlgorithmAbstract):
 
         # get enough trajectories for training the model
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            if self.traj % self._train_update_freq == 0:
-                self.epoch += 1
-                # TODO send client a signal to tell client ingore all trajectory collected. Resume after client model update
-                self.client_stop_collect_traj('stop')
+            self.epoch += 1
+            # TODO send client a signal to tell client ingore all trajectory collected. Resume after client model update
+            self.client_stop_collect_traj('stop')
 
-                self.train_model()
-                self.log_epoch()
-                return True
+            self.train_model()
+            self.log_epoch()
+            return True
 
         return False
 
@@ -173,6 +179,10 @@ class DQN(AlgorithmAbstract):
             loss_q.backward()
             self._q_optimizer.step()
 
+            self.total_steps += 1
+            if self.total_steps % self.target_update_freq == 0:
+                self.q_target.load_state_dict(self._model.state_dict())
+
         self.logger.store(StopIter=i)
 
         self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
@@ -200,17 +210,20 @@ class DQN(AlgorithmAbstract):
             Loss for Q function, Q target for logging
 
         """
-        obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
+        mask = data['mask']
+        obs, act, rew, next_obs = data['obs'], data['act'], data['rew'], data['next_obs']
+        print("what is obs: ",obs)
 
         # Q loss
         q_val = self._model.forward(obs, mask)
+        q_taken = q_val.gather(1, act.long().unsqueeze(-1)).squeeze(-1)
+
         with torch.no_grad():
-            next_q_val = self._model.forward(next_obs, mask)
-            q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
+            q_next_values = self.q_target(next_obs, mask) # ADDED
+            q_next_max = q_next_values.max(dim=1)[0]
+            q_targ = rew + self._gamma * q_next_max
 
-        #print("what is q_val: ",q_val)
-        #print("target_q: ",q_target)
         # Mean Square Error (MSE) loss
-        loss_q = ((q_val - q_target)**2).mean()
+        loss_q = ((q_taken - q_targ)**2).mean()
 
-        return loss_q, q_target.detach().numpy()
+        return loss_q, q_targ.detach().numpy()
