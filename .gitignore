@@ -56,4 +56,4 @@ Mkfile.old
 dkms.conf
 
 # Logs
-logs/
+**/logs/
