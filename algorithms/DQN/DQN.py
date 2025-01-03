@@ -50,7 +50,7 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, buf_size: int, act_dim: int = 4,
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim: int, buf_size: int,
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
@@ -212,7 +212,6 @@ class DQN(AlgorithmAbstract):
         """
         mask = data['mask']
         obs, act, rew, next_obs = data['obs'], data['act'], data['rew'], data['next_obs']
-        print("what is obs: ",obs)
 
         # Q loss
         q_val = self._model.forward(obs, mask)

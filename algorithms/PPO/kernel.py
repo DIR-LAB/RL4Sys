@@ -47,7 +47,7 @@ class RLActor(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int, custom_network: nn.Sequential = None):
+    def __init__(self, kernel_size: int, kernel_dim: int, act_dim: int , custom_network: nn.Sequential = None):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
@@ -57,13 +57,14 @@ class RLActor(ForwardKernelAbstract):
                 nn.ReLU(),
                 nn.Linear(16, 8),
                 nn.ReLU(),
-                nn.Linear(8, kernel_size)
+                nn.Linear(8, act_dim)
             )
         else:
             self.pi_network = custom_network
 
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
+        self.act_dim = act_dim
 
     def _distribution(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> Categorical:
         """Get actor policy for a given observation.
@@ -191,14 +192,15 @@ class RLActorCritic(StepKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int):
+    def __init__(self, kernel_size: int, kernel_dim: int, act_dim: int):
         super().__init__()
         self.flatten_obs_dim = kernel_size * kernel_dim
         self.kernel_size = kernel_size
         self.kernel_dim = kernel_dim
+        self.act_dim = act_dim
 
         # build actor function
-        self.pi = RLActor(kernel_size, kernel_dim)
+        self.pi = RLActor(kernel_size, kernel_dim, act_dim)
         # build value function
         self.v = RLCritic(self.flatten_obs_dim)
 

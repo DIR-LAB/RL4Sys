@@ -44,7 +44,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams: hyperparameters specific to algorithm. Keys/flags correspond to algorithm class constructor.
 
     """
-    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]],
+    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, action_dim: int, hyperparams: Union[dict | list[str]],
                  env_dir: str = os.getcwd(), tensorboard: bool = False):
         super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams,
                          env_dir=env_dir)
@@ -59,7 +59,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'self')
+            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'act_dim', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -81,6 +81,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams['env_dir'] = env_dir
         hyperparams['kernel_size'] = kernel_size
         hyperparams['kernel_dim'] = kernel_dim
+        hyperparams['act_dim'] = action_dim
 
         # instantiate algorithm class
         self._algorithm = algorithm_class(**hyperparams)

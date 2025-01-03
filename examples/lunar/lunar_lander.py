@@ -30,6 +30,7 @@ Training server parameters:
 
 FEATURES = 4
 MAX_SIZE = 2
+ACT_DIM = 4
 
 MOVE_SEQUENCE_SIZE = 500
 
@@ -156,7 +157,7 @@ class LunarLanderSim(ApplicationAbstract):
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
 
         # Create mask for action space (discrete actions from 0 to 3)
-        mask = torch.zeros(MAX_SIZE, dtype=torch.float32).unsqueeze(0)
+        mask = torch.zeros(ACT_DIM, dtype=torch.float32).unsqueeze(0)
 
         return obs_tensor, mask
 
@@ -248,8 +249,14 @@ if __name__ == '__main__':
     app_dir = os.path.dirname(os.path.abspath(__file__))
     if args.algorithm != 'No Server':
         extras.append('--buf_size')
-        extras.append(str(MOVE_SEQUENCE_SIZE * 10))
-        rl_training_server = TrainingServer(args.algorithm, MAX_SIZE, FEATURES, extras, app_dir, args.tensorboard)
+        extras.append(str(MOVE_SEQUENCE_SIZE * 100))
+        rl_training_server = TrainingServer(algorithm_name=args.algorithm, 
+                                            kernel_size=MAX_SIZE, 
+                                            kernel_dim=FEATURES, 
+                                            action_dim=4, 
+                                            hyperparams=extras, 
+                                            env_dir=app_dir, 
+                                            tensorboard=args.tensorboard)
         print('[lunar_lander.py] Created Training Server')
 
     # load model if applicable
