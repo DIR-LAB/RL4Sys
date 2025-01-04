@@ -1,8 +1,14 @@
 numpy
 torch
 pyzmq
-pickle
 tensorboard
+gym
 scipy
-seaborn
 pygame
+seaborn
+tensorflow
+joblib
+psutil
+tqdm
+box2d
+gymnasium

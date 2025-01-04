@@ -23,7 +23,7 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
             epsilon_min: Minimum possible value for epsilon
             epsilon_decay: Decay rate for epsilon
     """
-    def __init__(self, kernel_dim: int, kernel_size: int, act_dim: int = 1, epsilon: float = 1.0,
+    def __init__(self, kernel_dim: int, kernel_size: int, act_dim: int, epsilon: float = 1.0,
                  epsilon_min: float = 0.01, epsilon_decay: float = 5e-4, custom_network: nn.Sequential = None):
         super().__init__()
         if custom_network is None:
