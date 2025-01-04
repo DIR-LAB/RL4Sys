@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package modelservice;
+
+// Message sent from client to server
+message ClientData {
+  string client_id = 1;
+  bytes data = 2; // Serialized data from client
+}
+
+// Message sent from server to client
+message ModelData {
+  string model_version = 1;
+  bytes model = 2; // Serialized TorchScript model
+}
+
+// Service definition
+service ModelService {
+  // Bi-directional streaming RPC
+  rpc StreamData(stream ClientData) returns (stream ModelData);
+}
