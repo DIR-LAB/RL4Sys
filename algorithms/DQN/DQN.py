@@ -15,6 +15,8 @@ from trajectory import RL4SysTrajectory
 
 from conf_loader import ConfigLoader
 
+import zmq
+
 """
 Import and load RL4Sys/config.json DQN Agent configurations and applies them to
 the current instance.
@@ -49,17 +51,10 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, 
-                 kernel_size: int, 
-                 kernel_dim: int, 
-                 buf_size: int, 
-                 act_dim: int = 1,
-                 batch_size: int = hyperparams['batch_size'], 
-                 seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'], 
-                 gamma: float = hyperparams['gamma'],
-                 epsilon: float = hyperparams['epsilon'], 
-                 epsilon_min: float = hyperparams['epsilon_min'],
+    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim: int, buf_size: int,
+                 batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
+                 epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
                  epsilon_decay: float = hyperparams['epsilon_decay'],
                  train_update_freq: float = hyperparams['train_update_freq'], 
                  q_lr: float = hyperparams['q_lr'],
@@ -90,12 +85,9 @@ class DQN(AlgorithmAbstract):
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
         self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
-        # TODO add a target_net -----------------------------
-        self._target_model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
-        self._target_model.load_state_dict(self._model.state_dict())
-        self._target_model.eval()
-        # ---------------------------------------------------
-
+        self.q_target = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self.q_target.load_state_dict(self._model.state_dict())
+        
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
 
         # set up logger
@@ -108,6 +100,10 @@ class DQN(AlgorithmAbstract):
 
         self.traj = 0
         self.epoch = 0
+
+        # ADDED: for q target network
+        self.target_update_freq = 500  # how often to sync weights
+        self.total_steps = 0
 
     def save(self, filename: str) -> None:
         """Save model as file.
@@ -141,7 +137,7 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
+                self._replay_buffer.store(r4a.obs, r4a.next_obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
@@ -149,13 +145,28 @@ class DQN(AlgorithmAbstract):
 
         # get enough trajectories for training the model
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            if self.traj % self._train_update_freq == 0:
-                self.epoch += 1
-                self.train_model()
-                self.log_epoch()
-                return True
+            self.epoch += 1
+            # TODO send client a signal to tell client ingore all trajectory collected. Resume after client model update
+            self.client_stop_collect_traj('stop')
+
+            self.train_model()
+            self.log_epoch()
+            return True
 
         return False
+
+    def client_stop_collect_traj(self, msg):
+        """
+        msg = "stop" means stop collecting staled traj during model training
+        """
+        context = zmq.Context()
+        socket = context.socket(zmq.PUSH)  # REP socket for replies
+        socket.connect("tcp://127.0.0.1:5554") # TODO fix after
+        print("Server told Client stop collecting on port 5554")
+        socket.send_string(msg)
+
+        socket.close()
+        context.term()
 
     def train_model(self) -> None:
         """Train model on data from DQN replay_buffer.
@@ -172,10 +183,9 @@ class DQN(AlgorithmAbstract):
             loss_q.backward()
             self._q_optimizer.step()
 
-        # if on n# episold of training, update value. Default is 10
-        if self.epoch % self._target_net_update_frequency == 0:
-            self._target_model.load_state_dict(self._model.state_dict())
-        
+            self.total_steps += 1
+            if self.total_steps % self.target_update_freq == 0:
+                self.q_target.load_state_dict(self._model.state_dict())
 
         self.logger.store(StopIter=i)
 
@@ -206,17 +216,19 @@ class DQN(AlgorithmAbstract):
             Loss for Q function, Q target for logging
 
         """
-        obs, mask, rew, next_obs = data['obs'], data['mask'], data['rew'], data['next_obs']
+        mask = data['mask']
+        obs, act, rew, next_obs = data['obs'], data['act'], data['rew'], data['next_obs']
 
         # Q loss
-        q_val = self._model.forward(obs, mask) # TODO issue here, no target_net. It keep using self.model 
+        q_val = self._model.forward(obs, mask)
+        q_taken = q_val.gather(1, act.long().unsqueeze(-1)).squeeze(-1)
+
         with torch.no_grad():
-            next_q_val = self._target_model.forward(next_obs, mask)
-            q_target = rew + self._gamma * torch.max(next_q_val, dim=1)[0]
+            q_next_values = self.q_target(next_obs, mask) # ADDED
+            q_next_max = q_next_values.max(dim=1)[0]
+            q_targ = rew + self._gamma * q_next_max
 
         # Mean Square Error (MSE) loss
+        loss_q = ((q_taken - q_targ)**2).mean()
 
-        # loss_q = ((q_val - q_target)**2).mean()
-        loss_q = F.mse_loss(q_val, q_target)
-
-        return loss_q, q_target.detach().numpy()
+        return loss_q, q_targ.detach().numpy()

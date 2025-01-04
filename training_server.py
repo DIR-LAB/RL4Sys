@@ -12,6 +12,7 @@ from typing import NoReturn as Never
 
 from training_tensorboard import TensorboardWriter
 from conf_loader import ConfigLoader
+from time import time
 
 ALGORITHMS_PATH = 'algorithms'
 
@@ -43,7 +44,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams: hyperparameters specific to algorithm. Keys/flags correspond to algorithm class constructor.
 
     """
-    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, hyperparams: Union[dict | list[str]],
+    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, action_dim: int, hyperparams: Union[dict | list[str]],
                  env_dir: str = os.getcwd(), tensorboard: bool = False):
         super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams,
                          env_dir=env_dir)
@@ -58,7 +59,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'self')
+            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'act_dim', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -80,12 +81,17 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams['env_dir'] = env_dir
         hyperparams['kernel_size'] = kernel_size
         hyperparams['kernel_dim'] = kernel_dim
+        hyperparams['act_dim'] = action_dim
 
         # instantiate algorithm class
         self._algorithm = algorithm_class(**hyperparams)
 
         if tensorboard:
             self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
+
+        
+        # add a trajectory buffer to asynchronizly store trajs and then dispatch to agent
+        self.server_traj_buffer = [] # queue, FIFO
 
         # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
@@ -98,6 +104,8 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         self.loop_thread = threading.Thread(target=self.start_loop)
         self.loop_thread.daemon = True
         self.loop_thread.start()
+
+
 
     # TODO ask why this exists
     def joins(self) -> None:
@@ -160,9 +168,11 @@ class TrainingServer(RL4SysTrainingServerAbstract):
             updated = self._algorithm.receive_trajectory(trajectory)
             if updated:
                 self.send_model()
-
+            
         socket.close()
         context.term()
+
+            
 
 
 if __name__ == "__main__":

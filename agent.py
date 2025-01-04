@@ -15,6 +15,7 @@ import threading
 
 from conf_loader import ConfigLoader
 
+
 """Import and load RL4Sys/config.json server configurations and applies them to
 the current instance.
 
@@ -58,6 +59,9 @@ class RL4SysAgent(RL4SysAgentAbstract):
         self._listen_thread.daemon = True
         self._listen_thread.start()
 
+        self.stop_thread = threading.Thread(target=self.stop_listener)
+        self.stop_thread.start()
+
         self._model = model
         self._current_traj = RL4SysTrajectory()
 
@@ -69,6 +73,18 @@ class RL4SysAgent(RL4SysAgentAbstract):
                 break
 
         print("[RLSysAgent] Model Initialized")
+
+    
+    def stop_listener(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.PULL)  # REP socket for replies
+        socket.bind("tcp://127.0.0.1:5554")
+        print("Listening stop signal on port 5554...")
+        while True: 
+            message = socket.recv_string()
+            if message == 'stop':
+                print('Received Stop signal from server on port 5554, stop collect trajectories')
+                self._current_traj.stop_collecting = True
 
     def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward, *args, **kwargs) -> RL4SysAction:
         """Produce action based on trained model and given observation.
@@ -91,8 +107,14 @@ class RL4SysAgent(RL4SysAgentAbstract):
             assert self._model is not None
 
             a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
+            return a, data
+        
+    def record_traj(self, obs: torch.Tensor, next_obs: torch.Tensor, mask: torch.Tensor, action, reward, data, *args, **kwargs):
 
-            r4sa = RL4SysAction(obs, a, mask, reward, data, done=False)
+        with self._lock:
+            assert self._model is not None
+
+            r4sa = RL4SysAction(obs, next_obs, action, mask, reward, data, done=False)
             self._current_traj.add_action(r4sa)
 
             return r4sa
@@ -108,7 +130,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
             Selected action in an RL4SysAction object.
 
         """
-        r4sa = RL4SysAction(None, None, None, reward, None, True)
+        r4sa = RL4SysAction(None, None, None,None, reward, None, True)
         self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
 
     def _loop_for_updated_model(self) -> Never:
@@ -132,6 +154,10 @@ class RL4SysAgent(RL4SysAgentAbstract):
 
             with self._lock:
                 self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
+                #self._model = DQN.load('examples/maze-game/model.zip')
+
+            # resume collecting trajectories
+            self._current_traj.stop_collecting = False 
 
             print("[RLSysAgent - loop_for_updated_model] loaded the new model")
 

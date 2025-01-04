@@ -54,7 +54,7 @@ def convert_json(obj):
             return {convert_json(k): convert_json(v) for k, v in obj.items()}
 
         elif isinstance(obj, tuple):
-            return (convert_json(x) for x in obj)
+            return tuple(convert_json(x) for x in obj)
 
         elif isinstance(obj, list):
             return [convert_json(x) for x in obj]
@@ -68,8 +68,12 @@ def convert_json(obj):
                 for k, v in obj.__dict__.items()
             }
             return {str(obj): obj_dict}
-
-        return str(obj)
+        else:
+            try:
+                json.dumps(obj)  # if it works, just return obj
+                return obj
+            except TypeError:
+                return str(obj)
 
 
 def is_json_serializable(v):
