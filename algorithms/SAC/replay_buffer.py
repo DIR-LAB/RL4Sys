@@ -21,10 +21,12 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.ret_buf = np.zeros(buf_size, dtype=np.float32)
+        self.done_buf = np.zeros(buf_size, dtype=np.float32)
         self.gamma = gamma
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
+    """
     def store(self, obs, act, mask, rew):
         assert self.ptr < self.max_size
         self.obs_buf[self.ptr] = obs
@@ -35,6 +37,19 @@ class ReplayBuffer(ReplayBufferAbstract):
             self.next_obs_buf[self.ptr-1] = obs
         self.ptr = (self.ptr+1) % self.max_size
         self.path_start_idx = min(self.path_start_idx+1, self.max_size)
+    """
+
+    def store(self, obs, next_obs, act, mask, rew):
+        # Use the same index for both obs and next_obs
+        idx = self.ptr % self.max_size  # or whatever indexing logic you like
+
+        self.obs_buf[idx] = obs
+        self.next_obs_buf[idx] = next_obs
+        self.act_buf[idx] = act
+        self.mask_buf[idx] = mask
+        self.rew_buf[idx] = rew
+
+        self.ptr += 1
 
     def finish_path(self, last_val=0):
         """
@@ -50,10 +65,10 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.path_start_idx = self.ptr
 
     def get(self, batch_size: int):
-        assert self.ptr < self.max_size
+        # assert self.ptr < self.max_size
         assert self.ptr >= batch_size
-        batch = np.random.randint(0, self.path_start_idx, size=batch_size)
-        self.ptr, self.path_start_idx = 0, 0
+        batch = np.random.randint(0, min(self.path_start_idx, self.capacity), size=batch_size)
+        # self.ptr, self.path_start_idx = 0, 0
 
         data = dict(obs=self.obs_buf[batch],
                     next_obs=self.next_obs_buf[batch],
