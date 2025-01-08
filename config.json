@@ -23,6 +23,19 @@
             "q_lr": 1e-5,
             "train_q_iters": 50
         },
+        "DDPG": {
+            "batch_size": 64,
+            "seed": 0,
+            "traj_per_epoch": 5,
+            "gamma": 0.99,
+            "polyak": 0.995,
+            "act_noise_std": 0.1,
+            "act_noise_clip": 0.5,
+            "pi_lr": 1e-3,
+            "q_lr": 1e-3,
+            "train_iters:": 1,
+            "target_update_freq": 1000
+        },
         "DQN": {
             "batch_size": 64,
             "seed": 0,

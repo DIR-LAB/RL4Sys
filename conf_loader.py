@@ -49,6 +49,20 @@ class ConfigLoader:
                     "q_lr": 1e-3,
                     "train_q_iters": 80
                 }
+            elif algo == 'DDPG':
+                algorithm_params = {
+                    "batch_size": 32,
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "gamma": 0.95,
+                    "polyak": 0.995,
+                    "act_noise_std": 0.1,
+                    "act_noise_clip": 0.5,
+                    "pi_lr": 1e-3,
+                    "q_lr": 1e-3,
+                    "train_iters": 80,
+                    "target_update_freq": 20
+                }
             elif algo == 'DQN':
                 algorithm_params = {
                     "batch_size": 32,
@@ -74,6 +88,14 @@ class ConfigLoader:
                     "train_pi_iters": 80,
                     "train_v_iters": 80,
                     "target_kl": 0.01,
+                }
+            elif algo == 'REINFORCE':
+                algorithm_params = {
+                    "seed": 0,
+                    "traj_per_epoch": 3,
+                    "gamma": 0.99,
+                    "lr": 3e-4,
+                    "train_iters": 80
                 }
             elif algo == 'SAC':
                 algorithm_params = {
@@ -158,4 +180,3 @@ class ConfigLoader:
             print("[ConfigLoader] Failed to load max trajectory length, loading defaults.")
             max_traj_length = 1000
         return max_traj_length
-    
