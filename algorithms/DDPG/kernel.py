@@ -43,4 +43,4 @@ class ActorCritic(StepKernelAbstract):
         with torch.no_grad():
             act = self.actor.forward(obs, mask)
             act += self.act_noise_std * np.random.randn(self.act_dim)
-        return torch.clip(act, -self.act_limit, self.act_limit)
+        return torch.clip(act, -self.act_limit, self.act_limit), {}

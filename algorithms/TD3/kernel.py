@@ -1,3 +1,5 @@
+import numpy as np
+
 from _common._algorithms.BaseKernel import ForwardKernelAbstract, StepKernelAbstract, mlp
 
 from typing import Optional, Type
@@ -28,13 +30,18 @@ class QCritic(ForwardKernelAbstract):
 
 
 class ActorCritic(StepKernelAbstract):
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit):
+    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit, act_noise_std):
         super().__init__()
         self.actor = Actor(obs_dim, act_dim, hidden_sizes, activation, act_limit)
         self.q_critic1 = QCritic(obs_dim, act_dim, hidden_sizes, activation)
         self.q_critic2 = QCritic(obs_dim, act_dim, hidden_sizes, activation)
 
+        self.act_dim = act_dim
+        self.act_limit = act_limit
+        self.act_noise_std = act_noise_std
+
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
         with torch.no_grad():
-            act = self.actor.model(obs)
-        return act.numpy(), {}
+            act = self.actor.forward(obs, mask)
+            act += self.act_noise_std * np.random.randn(self.act_dim)
+        return np.clip(act, -self.act_limit, self.act_limit), {}

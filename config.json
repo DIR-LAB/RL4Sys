@@ -91,7 +91,7 @@
             "train_pi_delay": 2,
             "target_update_freq": 1000,
             "target_noise": 0.2,
-            "noise_clip": 0.5
+            "target_noise_clip": 0.5
         },
         "TRPO": {
 

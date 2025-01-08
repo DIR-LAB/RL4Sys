@@ -5,7 +5,7 @@ import random
 import torch
 
 """
-DDPG Code
+TD3 Code
 """
 
 
@@ -34,7 +34,7 @@ class ReplayBuffer(ReplayBufferAbstract):
 
     def finish_path(self, last_val=0):
         """
-        Unused in DDPG
+        Unused in TD3
         """
         pass
 
@@ -55,7 +55,6 @@ class ReplayBuffer(ReplayBufferAbstract):
         assert self.ptr >= batch_size
         # random sample of indices
         batch = random.sample(range(len(self.obs_buf)), batch_size)
-        # self.ptr, self.path_start_idx = 0, 0 # TODO debug try use all traj, not first 32
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     mask=self.mask_buf[batch], rew=self.rew_buf[batch])
