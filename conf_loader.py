@@ -57,7 +57,6 @@ class ConfigLoader:
                     "gamma": 0.95,
                     "polyak": 0.995,
                     "act_noise_std": 0.1,
-                    "act_noise_clip": 0.5,
                     "pi_lr": 1e-3,
                     "q_lr": 1e-3,
                     "train_iters": 80,

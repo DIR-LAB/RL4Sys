@@ -163,7 +163,7 @@ class RLCritic(ForwardKernelAbstract):
         else:
             self.v_net = custom_network
 
-    def forward(self, obs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: torch.Tensor = None) -> torch.Tensor:
         """Get estimate for state-value
 
         mask is not relevant in critic model but retained for consistency.
