@@ -78,6 +78,21 @@
             "train_update_freq": 8,
             "train_iters": 50
         },
+        "TD3": {
+            "batch_size": 64,
+            "seed": 0,
+            "traj_per_epoch": 5,
+            "gamma": 0.99,
+            "polyak": 0.995,
+            "act_noise_std": 0.1,
+            "q_lr": 1e-3,
+            "pi_lr": 1e-3,
+            "train_q_iters": 1,
+            "train_pi_delay": 2,
+            "target_update_freq": 1000,
+            "target_noise": 0.2,
+            "noise_clip": 0.5
+        },
         "TRPO": {
 
         }
