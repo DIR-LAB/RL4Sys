@@ -1,3 +1,5 @@
+import numpy as np
+
 from _common._algorithms.BaseKernel import ForwardKernelAbstract, StepKernelAbstract, mlp
 
 from typing import Optional, Type
@@ -10,7 +12,7 @@ from numpy import ndarray
 class Actor(ForwardKernelAbstract):
     def __init__(self, obs_dim: int, act_dim: int, hidden_sizes, activation, act_limit):
         super().__init__()
-        self.model = mlp([obs_dim] + list(hidden_sizes), activation, nn.Tanh)
+        self.model = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation, nn.Tanh)
         self.act_limit = act_limit
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: torch.Tensor = None):
@@ -28,13 +30,17 @@ class QCritic(ForwardKernelAbstract):
 
 
 class ActorCritic(StepKernelAbstract):
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit):
-
+    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit, act_noise_std):
         super().__init__()
         self.actor = Actor(obs_dim, act_dim, hidden_sizes, activation, act_limit)
         self.q_critic = QCritic(obs_dim, act_dim, hidden_sizes, activation)
 
+        self.act_dim = act_dim
+        self.act_limit = act_limit
+        self.act_noise_std = act_noise_std
+
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
         with torch.no_grad():
-            act = self.actor.model(obs)
-        return act.numpy(), {}
+            act = self.actor.forward(obs, mask)
+            act += self.act_noise_std * np.random.randn(self.act_dim)
+        return torch.clip(act, -self.act_limit, self.act_limit)
