@@ -47,11 +47,12 @@ class ForwardKernelAbstract(nn.Module, ABC):
         super(ForwardKernelAbstract, self).__init__()
 
     @abstractmethod
-    def forward(self, obs: torch.Tensor, mask: torch.Tensor):
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: torch.Tensor = None):
         """
         Pass obs and mask through the forward pass of kernel's network.
         """
         pass
+
 
 
 class StepKernelAbstract(nn.Module, ABC):
