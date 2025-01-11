@@ -48,6 +48,9 @@
             "train_v_iters": 40,
             "target_kl": 0.01
         },
+        "REINFORCE": {
+
+        },
         "SAC": {
             "discrete": true,
             "adaptive_alpha": false,
