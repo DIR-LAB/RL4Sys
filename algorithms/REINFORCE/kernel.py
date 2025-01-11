@@ -1,3 +1,5 @@
+from torch.distributions import Categorical
+
 from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
 from typing import Optional, Type
@@ -7,7 +9,7 @@ import torch.nn as nn
 from numpy import ndarray
 
 
-class PolicyNetwork(ForwardKernelAbstract):
+class DiscretePolicyNetwork(ForwardKernelAbstract):
     def __init__(self, obs_dim, act_dim):
         super().__init__()
         self.pi_network = nn.Sequential(
@@ -25,7 +27,7 @@ class PolicyNetwork(ForwardKernelAbstract):
         x = self.pi_network(x)
         logits = torch.squeeze(x, -1)
         logits = logits + (mask - 1) * 1e8
-        return logits
+        return Categorical(logits=logits)
 
     def _log_prob_from_distribution(self, pi, act):
         log_probs = torch.log_softmax(pi, dim=-1)
@@ -33,12 +35,34 @@ class PolicyNetwork(ForwardKernelAbstract):
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: Optional[torch.Tensor] = None):
         pi = self._distribution(obs, mask)
-
         if act is not None:
             logp_a = self._log_prob_from_distribution(pi, act)
-            return logp_a
-
+            return pi, logp_a
         return pi, None
+
+
+class ContinuousPolicyNetwork(ForwardKernelAbstract):
+    def __init__(self, obs_dim, act_dim):
+        super().__init__()
+        self.pi_network = nn.Sequential(
+            nn.Linear(obs_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, act_dim),
+        )
+
+        log_std = -0.5 * torch.ones(act_dim, dtype=torch.float32)
+        self.log_std = torch.nn.Parameter(log_std)
+
+    def _distribution(self, obs: torch.Tensor, mask: torch.Tensor):
+        x = obs.view(-1, obs.size(-1), obs.shape[1])
+        x = self.pi_network(x)
+        mean = torch.squeeze(x, -1)
+        mean = mean + (mask - 1) * 1e8
+        return torch.distributions.Normal(mean, self.log_std.exp())
 
 
 class BaselineValueNetwork(ForwardKernelAbstract):
@@ -51,21 +75,36 @@ class BaselineValueNetwork(ForwardKernelAbstract):
 
 
 class PolicyWithBaseline(StepKernelAbstract):
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
+    def __init__(self, obs_dim, act_dim, discrete, hidden_sizes, activation):
         super().__init__()
-        self.policy = PolicyNetwork(obs_dim, act_dim)
+        if discrete:
+            self.policy = DiscretePolicyNetwork(obs_dim, act_dim)
+        else:
+            self.policy = ContinuousPolicyNetwork(obs_dim, act_dim)
         self.baseline = BaselineValueNetwork(obs_dim, hidden_sizes, activation)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
-        logp_a = self.policy(obs, mask)
-        return logp_a, {}
+        with torch.no_grad():
+            dist, _ = self.policy.forward(obs, mask)
+            act = dist.sample()
+            logp_a = self.policy._log_prob_from_distribution(dist, act)
+            v = self.baseline.forward(obs, mask)
+        data = {'logp_a': logp_a.numpy(), 'v': v.numpy()}
+        return act.numpy(), data
 
 
 class PolicyWithoutBaseline(StepKernelAbstract):
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim, act_dim, discrete):
         super().__init__()
-        self.policy = PolicyNetwork(obs_dim, act_dim)
+        if discrete:
+            self.policy = DiscretePolicyNetwork(obs_dim, act_dim)
+        else:
+            self.policy = ContinuousPolicyNetwork(obs_dim, act_dim)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
-        logp_a = self.policy(obs, mask)
-        return logp_a, {}
+        with torch.no_grad():
+            dist, _ = self.policy.forward(obs, mask)
+            act = dist.sample()
+            logp_a = self.policy._log_prob_from_distribution(dist, act)
+        data = {'logp_a': logp_a.numpy()}
+        return act.numpy(), data
