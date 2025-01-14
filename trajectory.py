@@ -54,6 +54,10 @@ class RL4SysTrajectory(RL4SysTrajectoryAbstract):
 
         if action.done:
             
+            # Check if every reward is set
+            for i in self.actions:
+                assert i.reward_update_flag==True, "One ore more reward for action trajectory is not set"
+
 
             # TODO refactor out to RL4SysAgent object which holds this trajectory, or allow connection information to be passed in from agent
             print(self.stop_collecting)

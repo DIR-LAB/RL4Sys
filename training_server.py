@@ -14,6 +14,7 @@ from training_tensorboard import TensorboardWriter
 from conf_loader import ConfigLoader
 from time import time
 
+
 ALGORITHMS_PATH = 'algorithms'
 
 import os, json
@@ -44,10 +45,11 @@ class TrainingServer(RL4SysTrainingServerAbstract):
         hyperparams: hyperparameters specific to algorithm. Keys/flags correspond to algorithm class constructor.
 
     """
-    def __init__(self, algorithm_name: str, kernel_size: int, kernel_dim: int, action_dim: int, hyperparams: Union[dict | list[str]],
-                 env_dir: str = os.getcwd(), tensorboard: bool = False):
-        super().__init__(algorithm_name, obs_size=kernel_size, obs_dim=kernel_dim, hyperparams=hyperparams,
+    def __init__(self, algorithm_name: str, input_size: int, action_dim: int, hyperparams: Union[dict | list[str]],
+                 env_dir: str = os.getcwd(), tensorboard: bool = False, seed = 0):
+        super().__init__(algorithm_name, input_size==input_size, hyperparams=hyperparams,
                          env_dir=env_dir)
+
         # get algorithm class
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)
@@ -59,7 +61,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('env_dir', 'kernel_size', 'kernel_dim', 'act_dim', 'self')
+            no_parse = ('env_dir', 'input_size', 'act_dim', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -79,8 +81,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
         # add TrainingServer args to algorithm parameters
         hyperparams['env_dir'] = env_dir
-        hyperparams['kernel_size'] = kernel_size
-        hyperparams['kernel_dim'] = kernel_dim
+        hyperparams['input_size'] = input_size
         hyperparams['act_dim'] = action_dim
 
         # instantiate algorithm class
@@ -174,7 +175,7 @@ class TrainingServer(RL4SysTrainingServerAbstract):
 
             
 
-
+## TODO kernel size no longer exist
 if __name__ == "__main__":
 
     # Example:

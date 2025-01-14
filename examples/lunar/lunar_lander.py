@@ -28,8 +28,7 @@ Training server parameters:
     buf_size    | MOVE_SEQUENCE_SIZE * 100 = 50000
 """
 
-FEATURES = 4
-MAX_SIZE = 2
+INPUT_DIM = 8
 ACT_DIM = 4
 
 MOVE_SEQUENCE_SIZE = 500
@@ -50,6 +49,7 @@ class LunarLanderSim(ApplicationAbstract):
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
         self.env.action_space.seed(self._seed)
+        self.env.observation_space.seed(self._seed)
         np.random.seed(self._seed)
         random.seed(self._seed)
         torch.manual_seed(self._seed)
@@ -90,7 +90,8 @@ class LunarLanderSim(ApplicationAbstract):
                     self.env.render()
 
                 # Get action from agent
-                action, data = self.rlagent.request_for_action(obs_tensor, mask, cumulative_reward)
+                rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask)
+                action = rl4sys_action.act
 
                 # Ensure action is compatible
                 if isinstance(action, torch.Tensor):
@@ -108,7 +109,7 @@ class LunarLanderSim(ApplicationAbstract):
                 next_obs_tensor, mask = self.build_observation(next_obs)
 
                 # record trajectory
-                self.rlagent.record_traj(obs_tensor, next_obs_tensor, mask, action, reward, data)
+                rl4sys_action.update_reward(reward)
                 rl_runs += 1
                 moves += 1
                 self.simulator_stats['moves'] += 1
@@ -232,7 +233,7 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard', type=bool, default=True,
                         help='enable tensorboard logging for training observations and insights.\n' +
                              'Make sure to properly configure tensorboard parameters in config.json before running.')
-    parser.add_argument('--seed', type=int, default=1,
+    parser.add_argument('--seed', type=int, default=0,
                         help='seed for random number generation in environment')
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
@@ -241,7 +242,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='SAC',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -253,9 +254,8 @@ if __name__ == '__main__':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
         rl_training_server = TrainingServer(algorithm_name=args.algorithm, 
-                                            kernel_size=MAX_SIZE, 
-                                            kernel_dim=FEATURES, 
-                                            action_dim=4, 
+                                            input_size=INPUT_DIM, 
+                                            action_dim=ACT_DIM, 
                                             hyperparams=extras, 
                                             env_dir=app_dir, 
                                             tensorboard=args.tensorboard)

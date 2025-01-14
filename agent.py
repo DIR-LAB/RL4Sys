@@ -86,7 +86,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
                 print('Received Stop signal from server on port 5554, stop collect trajectories')
                 self._current_traj.stop_collecting = True
 
-    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, reward, *args, **kwargs) -> RL4SysAction:
+    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> RL4SysAction:
         """Produce action based on trained model and given observation.
 
         Automatically records action to trajectory.
@@ -107,14 +107,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
             assert self._model is not None
 
             a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
-            return a, data
-        
-    def record_traj(self, obs: torch.Tensor, next_obs: torch.Tensor, mask: torch.Tensor, action, reward, data, *args, **kwargs):
-
-        with self._lock:
-            assert self._model is not None
-
-            r4sa = RL4SysAction(obs, next_obs, action, mask, reward, data, done=False)
+            r4sa = RL4SysAction(obs, a, mask, -1, data, done=False)
             self._current_traj.add_action(r4sa)
 
             return r4sa
@@ -130,7 +123,8 @@ class RL4SysAgent(RL4SysAgentAbstract):
             Selected action in an RL4SysAction object.
 
         """
-        r4sa = RL4SysAction(None, None, None,None, reward, None, True)
+        r4sa = RL4SysAction(None, None, None, None, None, True)
+        r4sa.update_reward(reward)
         self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
 
     def _loop_for_updated_model(self) -> Never:

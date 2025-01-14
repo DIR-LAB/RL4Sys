@@ -47,11 +47,11 @@ class RLActor(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int, act_dim: int , custom_network: nn.Sequential = None):
+    def __init__(self, input_size: int, act_dim: int , custom_network: nn.Sequential = None):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(kernel_dim*kernel_size, 32),
+                nn.Linear(input_size, 32),
                 nn.ReLU(),
                 nn.Linear(32, 16),
                 nn.ReLU(),
@@ -62,8 +62,7 @@ class RLActor(ForwardKernelAbstract):
         else:
             self.pi_network = custom_network
 
-        self.kernel_size = kernel_size
-        self.kernel_dim = kernel_dim
+        self.input_size = input_size
         self.act_dim = act_dim
 
     def _distribution(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> Categorical:
@@ -80,7 +79,7 @@ class RLActor(ForwardKernelAbstract):
         """
 
         #print('whats flattened obs? ', flattened_obs)
-        x = flattened_obs.view(-1, self.kernel_size, self.kernel_dim) # unclear reason for -1 dimension
+        # x = flattened_obs.view(-1, self.input_size) # unclear reason for -1 dimension
         x = self.pi_network(flattened_obs)
         #print('what is result after network?', x)
         logits = torch.squeeze(x, -1) # each action has only one feature now
@@ -192,15 +191,13 @@ class RLActorCritic(StepKernelAbstract):
 
     """
 
-    def __init__(self, kernel_size: int, kernel_dim: int, act_dim: int):
+    def __init__(self, input_size: int, act_dim: int):
         super().__init__()
-        self.flatten_obs_dim = kernel_size * kernel_dim
-        self.kernel_size = kernel_size
-        self.kernel_dim = kernel_dim
+        self.flatten_obs_dim = input_size
         self.act_dim = act_dim
 
         # build actor function
-        self.pi = RLActor(kernel_size, kernel_dim, act_dim)
+        self.pi = RLActor(self.flatten_obs_dim, act_dim)
         # build value function
         self.v = RLCritic(self.flatten_obs_dim)
 

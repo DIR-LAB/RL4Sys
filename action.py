@@ -25,16 +25,17 @@ class RL4SysAction(RL4SysActionAbstract):
     """
     # TODO find out what reward's actual type should be. numpy float64? update type hints throughout project
     # TODO replace all forward evaluation type hints like these by imports that are only called by type checkers
-    def __init__(self, obs: Optional['torch.Tensor'], next_obs: Optional['torch.Tensor'], action: Optional['torch.Tensor'], mask: Optional['torch.Tensor'],
+    def __init__(self, obs: Optional['torch.Tensor'], action: Optional['torch.Tensor'], mask: Optional['torch.Tensor'],
                  reward: int, data: Optional[dict], done: bool):
         super().__init__()
         self.obs = obs
-        self.next_obs = next_obs
         self.act = action
         self.mask = mask
         self.rew = reward
         self.data = data
         self.done = done
+        self.reward_update_flag = False
 
     def update_reward(self, reward: int) -> None:
         self.rew = reward
+        self.reward_update_flag = True

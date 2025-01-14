@@ -1,5 +1,6 @@
 from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
 
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -36,8 +37,7 @@ DQN Agent with hyperparameters
 class DQN(AlgorithmAbstract):
     """
             Args:
-                kernel_size: number of observations
-                kernel_dim: number of features
+                input_size: size of input observation dimension
                 buf_size: size of replay buffer
                 act_dim: number of actions (output dimension(s))
                 batch_size: batch size of replay buffer
@@ -51,7 +51,7 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim: int, buf_size: int,
+    def __init__(self, env_dir: str, input_size: int, act_dim: int, buf_size: int,
                  batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
@@ -62,16 +62,19 @@ class DQN(AlgorithmAbstract):
                  target_net_update_frequency:int = hyperparams['target_net_update_frequency']):
 
         super().__init__()
-        seed += 10000 * os.getpid()
+        # seed += 10000 * os.getpid()
+
         torch.manual_seed(seed)
         np.random.seed(seed)
+        random.seed(seed)
 
         # Input parameters
-        self._kernel_size = kernel_size
-        self._kernel_dim = kernel_dim
+        self._input_size = input_size
         self._buf_size = buf_size
         self._act_dim = act_dim
         self._batch_size = batch_size
+
+        print("input size is: ", self._input_size)
 
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch
@@ -83,9 +86,9 @@ class DQN(AlgorithmAbstract):
         self._train_q_iters = train_q_iters
         self._target_net_update_frequency = target_net_update_frequency # update target net
 
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma=gamma, epsilon=epsilon)
-        self._model = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
-        self.q_target = DeepQNetwork(kernel_size, kernel_dim, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self._replay_buffer = ReplayBuffer(input_size, act_dim, buf_size, gamma=gamma, epsilon=epsilon)
+        self._model = DeepQNetwork(input_size, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
+        self.q_target = DeepQNetwork(input_size, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
         self.q_target.load_state_dict(self._model.state_dict())
         
         self._q_optimizer = Adam(self._model.parameters(), lr=q_lr)
@@ -102,7 +105,7 @@ class DQN(AlgorithmAbstract):
         self.epoch = 0
 
         # ADDED: for q target network
-        self.target_update_freq = 500  # how often to sync weights
+        self.target_update_freq = target_net_update_frequency  # how often to sync weights # 500
         self.total_steps = 0
 
     def save(self, filename: str) -> None:
@@ -137,7 +140,7 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.next_obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)

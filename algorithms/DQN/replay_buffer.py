@@ -60,16 +60,17 @@ class ReplayBuffer(ReplayBufferAbstract):
             if self.ptr > 0:
                 self.next_obs_buf[last_idx - 1] = obs
     """
-    def store(self, obs, next_obs, act, mask, rew, q_val):
+    def store(self, obs, act, mask, rew, q_val):
         # Use the same index for both obs and next_obs
         idx = self.ptr % self.max_size  # or whatever indexing logic you like
 
         self.obs_buf[idx] = obs
-        self.next_obs_buf[idx] = next_obs
         self.act_buf[idx] = act
         self.mask_buf[idx] = mask
         self.rew_buf[idx] = rew
         self.q_val_buf[idx] = np.max(q_val)
+        if self.ptr > 0:
+            self.next_obs_buf[idx - 1] = obs
 
         self.ptr += 1
 

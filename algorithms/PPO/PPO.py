@@ -70,7 +70,7 @@ class PPO(AlgorithmAbstract):
             for early stopping. (Usually small, 0.01 or 0.05.)
 
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim:int, buf_size: int, seed: int = hyperparams['seed'],
+    def __init__(self, env_dir: str, input_size: int, act_dim:int, buf_size: int, seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
                  gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
                  pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
@@ -89,8 +89,8 @@ class PPO(AlgorithmAbstract):
         self._train_v_iters = train_v_iters
         self._target_kl = target_kl
         
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, act_dim, buf_size, gamma=gamma, lam=lam)
-        self._model = RLActorCritic(kernel_size, kernel_dim, act_dim)
+        self._replay_buffer = ReplayBuffer(input_size, act_dim, buf_size, gamma=gamma, lam=lam)
+        self._model = RLActorCritic(input_size, act_dim)
         self._pi_optimizer = Adam(self._model.pi.parameters(), lr=pi_lr)
         self._vf_optimizer = Adam(self._model.v.parameters(), lr=vf_lr)
 

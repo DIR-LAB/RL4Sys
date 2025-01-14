@@ -60,7 +60,8 @@ class ConfigLoader:
                     "epsilon_decay": 5e-4,
                     "train_update_freq": 4,
                     "q_lr": 1e-3,
-                    "train_q_iters": 80
+                    "train_q_iters": 80,
+                    "target_net_update_frequency": 500
                 }
             elif algo == 'PPO':
                 algorithm_params = {

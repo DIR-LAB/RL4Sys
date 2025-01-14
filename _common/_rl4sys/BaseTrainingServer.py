@@ -6,7 +6,7 @@ class RL4SysTrainingServerAbstract(ABC):
     """
     Abstract class for a training server for RL4Sys.
     """
-    def __init__(self, algorithm_name: str, obs_size: int, obs_dim: int, hyperparams: Union[dict | list[str]],
+    def __init__(self, algorithm_name: str, input_size: int, hyperparams: Union[dict | list[str]],
                  *args, **kwargs):
         super(RL4SysTrainingServerAbstract, self).__init__()
 
