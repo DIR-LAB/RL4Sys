@@ -42,14 +42,14 @@ model = DQN(
     env, 
     learning_rate=1e-3,
     buffer_size=50000,  # Replay buffer size
-    learning_starts=1,  # Start learning after this many steps
+    learning_starts=0,  # Start learning after this many steps
     batch_size=64,
     tau=1e-3,  # Soft update coefficient
     gamma=0.99,  # Discount factor
     train_freq=64,  # Train every 4 steps
-    gradient_steps=1,  # Gradient updates per training step
+    gradient_steps=5,  # Gradient updates per training step
     target_update_interval=500,  # Target network update frequency
-    exploration_fraction=0.1,  # Fraction of steps for exploration
+    exploration_fraction=5e-4,  # Fraction of steps for exploration
     exploration_initial_eps=1.0,  # Initial epsilon for exploration
     exploration_final_eps=0.01,  # Final epsilon for exploration
     policy_kwargs=policy_kwargs,  # Custom policy network
@@ -62,7 +62,7 @@ model = DQN(
 model.set_logger(new_logger)
 
 # Train the model
-TIMESTEPS = 100_000
+TIMESTEPS = 500_000
 model.learn(total_timesteps=TIMESTEPS)
 
 # Save the model

@@ -51,11 +51,18 @@ class DQN(AlgorithmAbstract):
                 q_lr: learning rate for Q network, passed to Adam optimizer
                 train_q_iters:
     """
-    def __init__(self, env_dir: str, input_size: int, act_dim: int, buf_size: int,
-                 batch_size: int = hyperparams['batch_size'], seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
-                 epsilon: float = hyperparams['epsilon'], epsilon_min: float = hyperparams['epsilon_min'],
+    def __init__(self, env_dir: str, 
+                 input_size: int, 
+                 act_dim: int, 
+                 buf_size: int,
+                 batch_size: int = hyperparams['batch_size'], 
+                 seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], 
+                 gamma: float = hyperparams['gamma'],
+                 epsilon: float = hyperparams['epsilon'], 
+                 epsilon_min: float = hyperparams['epsilon_min'],
                  epsilon_decay: float = hyperparams['epsilon_decay'],
+                 tau: float = hyperparams['tau'],
                  train_update_freq: float = hyperparams['train_update_freq'], 
                  q_lr: float = hyperparams['q_lr'],
                  train_q_iters: int = hyperparams['train_q_iters'],
@@ -83,6 +90,7 @@ class DQN(AlgorithmAbstract):
         self._epsilon = epsilon
         self._epsilon_min = epsilon_min
         self._epsilon_decay = epsilon_decay
+        self._tau = tau
         self._train_update_freq = train_update_freq
         self._train_q_iters = train_q_iters
         self._target_net_update_frequency = target_net_update_frequency # update target net
@@ -188,14 +196,22 @@ class DQN(AlgorithmAbstract):
             self._q_optimizer.step()
 
             self.total_steps += 1
+            
             if self.total_steps % self.target_update_freq == 0:
-                self.q_target.load_state_dict(self._model.state_dict())
+                self.soft_update()
 
         self.logger.store(StopIter=i)
 
         self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
 
         
+    def soft_update(self):
+        """Soft update target network parameters."""
+        for main_param, target_param in zip(self._model.parameters(), self.q_target.parameters()):
+            # target_param ← tau * main + (1−tau) * target
+            target_param.data.copy_(
+                self._tau * main_param.data + (1.0 - self._tau) * target_param.data
+            )
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch
