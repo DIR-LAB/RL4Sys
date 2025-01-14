@@ -75,6 +75,7 @@ class DQN(AlgorithmAbstract):
         self._batch_size = batch_size
 
         print("input size is: ", self._input_size)
+        print("action dim is: ", self._act_dim)
 
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch

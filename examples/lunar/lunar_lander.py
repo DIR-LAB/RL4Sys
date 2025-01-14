@@ -43,8 +43,6 @@ class LunarLanderSim(ApplicationAbstract):
 
         # Initialize the Gym environment
         self.env = gym.make('LunarLander-v3')
-        global ACT_DIM
-        ACT_DIM = self.env.action_space.n
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)

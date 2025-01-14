@@ -33,7 +33,7 @@
             "epsilon_decay": 5e-4,
             "train_update_freq": 1,
             "q_lr": 1e-3,
-            "train_q_iters": 1,
+            "train_q_iters": 5,
             "target_net_update_frequency": 500
         },
         "PPO": {
