@@ -15,20 +15,21 @@ class ReplayBuffer(ReplayBufferAbstract):
     for calculating the advantages of state-action pairs.
     """
 
-    def __init__(self, obs_dim, mask_dim, size, gamma=0.99, lam=0.95):
+    def __init__(self, obs_dim, mask_dim, size, gamma=0.99, lam=0.95, with_baseline=True):
         super().__init__()
         self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
-        self.cobs_buf = None
         self.act_buf = np.zeros(combined_shape(size), dtype=np.float32)
         self.mask_buf = np.zeros(combined_shape(size, mask_dim), dtype=np.float32)
         self.adv_buf = np.zeros(size, dtype=np.float32)
         self.rew_buf = np.zeros(size, dtype=np.float32)
         self.ret_buf = np.zeros(size, dtype=np.float32)
-        self.val_buf = np.zeros(size, dtype=np.float32)
         self.logp_buf = np.zeros(size, dtype=np.float32)
+        if with_baseline:
+            self.val_buf = np.zeros(size, dtype=np.float32)
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
         self.capacity = size
+        self.with_baseline = with_baseline
 
     def store(self, obs, act, mask, rew, val, logp):
         """
@@ -39,8 +40,9 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.act_buf[self.ptr] = act
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
-        self.val_buf[self.ptr] = val
         self.logp_buf[self.ptr] = logp
+        if self.with_baseline:
+            self.val_buf[self.ptr] = val
         self.ptr += 1
 
     def finish_path(self, last_val=0):

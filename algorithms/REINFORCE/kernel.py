@@ -10,28 +10,25 @@ from numpy import ndarray
 
 
 class DiscretePolicyNetwork(ForwardKernelAbstract):
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim, hidden_sizes, act_dim):
         super().__init__()
         self.pi_network = nn.Sequential(
-            nn.Linear(obs_dim, 32),
+            nn.Linear(obs_dim, hidden_sizes[0]),
             nn.ReLU(),
-            nn.Linear(32, 16),
+            nn.Linear(hidden_sizes[0], hidden_sizes[1]),
             nn.ReLU(),
-            nn.Linear(16, 8),
-            nn.ReLU(),
-            nn.Linear(8, act_dim),
+            nn.Linear(hidden_sizes[1], act_dim),
         )
 
     def _distribution(self, obs: torch.Tensor, mask: torch.Tensor):
-        x = obs.view(-1, obs.size(-1), obs.shape[1])
-        x = self.pi_network(x)
+        x = self.pi_network(obs)
         logits = torch.squeeze(x, -1)
-        logits = logits + (mask - 1) * 1e8
-        return Categorical(logits=logits)
+        logits = logits + (mask-1) * 1e8
+        dist = torch.softmax(logits, dim=-1)
+        return Categorical(probs=dist)
 
     def _log_prob_from_distribution(self, pi, act):
-        log_probs = torch.log_softmax(pi, dim=-1)
-        return log_probs.gather(-1, act)
+        return pi.log_prob(act)
 
     def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: Optional[torch.Tensor] = None):
         pi = self._distribution(obs, mask)
@@ -42,16 +39,14 @@ class DiscretePolicyNetwork(ForwardKernelAbstract):
 
 
 class ContinuousPolicyNetwork(ForwardKernelAbstract):
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim, hidden_sizes, act_dim):
         super().__init__()
         self.pi_network = nn.Sequential(
-            nn.Linear(obs_dim, 32),
+            nn.Linear(obs_dim, hidden_sizes[0]),
             nn.ReLU(),
-            nn.Linear(32, 16),
+            nn.Linear(hidden_sizes[0], hidden_sizes[1]),
             nn.ReLU(),
-            nn.Linear(16, 8),
-            nn.ReLU(),
-            nn.Linear(8, act_dim),
+            nn.Linear(hidden_sizes[1], act_dim),
         )
 
         log_std = -0.5 * torch.ones(act_dim, dtype=torch.float32)
@@ -63,6 +58,13 @@ class ContinuousPolicyNetwork(ForwardKernelAbstract):
         mean = torch.squeeze(x, -1)
         mean = mean + (mask - 1) * 1e8
         return torch.distributions.Normal(mean, self.log_std.exp())
+
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor, act: Optional[torch.Tensor] = None):
+        pi = self._distribution(obs, mask)
+        if act is not None:
+            logp_a = self._log_prob_from_distribution(pi, act)
+            return pi, logp_a
+        return pi, None
 
 
 class BaselineValueNetwork(ForwardKernelAbstract):
@@ -78,9 +80,9 @@ class PolicyWithBaseline(StepKernelAbstract):
     def __init__(self, obs_dim, act_dim, discrete, hidden_sizes, activation):
         super().__init__()
         if discrete:
-            self.policy = DiscretePolicyNetwork(obs_dim, act_dim)
+            self.policy = DiscretePolicyNetwork(obs_dim, hidden_sizes, act_dim)
         else:
-            self.policy = ContinuousPolicyNetwork(obs_dim, act_dim)
+            self.policy = ContinuousPolicyNetwork(obs_dim, hidden_sizes, act_dim)
         self.baseline = BaselineValueNetwork(obs_dim, hidden_sizes, activation)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
@@ -94,12 +96,12 @@ class PolicyWithBaseline(StepKernelAbstract):
 
 
 class PolicyWithoutBaseline(StepKernelAbstract):
-    def __init__(self, obs_dim, act_dim, discrete):
+    def __init__(self, obs_dim, act_dim, discrete, hidden_sizes):
         super().__init__()
         if discrete:
-            self.policy = DiscretePolicyNetwork(obs_dim, act_dim)
+            self.policy = DiscretePolicyNetwork(obs_dim, hidden_sizes, act_dim)
         else:
-            self.policy = ContinuousPolicyNetwork(obs_dim, act_dim)
+            self.policy = ContinuousPolicyNetwork(obs_dim, hidden_sizes, act_dim)
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor):
         with torch.no_grad():

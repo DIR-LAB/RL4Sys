@@ -25,30 +25,32 @@ save_model_path = config_loader.save_model_path
 
 class REINFORCE(AlgorithmAbstract):
     def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim: int, buf_size: int,
-                 discrete: bool = hyperparams['discrete'], with_vf: bool = hyperparams['with_vf'], seed: int = hyperparams['seed'],
+                 discrete: bool = hyperparams['discrete'], with_baseline: bool = hyperparams['with_baseline'], seed: int = hyperparams['seed'],
                  traj_per_epoch: int = hyperparams['traj_per_epoch'], gamma: float = hyperparams['gamma'],
                  lam: float = hyperparams['lam'], pi_lr: float = hyperparams['pi_lr'],
-                 vf_lr: float = hyperparams['vf_lr'], train_vf_iters: int = hyperparams['train_vf_iters']):
+                 vf_lr: float = hyperparams['vf_lr'], train_pi_iters: int = hyperparams['train_pi_iters'], train_vf_iters: int = hyperparams['train_vf_iters']):
+
         super().__init__()
         seed += 10000 * os.getpid()
         torch.manual_seed(seed)
         np.random.seed(seed)
 
         # Hyperparameters
-        self._with_baseline = with_vf
+        self._with_baseline = with_baseline
         self._traj_per_epoch = traj_per_epoch
         self._gamma = gamma
         self._lam = lam
         self._pi_lr = pi_lr
         self._vf_lr = vf_lr
+        self._train_pi_iters = train_pi_iters
         self._train_vf_iters = train_vf_iters
 
         self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, act_dim, buf_size, gamma, lam)
-        if with_vf:
-            self._model = PolicyWithBaseline(kernel_size * kernel_dim, act_dim, discrete, [64, 64], torch.nn.ReLU)
+        if with_baseline:
+            self._model = PolicyWithBaseline(kernel_size * kernel_dim, act_dim, discrete, [128, 128], torch.nn.ReLU)
             self._vf_optimizer = Adam(self._model.baseline.parameters(), lr=vf_lr)
         else:
-            self._model = PolicyWithoutBaseline(kernel_size * kernel_dim, act_dim, discrete)
+            self._model = PolicyWithoutBaseline(kernel_size * kernel_dim, act_dim, discrete, [128, 128])
         self._pi_optimizer = Adam(self._model.parameters(), lr=pi_lr)
 
         # set up logger
@@ -73,15 +75,19 @@ class REINFORCE(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew)
+                if self._with_baseline:
+                    self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['v'], r4a.data['logp_a'])
+                    self.logger.store(VVals=r4a.data['v'])
+                else:
+                    self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, None, r4a.data['logp_a'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
 
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
+            self.epoch += 1
             self.train_model()
             self.log_epoch()
-            self.traj = 0
             return True
 
         return False
@@ -94,10 +100,11 @@ class REINFORCE(AlgorithmAbstract):
         if self._with_baseline:
             v_l_old = self.compute_loss_vf(data).item()
 
-        self._pi_optimizer.zero_grad()
-        loss_pi, pi_info = self.compute_loss_pi(data)
-        loss_pi.backward()
-        self._pi_optimizer.step()
+        for i in range(self._train_pi_iters):
+            self._pi_optimizer.zero_grad()
+            loss_pi, pi_info = self.compute_loss_pi(data)
+            loss_pi.backward()
+            self._pi_optimizer.step()
 
         if self._with_baseline:
             for i in range(self._train_vf_iters):
@@ -120,18 +127,18 @@ class REINFORCE(AlgorithmAbstract):
         self.logger.log_tabular('Epoch', self.epoch)
         self.logger.log_tabular('EpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', average_only=True)
-        self.logger.log_tabular('VVals', with_min_and_max=True)
         self.logger.log_tabular('LossPi', average_only=True)
         self.logger.log_tabular('DeltaLossPi', average_only=True)
         if self._with_baseline:
+            self.logger.log_tabular('VVals', with_min_and_max=True)
             self.logger.log_tabular('LossV', average_only=True)
             self.logger.log_tabular('DeltaLossV', average_only=True)
         self.logger.dump_tabular()
 
     def compute_loss_pi(self, data):
-        obs, act, adv, logp_old = data['obs'], data['act'], data['adv'], data['logp']
+        obs, mask, act, adv, logp_old = data['obs'], data['mask'], data['act'], data['adv'], data['logp']
 
-        pi, logp = self._model.policy.forward(obs, act)
+        pi, logp = self._model.policy.forward(obs, mask, act)
         loss_pi = -(logp * adv).mean()
 
         approx_kl = (logp_old - logp).mean().item()
@@ -142,5 +149,5 @@ class REINFORCE(AlgorithmAbstract):
         return loss_pi, pi_info
 
     def compute_loss_vf(self, data):
-        obs, ret = data['obs'], data['ret']
-        return ((self._model.baseline.forward(obs) - ret) ** 2).mean()
+        obs, mask, ret = data['obs'], data['mask'], data['ret']
+        return ((self._model.baseline.forward(obs, mask) - ret) ** 2).mean()

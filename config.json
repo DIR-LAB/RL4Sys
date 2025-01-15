@@ -50,13 +50,14 @@
         },
         "REINFORCE": {
             "discrete": true,
-            "with_vf": true,
+            "with_baseline": true,
             "seed": 0,
-            "traj_per_epoch": 5,
-            "gamma": 0.99,
+            "traj_per_epoch": 12,
+            "gamma": 0.98,
             "lam": 0.97,
             "pi_lr": 3e-4,
-            "vf_lr": 3e-4,
+            "vf_lr": 1e-3,
+            "train_pi_iters": 1,
             "train_vf_iters": 80
         },
         "SAC": {
