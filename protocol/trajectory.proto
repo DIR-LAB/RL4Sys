@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package rl4sys;
+
+message RL4SysAction {
+    bytes obs = 1;      // Serialized tensor data as bytes
+    bytes action = 2;   // Serialized action tensor as bytes
+    bytes mask = 3;     // Serialized mask tensor as bytes
+    int32 reward = 4;   // Reward as an integer
+    map<string, string> data = 5;  // Extra values from model.step()
+    bool done = 6;      // Indicates if this is the last action in trajectory
+    bool reward_update_flag = 7; // Indicates if the reward was updated
+}
+
+// A message containing a list of RL4SysAction objects
+message RL4SysActionList {
+    repeated RL4SysAction actions = 1; // A list of RL4SysAction objects
+}
+
+message RL4SysModel {
+    int32 code = 1; // notify if model is ready. 1 is ready, 0 is not ready, -1 error
+    bytes model = 2; // if done = 1, model should have something, else NaN
+    string error = 3; // if done = -1, this should response error message
+}
+
+message Empty {}
+
+// Define the service to send the list of RL4SysAction objects
+service RL4SysRoute {
+    rpc SendActions (RL4SysActionList) returns (ActionResponse);
+    rpc ClientPoll (Empty) returns (RL4SysModel);
+}
+
+// A message for the response
+message ActionResponse {
+    int32 code = 1; // 1 normal, 0 bad response
+    string message = 2; // Acknowledgement message
+}

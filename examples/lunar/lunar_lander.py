@@ -79,6 +79,9 @@ class LunarLanderSim(ApplicationAbstract):
             cumulative_reward = 0
             start_time = time.time()
 
+            ##TODO Debug only
+            print("---> OBS is: ", obs)
+
             # Build initial observation
             obs_tensor, mask = self.build_observation(obs)
 
