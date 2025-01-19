@@ -78,13 +78,13 @@ class ConfigLoader:
             elif algo == 'REINFORCE':
                 algorithm_params = {
                     "discrete": True,
-                    "with_vf": True,
+                    "with_vf_baseline": True,
                     "seed": 0,
-                    "traj_per_epoch": 3,
-                    "gamma": 0.95,
+                    "traj_per_epoch": 12,
+                    "gamma": 0.98,
                     "lam": 0.97,
                     "pi_lr": 3e-4,
-                    "vf_lr": 3e-4,
+                    "vf_lr": 1e-3,
                     "train_vf_iters": 80
                 }
             elif algo == 'SAC':

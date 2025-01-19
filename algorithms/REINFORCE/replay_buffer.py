@@ -15,7 +15,7 @@ class ReplayBuffer(ReplayBufferAbstract):
     for calculating the advantages of state-action pairs.
     """
 
-    def __init__(self, obs_dim, mask_dim, size, gamma=0.99, lam=0.95, with_baseline=True):
+    def __init__(self, obs_dim, mask_dim, size, gamma=0.99, lam=0.95, with_vf_baseline=True):
         super().__init__()
         self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros(combined_shape(size), dtype=np.float32)
@@ -24,12 +24,12 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.rew_buf = np.zeros(size, dtype=np.float32)
         self.ret_buf = np.zeros(size, dtype=np.float32)
         self.logp_buf = np.zeros(size, dtype=np.float32)
-        if with_baseline:
+        if with_vf_baseline:
             self.val_buf = np.zeros(size, dtype=np.float32)
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
         self.capacity = size
-        self.with_baseline = with_baseline
+        self.with_vf_baseline = with_vf_baseline
 
     def store(self, obs, act, mask, rew, val, logp):
         """
@@ -41,7 +41,7 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.mask_buf[self.ptr] = mask
         self.rew_buf[self.ptr] = rew
         self.logp_buf[self.ptr] = logp
-        if self.with_baseline:
+        if self.with_vf_baseline:
             self.val_buf[self.ptr] = val
         self.ptr += 1
 
@@ -61,15 +61,20 @@ class ReplayBuffer(ReplayBufferAbstract):
         for timesteps beyond the arbitrary episode horizon (or epoch cutoff).
         """
         path_slice = slice(self.path_start_idx, self.ptr)
-        rews = np.append(self.rew_buf[path_slice], last_val)
-        vals = np.append(self.val_buf[path_slice], last_val)
 
-        # the next two lines implement GAE-Lambda advantage calculation
-        deltas = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
-        self.adv_buf[path_slice] = discount_cumsum(deltas, self.gamma * self.lam)
+        if self.with_vf_baseline:
+            rews = np.append(self.rew_buf[path_slice], last_val)
+            vals = np.append(self.val_buf[path_slice], last_val)
+            # the next two lines implement GAE-Lambda advantage calculation
+            deltas = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
+            self.adv_buf[path_slice] = discount_cumsum(deltas, self.gamma * self.lam)
 
-        # the next line computes rewards-to-go, to be targets for the value function
-        self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)[:-1]
+            # the next line computes rewards-to-go, to be targets for the value function
+            self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)[:-1]
+        else:
+            rews = self.rew_buf[path_slice]
+            self.adv_buf[path_slice] = discount_cumsum(rews, self.gamma * self.lam)
+            self.ret_buf[path_slice] = discount_cumsum(rews, self.gamma)
 
         self.path_start_idx = self.ptr
 
