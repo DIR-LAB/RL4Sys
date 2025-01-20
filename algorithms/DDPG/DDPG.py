@@ -121,29 +121,27 @@ class DDPG(AlgorithmAbstract):
     def train_model(self) -> None:
         """Train model on data from DDPG replay_buffer.
         """
-        data, batch = self._replay_buffer.get(self._batch_size)
-
-        q_l_old = self.compute_loss_q(data)[0]
-        pi_l_old = self.compute_loss_pi(data)
 
         for i in range(self._train_iters):
-            self._q_optimizer.zero_grad()
-            loss_q, q_target = self.compute_loss_q(data)
-            loss_q.backward()
-            self._q_optimizer.step()
+            data, batch = self._replay_buffer.get(self._batch_size)
 
-            for param in self._model.q_critic.parameters():
-                param.requires_grad = False
+            with torch.no_grad():
+                q_l_old = self.compute_loss_q(data)[0].item()
+                pi_l_old = self.compute_loss_pi(data)
 
             self._pi_optimizer.zero_grad()
             loss_pi = self.compute_loss_pi(data)
             loss_pi.backward()
             self._pi_optimizer.step()
 
-            for param in self._model.q_critic.parameters():
-                param.requires_grad = True
+            self._q_optimizer.zero_grad()
+            loss_q, q_target = self.compute_loss_q(data)
+            loss_q.backward()
+            self._q_optimizer.step()
+
 
             self.total_steps += 1
+
             if self.total_steps % self._target_update_freq == 0:
                 with torch.no_grad():
                     # update q network
@@ -153,9 +151,12 @@ class DDPG(AlgorithmAbstract):
                     for param, target_param in zip(self._model.actor.parameters(), self._target_model.actor.parameters()):
                         target_param.data.copy_(self._polyak * param.data + (1 - self._polyak) * target_param.data)
 
+        loss_pi = loss_pi.item()
+        loss_q = loss_q.item()
+
         self.logger.store(StopIter=i)
-        self.logger.store(QTargets=q_target, LossQ=loss_q, LossPi=loss_pi, DeltaLossQ=(loss_q - q_l_old),
-                          DeltaLossPi=(loss_pi - pi_l_old))
+        self.logger.store(QTargets=q_target, LossQ=loss_q, LossPi=loss_pi, DeltaLossQ=abs(loss_q - q_l_old),
+                          DeltaLossPi=abs(loss_pi - pi_l_old))
 
     def log_epoch(self) -> None:
         """Log the information collected in logger over the course of the last epoch

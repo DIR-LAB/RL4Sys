@@ -36,14 +36,15 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class LunarLanderSim(ApplicationAbstract):
-    def __init__(self, seed, model=None, performance_metric=0, render_game=False):
+    def __init__(self, seed, model=None, performance_metric=0, render_game=False, continuous_actions=True):
         super().__init__()
         self._seed = seed
         self._performance_metric = performance_metric
         self._render_game = render_game
+        self._continuous_actions = continuous_actions
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3')
+        self.env = gym.make('LunarLander-v3', continuous=continuous_actions)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -91,11 +92,15 @@ class LunarLanderSim(ApplicationAbstract):
                 action, data = self.rlagent.request_for_action(obs_tensor, mask, cumulative_reward)
 
                 # Ensure action is compatible
-                if isinstance(action, torch.Tensor):
-                    action = action.item()
-                elif isinstance(action, np.ndarray):
-                    action = action[0]
-                action = int(action)
+                if not self._continuous_actions:
+                    if isinstance(action, torch.Tensor):
+                        action = action.item()
+                    elif isinstance(action, np.ndarray):
+                        action = action[0]
+                    action = int(action)
+                else:
+                    if isinstance(action, torch.Tensor):
+                        action = action.numpy()[0]
 
                 # Step the environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
@@ -113,7 +118,6 @@ class LunarLanderSim(ApplicationAbstract):
                 self.simulator_stats['action_rewards'].append(reward)
 
                 obs_tensor = next_obs_tensor  # Update current observation
-
                 
                 if rl_runs >= MOVE_SEQUENCE_SIZE:
                     # Flag last action
@@ -230,6 +234,8 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard', type=bool, default=True,
                         help='enable tensorboard logging for training observations and insights.\n' +
                              'Make sure to properly configure tensorboard parameters in config.json before running.')
+    parser.add_argument('--continuous_actions', type=bool, default=True,
+                        help='True: continuous action domain, False: discrete action domain')
     parser.add_argument('--seed', type=int, default=1,
                         help='seed for random number generation in environment')
     parser.add_argument('--score-type', type=int, default=0,
@@ -239,7 +245,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DDPG',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -265,7 +271,7 @@ if __name__ == '__main__':
     # create simulation environment
     lunar_lander_game = LunarLanderSim(args.seed, model=model_arg,
                                        performance_metric=args.score_type,
-                                       render_game=args.render)
+                                       render_game=args.render, continuous_actions=args.continuous_actions)
 
     # run simulation
     print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations...")
