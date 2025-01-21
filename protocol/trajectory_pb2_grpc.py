@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import trajectory_pb2 as trajectory__pb2
+from . import trajectory_pb2 as trajectory__pb2
 
 GRPC_GENERATED_VERSION = '1.69.0'
 GRPC_VERSION = grpc.__version__

@@ -14,9 +14,9 @@ from copy import deepcopy
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
-from trajectory import RL4SysTrajectory
+from protocol.trajectory import RL4SysTrajectory
 
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json SAC algorithm configurations and applies them to
 the current instance.
 

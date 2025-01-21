@@ -12,8 +12,8 @@ import torch
 
 import re
 
-from agent import RL4SysAgent
-from training_server import TrainingServer
+from client.agent import RL4SysAgent
+from server.training_server import TrainingServer
 
 """
 Environment script: Batch Job Scheduling

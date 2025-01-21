@@ -1,8 +1,8 @@
 from _common._rl4sys.BaseTrajectory import RL4SysTrajectoryAbstract, send_trajectory
 
-from action import RL4SysAction
+from protocol.action import RL4SysAction
 
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 
 import zmq
 import threading

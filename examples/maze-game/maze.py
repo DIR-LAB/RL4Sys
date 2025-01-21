@@ -13,8 +13,8 @@ import torch
 
 import pygame
 
-from agent import RL4SysAgent
-from training_server import TrainingServer
+from client.agent import RL4SysAgent
+from server.training_server import TrainingServer
 
 from utils.plot import get_newest_dataset
 

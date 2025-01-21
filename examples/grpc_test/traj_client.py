@@ -1,18 +1,35 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 import grpc
-import trajectory_pb2
-import trajectory_pb2_grpc
+from protocol import trajectory_pb2
+from protocol import trajectory_pb2_grpc
 import io
 import torch
 import time
+from utils.util import serialize_tensor
+
 
 # Helper function to simulate creating a trajectory
 def create_trajectory():
+    # Generate real tensors
+    obs_tensor = torch.randn(8,)  # Example: A 3x3 tensor
+    action_tensor = torch.tensor(1)  # Example: A scalar tensor representing an action
+    mask_tensor = torch.zeros(8,)  # Example: A 1D tensor of size 3
+
+    # Serialize tensors to bytes
+    serialized_obs = serialize_tensor(obs_tensor)
+    serialized_action = serialize_tensor(action_tensor)
+    serialized_mask = serialize_tensor(mask_tensor)
+
+    # Return a Protobuf RL4SysAction object with serialized tensors
     return trajectory_pb2.RL4SysAction(
-        obs=b"dummy_obs",  # Placeholder for serialized tensor
-        action=b"dummy_action",  # Placeholder for serialized tensor
-        mask=b"dummy_mask",  # Placeholder for serialized tensor
-        reward=10,
-        data={"key": "value"},
+        obs=serialized_obs,
+        action=serialized_action,
+        mask=serialized_mask,
+        reward=10,  # Example reward
+        data={"key": "value"},  # Example metadata
         done=False,
         reward_update_flag=False,
     )
@@ -24,12 +41,20 @@ def run():
         # Create and send trajectories
         actions = [create_trajectory() for _ in range(5)]  # Simulate 5 actions
         trajectory = trajectory_pb2.RL4SysActionList(actions=actions)
-        response = stub.SendActions(trajectory)
+        try:
+            response = stub.SendActions(trajectory)
+        except grpc.RpcError as e:
+            print(f"Error while sending actions to the server: {e.details()}")
+            return
         print(f"Server response: {response.code}, {response.message}")
 
         # Poll for model readiness
         while True:
-            poll_response = stub.ClientPoll(trajectory_pb2.Empty())
+            try:
+                poll_response = stub.ClientPoll(trajectory_pb2.Empty())
+            except grpc.RpcError as e:
+                print(f"Error while polling the server: {e.details()}")
+                break
             if poll_response.code == 1:
                 print("Model is ready!")
                 # Deserialize the model

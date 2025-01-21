@@ -4,7 +4,7 @@ import json
 
 class ConfigLoader:
     def __init__(self, config_path=None, algorithm=None):
-        self.config_path = config_path or os.path.join(os.path.dirname(__file__), 'config.json')
+        self.config_path = config_path or os.path.join(os.path.dirname(__file__), '..', 'config.json')
         self.config = self.load_config()
 
         self.algorithm_params = self.get_algorithm_params(algorithm) if algorithm is not None else None

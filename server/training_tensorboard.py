@@ -9,7 +9,7 @@ import os
 import json
 
 import pandas as pd
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 
 """ Import and load RL4Sys/config.json asynchronous tensorboard parameters and applies them to
 the current instance.

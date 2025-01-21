@@ -7,13 +7,13 @@ import time
 import torch
 from numpy import ndarray
 
-from trajectory import RL4SysTrajectory
-from action import RL4SysAction
+from protocol.trajectory import RL4SysTrajectory
+from protocol.action import RL4SysAction
 
 import zmq
 import threading
 
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 
 
 """Import and load RL4Sys/config.json server configurations and applies them to
