@@ -24,7 +24,7 @@ class ConfigLoader:
             return {}
 
     def get_algorithm_params(self, algo: str):
-        available_algorithms = ['C51', 'DQN', 'PPO', 'SAC']
+        available_algorithms = ['C51', 'DQN', 'PPO', 'REINFORCE', 'SAC']
         if algo is None or algo not in available_algorithms:
             return None
         try:
@@ -74,6 +74,18 @@ class ConfigLoader:
                     "train_pi_iters": 80,
                     "train_v_iters": 80,
                     "target_kl": 0.01,
+                }
+            elif algo == 'REINFORCE':
+                algorithm_params = {
+                    "discrete": True,
+                    "with_vf_baseline": True,
+                    "seed": 0,
+                    "traj_per_epoch": 12,
+                    "gamma": 0.98,
+                    "lam": 0.97,
+                    "pi_lr": 3e-4,
+                    "vf_lr": 1e-3,
+                    "train_vf_iters": 80
                 }
             elif algo == 'SAC':
                 algorithm_params = {

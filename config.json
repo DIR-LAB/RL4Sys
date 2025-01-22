@@ -48,6 +48,17 @@
             "train_v_iters": 40,
             "target_kl": 0.01
         },
+        "REINFORCE": {
+            "discrete": true,
+            "with_vf_baseline": false,
+            "seed": 0,
+            "traj_per_epoch": 12,
+            "gamma": 0.98,
+            "lam": 0.97,
+            "pi_lr": 3e-4,
+            "vf_lr": 1e-3,
+            "train_vf_iters": 80
+        },
         "SAC": {
             "discrete": true,
             "adaptive_alpha": false,
