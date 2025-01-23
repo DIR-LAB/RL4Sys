@@ -55,7 +55,7 @@ class REINFORCE(AlgorithmAbstract):
         # set up logger
         log_data_dir = os.path.join(env_dir, './logs/')
         logger_kwargs = setup_logger_kwargs(
-            "rl4sys-reinforce-info", seed=seed, data_dir=log_data_dir)
+            "rl4sys-reinforce-vf-info" if with_vf_baseline else "rl4sys-reinforce-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
 
@@ -131,6 +131,8 @@ class REINFORCE(AlgorithmAbstract):
             self.logger.log_tabular('VVals', with_min_and_max=True)
             self.logger.log_tabular('LossV', average_only=True)
             self.logger.log_tabular('DeltaLossV', average_only=True)
+        self.logger.log_tabular('KL', average_only=True)
+        self.logger.log_tabular('Entropy', average_only=True)
         self.logger.dump_tabular()
 
     def compute_loss_pi(self, data):

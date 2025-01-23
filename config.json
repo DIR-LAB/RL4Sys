@@ -50,14 +50,14 @@
         },
         "REINFORCE": {
             "discrete": true,
-            "with_vf_baseline": false,
+            "with_vf_baseline": true,
             "seed": 0,
             "traj_per_epoch": 12,
             "gamma": 0.98,
             "lam": 0.97,
             "pi_lr": 3e-4,
             "vf_lr": 1e-3,
-            "train_vf_iters": 80
+            "train_vf_iters": 100
         },
         "SAC": {
             "discrete": true,
@@ -94,17 +94,17 @@
         "training_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5556" 
+            "port": ":5557"
         },
         "trajectory_server": {
             "prefix": "tcp://",
             "host": "localhost",
-            "port": ":5555"
+            "port": ":5556"
         }
     },
     "tensorboard": {
         "tensorboard_writer": {
-          "scalar_tags": "AverageEpRet",
+          "scalar_tags": "AverageEpRet;LossPi;LossV",
           "max_count_per_scalar": 10000,
           "global_step_tag": "Epoch"
         }

@@ -78,7 +78,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
     def stop_listener(self):
         context = zmq.Context()
         socket = context.socket(zmq.PULL)  # REP socket for replies
-        socket.bind("tcp://127.0.0.1:5554")
+        socket.bind("tcp://127.0.0.1:5560")
         print("Listening stop signal on port 5554...")
         while True: 
             message = socket.recv_string()
