@@ -55,7 +55,7 @@ class RL4SysAgent(RL4SysAgentAbstract):
         self._lock = threading.Lock()
         self.port = training_server_port
 
-        self._listen_thread = threading.Thread(target=self._loop_for_updated_model)
+        self._listen_thread = threading.Thread(target=self._loop_for_updated_model) # handshake
         self._listen_thread.daemon = True
         self._listen_thread.start()
 

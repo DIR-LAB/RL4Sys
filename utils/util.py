@@ -1,5 +1,6 @@
 import io
 import torch
+from protocol.action import RL4SysAction
 
 
 # for gRPC transfering. Torch tensors will be conver into bytes
@@ -16,5 +17,13 @@ def deserialize_tensor(tensor_bytes):
             return torch.load(buffer, weights_only=True)
         return None
 
-
-# TBD
+def deserialize_action(action):
+    """Deserialize a Protobuf message into an RL4SysAction object."""
+    return RL4SysAction(
+        obs=deserialize_tensor(action.obs),
+        action=deserialize_tensor(action.action),
+        mask=deserialize_tensor(action.mask),
+        reward=action.reward,
+        data=dict(action.data),  # Convert Protobuf map to Python dict
+        done=action.done
+    )

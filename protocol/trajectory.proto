@@ -20,15 +20,19 @@ message RL4SysActionList {
 message RL4SysModel {
     int32 code = 1; // notify if model is ready. 1 is ready, 0 is not ready, -1 error
     bytes model = 2; // if done = 1, model should have something, else NaN
-    string error = 3; // if done = -1, this should response error message
+    int64 version = 3; // current model version, client need to update
+    string error = 4; // if done = -1, this should response error message
 }
 
-message Empty {}
+message RequestModel {
+    int32 first_time = 1; // 1 means initialize with server, 0 means already handshaked with server, server send model to client
+    int64 version = 2; // current version # of client have, if match with server, no update
+}
 
 // Define the service to send the list of RL4SysAction objects
 service RL4SysRoute {
     rpc SendActions (RL4SysActionList) returns (ActionResponse);
-    rpc ClientPoll (Empty) returns (RL4SysModel);
+    rpc ClientPoll (RequestModel) returns (RL4SysModel);
 }
 
 // A message for the response

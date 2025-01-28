@@ -3,7 +3,10 @@
 import grpc
 import warnings
 
-from . import trajectory_pb2 as trajectory__pb2
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+import trajectory_pb2 as trajectory__pb2
 
 GRPC_GENERATED_VERSION = '1.69.0'
 GRPC_VERSION = grpc.__version__
@@ -42,7 +45,7 @@ class RL4SysRouteStub(object):
                 _registered_method=True)
         self.ClientPoll = channel.unary_unary(
                 '/rl4sys.RL4SysRoute/ClientPoll',
-                request_serializer=trajectory__pb2.Empty.SerializeToString,
+                request_serializer=trajectory__pb2.RequestModel.SerializeToString,
                 response_deserializer=trajectory__pb2.RL4SysModel.FromString,
                 _registered_method=True)
 
@@ -73,7 +76,7 @@ def add_RL4SysRouteServicer_to_server(servicer, server):
             ),
             'ClientPoll': grpc.unary_unary_rpc_method_handler(
                     servicer.ClientPoll,
-                    request_deserializer=trajectory__pb2.Empty.FromString,
+                    request_deserializer=trajectory__pb2.RequestModel.FromString,
                     response_serializer=trajectory__pb2.RL4SysModel.SerializeToString,
             ),
     }
@@ -130,7 +133,7 @@ class RL4SysRoute(object):
             request,
             target,
             '/rl4sys.RL4SysRoute/ClientPoll',
-            trajectory__pb2.Empty.SerializeToString,
+            trajectory__pb2.RequestModel.SerializeToString,
             trajectory__pb2.RL4SysModel.FromString,
             options,
             channel_credentials,

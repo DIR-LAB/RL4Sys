@@ -37,18 +37,24 @@ class RL4SysActionList(_message.Message):
     def __init__(self, actions: _Optional[_Iterable[_Union[RL4SysAction, _Mapping]]] = ...) -> None: ...
 
 class RL4SysModel(_message.Message):
-    __slots__ = ("code", "model", "error")
+    __slots__ = ("code", "model", "version", "error")
     CODE_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
     code: int
     model: bytes
+    version: int
     error: str
-    def __init__(self, code: _Optional[int] = ..., model: _Optional[bytes] = ..., error: _Optional[str] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., model: _Optional[bytes] = ..., version: _Optional[int] = ..., error: _Optional[str] = ...) -> None: ...
 
-class Empty(_message.Message):
-    __slots__ = ()
-    def __init__(self) -> None: ...
+class RequestModel(_message.Message):
+    __slots__ = ("first_time", "version")
+    FIRST_TIME_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    first_time: int
+    version: int
+    def __init__(self, first_time: _Optional[int] = ..., version: _Optional[int] = ...) -> None: ...
 
 class ActionResponse(_message.Message):
     __slots__ = ("code", "message")

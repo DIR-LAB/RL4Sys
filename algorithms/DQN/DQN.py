@@ -13,6 +13,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
 from protocol.trajectory import RL4SysTrajectory
+from protocol.action import RL4SysAction
 
 from utils.conf_loader import ConfigLoader
 
@@ -130,7 +131,7 @@ class DQN(AlgorithmAbstract):
                                 ('.pth' if not filename.__contains__('.pth') else ''))
         torch.save(self._model, new_path)
 
-    def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
+    def receive_trajectory(self, trajectory: list[RL4SysAction]) -> bool:
         """Process a trajectory received by training_server.
 
         If an epoch is triggered, calls train_model().
@@ -144,7 +145,7 @@ class DQN(AlgorithmAbstract):
         self.traj += 1
         ep_ret, ep_len = 0, 0
 
-        for r4a in trajectory.actions:
+        for r4a in trajectory:
             # Process each RL4SysAction in the trajectory
             ep_ret += r4a.rew
             ep_len += 1

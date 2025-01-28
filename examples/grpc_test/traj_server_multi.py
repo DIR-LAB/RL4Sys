@@ -40,7 +40,7 @@ class ClientState:
 
 # gRPC server class to manage multiple clients
 class RL4SysRouteServicer(trajectory_pb2_grpc.RL4SysRouteServicer):
-    def __init__(self, max_clients=100, cleanup_interval=300, idle_timeout=600):
+    def __init__(self, max_clients=100, cleanup_interval=300, idle_timeout=30):
         self.clients = {}  # Dictionary to store client states
         self.max_clients = max_clients  # Maximum number of clients to retain
         self.cleanup_interval = cleanup_interval  # Time between cleanup runs (seconds)
@@ -159,17 +159,30 @@ class RL4SysRouteServicer(trajectory_pb2_grpc.RL4SysRouteServicer):
         
         client_state = self.clients[client_id]
         print(f"[Client Poll] Received poll request from client {client_id}...")
-        with client_state.lock:
-            if client_state.model_ready == 1:
-                print(f"[Client Poll] Model is ready for client {client_id}. Sending model.")
-                model_data = client_state.trained_model
-                return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
-            elif client_state.model_ready == -1:
-                print(f"[Client Poll] Error for client {client_id}: {client_state.error_message}")
-                return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=client_state.error_message)
-            else:
-                print(f"[Client Poll] Model is still training for client {client_id}.")
+        done = False
+        timeout = 0
+        while not done:
+            if timeout >= self.idle_timeout:
                 return trajectory_pb2.RL4SysModel(code=0, model=b"", error="Model is still training.")
+
+
+            with client_state.lock:
+                # Initial handshake
+                if request.first_time == 1:
+                    print(f"Client model version {request.version}, Server model version ") # TODO model need to have version scheme
+                    print(f"[Client Poll] Handshake initiated by client {client_id}.")
+                    return trajectory_pb2.RL4SysModel(code=1, model=b"", version=0, error="Handshake successful.")
+
+                if client_state.model_ready == 1:
+                    print(f"[Client Poll] Model is ready for client {client_id}. Sending model.")
+                    model_data = client_state.trained_model
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+                elif client_state.model_ready == -1:
+                    print(f"[Client Poll] Error for client {client_id}: {client_state.error_message}")
+                    return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=client_state.error_message)
+            
+            time.sleep(1)
+            timeout += 1
 
 
 # Server startup function

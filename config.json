@@ -78,8 +78,8 @@
     "model_paths": {
         "_comment1": "Model paths are relative to root directory.",
         "_comment2": "save and load share the same path (in all likelihood).",
-        "load_model": "examples/maze-game/model.pth",
-        "save_model": "examples/maze-game/model.pth"
+        "load_model": "models/",
+        "save_model": "models/"
     },
     "server": {
         "training_server": {
