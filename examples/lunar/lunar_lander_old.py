@@ -14,9 +14,8 @@ import torch
 import gymnasium as gym
 import gymnasium.spaces
 
-import threading
 from client.agent import RL4SysAgent
-from server.training_server import start_training_server
+from server.training_server import TrainingServer
 
 from utils.plot import get_newest_dataset
 
@@ -250,43 +249,27 @@ if __name__ == '__main__':
                         help='render the Lunar Lander environment')
     args, extras = parser.parse_known_args()
 
-    # If user wants to run a local gRPC server for training:
-    if args.algorithm != 'NoServer':
-        # example: append the buffer size for your DQN or PPO, etc.
+    # start training server
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    if args.algorithm != 'No Server':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
+        rl_training_server = TrainingServer(algorithm_name=args.algorithm, 
+                                            input_size=INPUT_DIM, 
+                                            action_dim=ACT_DIM, 
+                                            hyperparams=extras, 
+                                            env_dir=app_dir, 
+                                            tensorboard=args.tensorboard)
+        print('[lunar_lander.py] Created Training Server')
 
-        def run_server():
-            # This blocks internally on server.wait_for_termination(),
-            # so we run it in a thread.
-            start_training_server(
-                algorithm_name=args.algorithm,
-                input_size=INPUT_DIM,
-                action_dim=ACT_DIM,
-                hyperparams=extras,
-                env_dir=os.path.dirname(os.path.abspath(__file__)),
-                tensorboard=args.tensorboard
-            )
+    # load model if applicable
+    model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
 
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-        
-    # TODO
-    time.sleep(1)
+    # create simulation environment
+    lunar_lander_game = LunarLanderSim(args.seed, model=model_arg,
+                                       performance_metric=args.score_type,
+                                       render_game=args.render)
 
-    # Load a model if specified
-    model_arg = None
-    if args.model_path:
-        model_arg = torch.load(args.model_path, map_location=torch.device('cpu'))
-
-    # Create the simulation environment with the agent
-    lunar_lander_game = LunarLanderSim(
-        seed=args.seed,
-        model=model_arg,
-        performance_metric=args.score_type,
-        render_game=args.render
-    )
-
-    print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations with up to {args.number_of_moves} moves each.")
-    lunar_lander_game.run_application(num_iterations=args.number_of_iterations,
-                                      num_moves=args.number_of_moves)
+    # run simulation
+    print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations...")
+    lunar_lander_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves)

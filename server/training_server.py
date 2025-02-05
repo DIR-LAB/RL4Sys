@@ -14,7 +14,7 @@ from typing import NoReturn as Never
 
 from server.training_tensorboard import TensorboardWriter
 from utils.conf_loader import ConfigLoader
-from utils.util import deserialize_action
+from utils.util import deserialize_action, serialize_model
 
 import time
 import grpc
@@ -49,8 +49,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
     """
     def __init__(self, algorithm_name: str, input_size: int, action_dim: int, hyperparams: Union[dict | list[str]],
                  env_dir: str = os.getcwd(), tensorboard: bool = False, seed = 0):
-        super().__init__(algorithm_name, input_size==input_size, hyperparams=hyperparams,
-                         env_dir=env_dir)
+        # super().__init__(algorithm_name, input_size==input_size, hyperparams=hyperparams, env_dir=env_dir)
 
         # get algorithm class
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
@@ -100,20 +99,8 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         if tensorboard:
             self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
 
-        # add a trajectory buffer to asynchronizly store trajs and then dispatch to agent
-        self.server_traj_buffer = [] # queue, FIFO
-
-        # send the initial model in a different thread so we can start listener immediately
         print("[TrainingServer] Finish Initilizating, Sending the model...")
-        self.initial_send_thread = threading.Thread(target=self.send_model)
-        self.initial_send_thread.daemon = True
-        self.initial_send_thread.start()
 
-        # start listener in a seperate thread
-        self._loop_thread_stop_signal = threading.Event()
-        self.loop_thread = threading.Thread(target=self.start_loop)
-        self.loop_thread.daemon = True
-        self.loop_thread.start()
 
     def save_model(self, model_data):
         """Save model to persistent storage."""
@@ -128,18 +115,49 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
 
     def SendActions(self, request, context):
-        """Client use this service to send trajectories and server use this to receive
-        It is client's job to make sure send enough trajectories to sever for training"""
+        """
+        Client uses this gRPC method to send trajectories; the server starts training.
+        """
+        # Validate batch size
         if len(request.actions) <= hyperparam_server['batch_size']:
-            return trajectory_pb2.ActionResponse(code=0, message=f"Not enough trajectory for training, at least send {hyperparam_server['batch_size']} trajectories.")
+            return trajectory_pb2.ActionResponse(
+                code=0,
+                message=f"Not enough trajectory for training, need at least {hyperparam_server['batch_size']} actions."
+            )
+        
         print(f"Received {len(request.actions)} actions for training from client.")
 
-        actions = self._see_actions(request.actions)
+        # Convert proto actions to your local RL4SysAction
+        actions = self._get_actions(request.actions)
 
-        # clean model_ready before start 
+        # 1) Clear out any previous model signals
         self.model_ready = 0
-        response = threading.Thread(target=self._algorithm.receive_trajectory, args=(actions)).start() # start training
-        return trajectory_pb2.ActionResponse(code=1, message=f"Training started successfully for client.")
+        self.trained_model = None
+
+        # 2) Start a background thread to do the training
+        def training_worker():
+            updated = self._algorithm.receive_trajectory(actions)
+            # 'updated' is a boolean indicating if training actually happened
+            if updated:
+                # If we have a new trained model, store it so that ClientPoll can pick it up
+                self.model_ready = 0  # in case the actual training is not instant
+
+                # Either serialize directly to memory, or use self._algorithm.save(...)
+                # Example: direct in-memory approach:
+                self.trained_model = self._algorithm._model
+
+                # Now we indicate the model is good to go
+                self.model_ready = 1
+            else:
+                # If no epoch triggered, no new model
+                self.model_ready = 0
+
+        # Launch the worker
+        thread = threading.Thread(target=training_worker)
+        thread.daemon = True
+        thread.start()
+
+        return trajectory_pb2.ActionResponse(code=1, message="Training started successfully for client.")
 
     def ClientPoll(self, request, context):
         """
@@ -162,18 +180,20 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                 if request.first_time == 1:
                     print(f"Client model version {request.version}, Server model version ") # TODO model need to have version scheme
                     print(f"[Client Poll] Handshake initiated by client.")
-                    return trajectory_pb2.RL4SysModel(code=1, model=b"", version=0, error="Handshake successful.")
+                    model_data = serialize_model(self._algorithm._model)
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, version=0, error="Handshake successful.")
 
                 if self.model_ready == 1:
                     print(f"[Client Poll] Model is ready for client. Sending model.")
-                    model_data = self.trained_model
+                    model_data = serialize_model(self.trained_model)
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=self.error_message)
             
-            time.sleep(1) # hyper 信号亮 TODO
-            timeout += 1 
+            interval = 0.5
+            time.sleep(interval) # hyper 信号亮 TODO
+            timeout += interval
 
     def _get_actions(self, actions, verbose = False):
         """This function deserialize tensors from byte and return a list of actions"""
@@ -238,8 +258,10 @@ def start_training_server(algorithm_name: str,
     # 6. Block until the server is terminated
     server.wait_for_termination()
 
-            
 
+
+
+## --------------------------Test Script--------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="RL4Sys Training Server",

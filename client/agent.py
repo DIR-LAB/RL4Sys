@@ -1,159 +1,182 @@
-from _common._rl4sys.BaseAgent import RL4SysAgentAbstract
-
-from typing import NoReturn as Never
-
+import sys
+import os
 import time
+import threading
+import io
 
 import torch
 from numpy import ndarray
 
+import grpc
+from protocol import trajectory_pb2, trajectory_pb2_grpc
 from protocol.trajectory import RL4SysTrajectory
 from protocol.action import RL4SysAction
 
-import zmq
-import threading
-
+from utils.util import deserialize_model  # or your own full-model or state-dict deserializer
 from utils.conf_loader import ConfigLoader
 
-
-"""Import and load RL4Sys/config.json server configurations and applies them to
-the current instance.
-
-Loads defaults if config.json is unavailable or key error thrown.
-"""
 config_loader = ConfigLoader()
-train_server = config_loader.train_server
-load_model_path = config_loader.load_model_path
+TRAINING_SERVER_ADDRESS = "localhost:50051"  # or from config
+load_model_path = config_loader.load_model_path  # if you want local fallback
 
-
-class RL4SysAgent(RL4SysAgentAbstract):
-    """RL model for use in environment scripts.
-
-    Listens for updated models on the network asynchronously.
-    Updated models are saved to ./model.pth and then loaded for use.
-
-    Initialization will not complete until a model is received over the network.
-
-    Attributes:
-        _model (torch.nn.Module): Model to be used for inference and training.
-        _lock (threading.Lock): to be acquired anytime self._model is accessed.
-        port (int): TCP port on which to listen for updated models from training server.
-
+class RL4SysAgent:
+    """
+    Synchronous gRPC-based Agent that:
+      - Handshakes once at startup for an initial model
+      - Sends trajectories and polls once after each send
+      - No continuous background polling thread
     """
 
-    def __init__(self, model: torch.nn.Module = None, training_server_port: int = train_server['port']):
-        super().__init__(model, training_server_port)
-        if model is not None:
-            assert hasattr(model, 'step'), "Model must have a step method."
-            result = model.step(None, None)
-            assert isinstance(result, tuple), "Model step method must return a tuple."
-            assert isinstance(result[0], ndarray), ("Model step method must return a tuple with a" +
-                                                    " ndarray as the first element.")
-            assert isinstance(result[1], dict), ("Model step method must return a tuple with a" +
-                                                 " dict as the second element.")
+    def __init__(self, 
+                 model: torch.nn.Module = None, 
+                 server_address: str = TRAINING_SERVER_ADDRESS):
+        """
+        Args:
+            model: an optional PyTorch model. Must have .step(obs, mask) -> (action_ndarray, dict_info).
+            server_address: "host:port" of the gRPC training server.
+        """
+        self.server_address = server_address
+        self.channel = grpc.insecure_channel(self.server_address)
+        self.stub = trajectory_pb2_grpc.RL4SysRouteStub(self.channel)
 
         self._lock = threading.Lock()
-        self.port = training_server_port
-
-        self._listen_thread = threading.Thread(target=self._loop_for_updated_model) # handshake
-        self._listen_thread.daemon = True
-        self._listen_thread.start()
-
-        self.stop_thread = threading.Thread(target=self.stop_listener)
-        self.stop_thread.start()
-
         self._model = model
         self._current_traj = RL4SysTrajectory()
 
-        # Receive one model to initialize
-        while True:
-            if self._model is None:
-                time.sleep(1)
+        # If a model was provided, validate it
+        if self._model is not None:
+            self._validate_model(self._model)
+
+        # 1) Single handshake at init: we attempt to get an initial model
+        self.local_version = 0
+        self._handshake_for_initial_model()
+
+    def _handshake_for_initial_model(self) -> None:
+        """
+        One-time handshake with the server to see if it has an initial model.
+        If code=1 and model bytes are nonempty, we deserialize it.
+        Otherwise, we just note the version or error.
+        """
+        print("[RL4SysAgent] Handshake: requesting initial model from server...")
+        req = trajectory_pb2.RequestModel(first_time=1, version=self.local_version)
+        try:
+            resp = self.stub.ClientPoll(req)
+        except grpc.RpcError as e:
+            print(f"[RL4SysAgent] gRPC error during handshake: {e.details()}")
+            return
+
+        if resp.code == 1:
+            print("[RL4SysAgent] Handshake successful with server.")
+            self.local_version = resp.version
+            if len(resp.model) > 0:
+                with self._lock:
+                    self._model = deserialize_model(resp.model)
+                print("[RL4SysAgent] Received and loaded initial model from server.")
             else:
-                break
+                print("[RL4SysAgent] Server has no initial model yet (model bytes empty).")
+        elif resp.code == 0:
+            print("[RL4SysAgent] Server not ready yet (code=0). No initial model.")
+        else:  # code == -1 or other
+            print(f"[RL4SysAgent] Handshake error or server error: code={resp.code}, err={resp.error}")
 
-        print("[RLSysAgent] Model Initialized")
-
-    
-    def stop_listener(self):
-        context = zmq.Context()
-        socket = context.socket(zmq.PULL)  # REP socket for replies
-        socket.bind("tcp://127.0.0.1:5554")
-        print("Listening stop signal on port 5554...")
-        while True: 
-            message = socket.recv_string()
-            if message == 'stop':
-                print('Received Stop signal from server on port 5554, stop collect trajectories')
-                self._current_traj.stop_collecting = True
+    def _validate_model(self, model: torch.nn.Module) -> None:
+        """Check that the model has .step(...) returning (ndarray, dict)."""
+        assert hasattr(model, 'step'), "Model must have a .step(...) method."
+        result = model.step(None, None)
+        assert isinstance(result, tuple), "Model.step(...) must return a tuple."
+        assert isinstance(result[0], ndarray), "First element of tuple must be numpy ndarray."
+        assert isinstance(result[1], dict), "Second element of tuple must be a dict."
 
     def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> RL4SysAction:
-        """Produce action based on trained model and given observation.
-
-        Automatically records action to trajectory.
-
-        Mask should contain 1 for all actions which are able to be chosen, and 0 for disabled.
-        For example, if kernel_size is 6 but only 4 actions are available in this observation, mask unused spots:
-            [1, 1, 1, 1, 0, 0]
-
-        Args:
-            obs: flattened observation. Should have shape (kernel_size, kernel_dim).
-            mask: observation mask. Should have shape (kernel_size).
-            reward: reward of the previous action (action which led to state corresponding to obs).
-        Returns:
-            Selected action in an RL4SysAction object.
-
+        """
+        Produce an action from the current model. Stores the action in our local trajectory buffer.
         """
         with self._lock:
-            assert self._model is not None
+            if self._model is None:
+                raise RuntimeError("No model available yet!")
+            action_nd, data_dict = self._model.step(obs, mask)
 
-            a, data = self._model.step(torch.as_tensor(obs, dtype=torch.float32), mask.reshape(1, -1))
-            r4sa = RL4SysAction(obs, a, mask, -1, data, done=False)
-            self._current_traj.add_action(r4sa)
-
-            return r4sa
+        r4sa = RL4SysAction(obs, action_nd, mask, reward=-1, data=data_dict, done=False)
+        self._current_traj.add_action(r4sa)
+        return r4sa
 
     def flag_last_action(self, reward: int) -> None:
-        """Mark end of trajectory.
-
-        Triggers sending trajectory to training server.
-
-        Args:
-            reward: reward of the previous (and final) action.
-        Returns:
-            Selected action in an RL4SysAction object.
-
         """
-        r4sa = RL4SysAction(None, None, None, None, None, True)
-        r4sa.update_reward(reward)
-        self._current_traj.add_action(r4sa)  # triggers send to training server, clear local trajectory
-
-    def _loop_for_updated_model(self) -> Never:
-        """Listen on network for new model.
-
-        Asynchronous from rest of agent by running in a seperate thread.
-
+        Mark the end of the current trajectory, send it to the server, and poll for an updated model.
         """
-        context = zmq.Context()
-        socket = context.socket(zmq.PULL)
-        address = f"{train_server['prefix']}{train_server['host']}{self.port}"
-        socket.bind(address)
+        # Create terminal action
+        last_action = RL4SysAction(obs=None, action=None, mask=None, reward=None,
+                                   data=None, done=True)
+        last_action.update_reward(reward)
+        self._current_traj.add_action(last_action)
 
-        while True:
-            # Receive the bytes and write to a file
-            model_bytes = socket.recv()
-            print("[RLSysAgent - loop_for_updated_model] receives the model")
+        # 1) Send trajectory to server for training
+        self._send_trajectory_to_server()
 
-            with open(load_model_path, 'wb') as f:
-                f.write(model_bytes)
+        # 2) Poll once for a new model (server may or may not have a fresh one yet)
+        self._poll_for_model_update()
 
-            with self._lock:
-                self._model = torch.load(f"{load_model_path}", map_location=torch.device('cpu'), weights_only=False)
-                #self._model = DQN.load('examples/maze-game/model.zip')
+        # 3) Clear local trajectory
+        self._current_traj = RL4SysTrajectory()
 
-            # resume collecting trajectories
-            self._current_traj.stop_collecting = False 
+    def _send_trajectory_to_server(self) -> None:
+        """
+        Builds a gRPC ActionList message from self._current_traj and calls SendActions.
+        """
+        action_msgs = []
+        for action in self._current_traj.actions:
+            action_proto = trajectory_pb2.RL4SysAction(
+                obs=action.obs_tensor.numpy().tobytes() if action.obs_tensor is not None else b"",
+                action=action.action_tensor.tobytes() if action.action_tensor is not None else b"",
+                mask=action.mask_tensor.numpy().tobytes() if action.mask_tensor is not None else b"",
+                reward=action.reward if action.reward is not None else 0,
+                done=action.done,
+                reward_update_flag=action.reward_update_flag,
+                data={str(k): str(v) for k,v in (action.data or {}).items()}
+            )
+            action_msgs.append(action_proto)
 
-            print("[RLSysAgent - loop_for_updated_model] loaded the new model")
+        action_list = trajectory_pb2.RL4SysActionList(actions=action_msgs)
 
-        socket.close()
-        context.term()
+        try:
+            response = self.stub.SendActions(action_list)
+            if response.code == 1:
+                print(f"[RL4SysAgent] Successfully sent trajectory: {response.message}")
+            else:
+                print(f"[RL4SysAgent] Server rejected trajectory: {response.message}")
+        except grpc.RpcError as e:
+            print(f"[RL4SysAgent] gRPC error sending trajectory: {e.details()}")
+
+    def _poll_for_model_update(self) -> None:
+        """
+        Makes a single gRPC call to ClientPoll to see if the server has a new model.
+        If code=1 and we get non-empty model bytes, we load it.
+        Otherwise we do nothing further.
+        """
+        poll_req = trajectory_pb2.RequestModel(first_time=0, version=self.local_version)
+        try:
+            poll_resp = self.stub.ClientPoll(poll_req)
+        except grpc.RpcError as e:
+            print(f"[RL4SysAgent] gRPC error while polling for model: {e.details()}")
+            return
+
+        if poll_resp.code == 1:
+            # Possibly a new model or the same version
+            if len(poll_resp.model) > 0:
+                with self._lock:
+                    self._model = deserialize_model(poll_resp.model)
+                self.local_version = poll_resp.version
+                print("[RL4SysAgent] Updated local model from server (poll).")
+            else:
+                # code=1 but no new model bytes => server has no newer version
+                pass
+        elif poll_resp.code == 0:
+            # Model not ready or server is still training
+            pass
+        elif poll_resp.code == -1:
+            print(f"[RL4SysAgent] Server reported error: {poll_resp.error}")
+
+    def close(self):
+        """Cleanly close the gRPC channel if needed."""
+        self.channel.close()
+        print("[RL4SysAgent] Closed gRPC channel.")

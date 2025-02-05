@@ -1,5 +1,6 @@
 import io
 import torch
+from torch import nn
 from protocol.action import RL4SysAction
 
 
@@ -27,3 +28,25 @@ def deserialize_action(action):
         data=dict(action.data),  # Convert Protobuf map to Python dict
         done=action.done
     )
+
+def serialize_model(model: nn.Module) -> bytes:
+    """
+    Serializes the full PyTorch model object into bytes (including class structure).
+    The client must have the same class definition(s) available on load.
+    """
+    buffer = io.BytesIO()
+    # This pickles the entire model, including its class definitions (by reference)
+    torch.save(model, buffer)
+    buffer.seek(0)
+    return buffer.read()
+
+def deserialize_model(raw_bytes: bytes) -> nn.Module:
+    """
+    Deserializes the full PyTorch model from raw bytes.
+    Requires that the exact model class definition be available locally.
+    """
+    buffer = io.BytesIO(raw_bytes)
+    model = torch.load(buffer, map_location='cpu', weights_only=True)
+    return model
+
+
