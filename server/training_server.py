@@ -172,8 +172,8 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=self.error_message)
             
-            time.sleep(1)
-            timeout += 1
+            time.sleep(1) # hyper 信号亮 TODO
+            timeout += 1 
 
     def _get_actions(self, actions, verbose = False):
         """This function deserialize tensors from byte and return a list of actions"""
@@ -252,11 +252,7 @@ if __name__ == "__main__":
     )
 
     # Required arguments
-    parser.add_argument(
-        "algorithm",
-        type=str,
-        help="Name of algorithm to use, as found in RL4Sys/algorithms"
-    )
+    parser.add_argument("algorithm", type=str, help="Name of algorithm to use, as found in RL4Sys/algorithms")
     parser.add_argument(
         "--kernel_size", "--size",
         type=int,
