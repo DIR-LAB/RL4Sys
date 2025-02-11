@@ -58,14 +58,5 @@ class RL4SysTrajectory(RL4SysTrajectoryAbstract):
             for i in self.actions:
                 assert i.reward_update_flag==True, "One ore more reward for action trajectory is not set"
 
-
             # TODO refactor out to RL4SysAgent object which holds this trajectory, or allow connection information to be passed in from agent
             print(self.stop_collecting)
-            if not self.stop_collecting:
-                send_trajectory(self)
-                print("[BaseTrajectory.py - whole traj - send to Training Server]")
-
-            self.actions = [] # reset the trajectory
-            if len(self.actions) >= self.max_length:
-                print("traj too long, ignored in current implementation") # TODO handle max traj length
-

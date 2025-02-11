@@ -46,7 +46,7 @@ def deserialize_model(raw_bytes: bytes) -> nn.Module:
     Requires that the exact model class definition be available locally.
     """
     buffer = io.BytesIO(raw_bytes)
-    model = torch.load(buffer, map_location='cpu', weights_only=True)
+    model = torch.load(buffer, map_location='cpu')
     return model
 
 

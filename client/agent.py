@@ -112,6 +112,7 @@ class RL4SysAgent:
 
         # 1) Send trajectory to server for training
         self._send_trajectory_to_server()
+        print("[BaseTrajectory.py - whole traj - send to Training Server]")
 
         # 2) Poll once for a new model (server may or may not have a fresh one yet)
         self._poll_for_model_update()
@@ -125,15 +126,35 @@ class RL4SysAgent:
         """
         action_msgs = []
         for action in self._current_traj.actions:
+            # Debug print to see what we're working with
+            print(f"[Debug] Processing action:")
+            print(f"  obs: {type(action.obs)}")
+            print(f"  act: {type(action.act)}")
+            print(f"  mask: {type(action.mask)}")
+            print(f"  rew: {type(action.rew)}")
+            print(f"  done: {action.done}")
+            print(f"  reward_update_flag: {action.reward_update_flag}")
+            print(f"  data: {action.data}")
+
+
             action_proto = trajectory_pb2.RL4SysAction(
-                obs=action.obs_tensor.numpy().tobytes() if action.obs_tensor is not None else b"",
-                action=action.action_tensor.tobytes() if action.action_tensor is not None else b"",
-                mask=action.mask_tensor.numpy().tobytes() if action.mask_tensor is not None else b"",
-                reward=action.reward if action.reward is not None else 0,
-                done=action.done,
-                reward_update_flag=action.reward_update_flag,
-                data={str(k): str(v) for k,v in (action.data or {}).items()}
+                obs=action.obs.numpy().tobytes() if action.obs is not None else b"",
+                action=action.act.to_bytes(4, byteorder='big', signed=True) if action.act is not None else b"",
+                mask=action.mask.numpy().tobytes() if action.mask is not None else b"",
+                reward=int(action.rew) if action.rew is not None else 0,
+                done=action.done if type(action.done) != None else False,
+                reward_update_flag=action.reward_update_flag if type(action.reward_update_flag) != None else False,
+                data={str(k): str(v) for k,v in (action.data or {}).items()} if action.data is not None else {}
             )
+            print(action_proto.obs)
+            print(action_proto.action)
+            print(action_proto.mask)
+            print(action_proto.reward)
+            print(action_proto.done)
+            print(action_proto.reward_update_flag)
+            print(action_proto.data)
+
+
             action_msgs.append(action_proto)
 
         action_list = trajectory_pb2.RL4SysActionList(actions=action_msgs)
