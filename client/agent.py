@@ -138,13 +138,13 @@ class RL4SysAgent:
 
 
             action_proto = trajectory_pb2.RL4SysAction(
-                obs=action.obs.numpy().tobytes() if action.obs is not None else b"",
-                action=action.act.to_bytes(4, byteorder='big', signed=True) if action.act is not None else b"",
-                mask=action.mask.numpy().tobytes() if action.mask is not None else b"",
+                obs=action.obs.numpy().tobytes() if action.obs is not None else b"None",
+                action=action.act.to_bytes(4, byteorder='big', signed=True) if action.act is not None else b"None",
+                mask=action.mask.numpy().tobytes() if action.mask is not None else b"None",
                 reward=int(action.rew) if action.rew is not None else 0,
                 done=action.done if type(action.done) != None else False,
                 reward_update_flag=action.reward_update_flag if type(action.reward_update_flag) != None else False,
-                data={str(k): str(v) for k,v in (action.data or {}).items()} if action.data is not None else {}
+                data={str(k): str(v) for k,v in (action.data or {}).items()} if action.data is not None else {"none":"none"}
             )
             print(action_proto.obs)
             print(action_proto.action)
@@ -158,6 +158,7 @@ class RL4SysAgent:
             action_msgs.append(action_proto)
 
         action_list = trajectory_pb2.RL4SysActionList(actions=action_msgs)
+        print(action_list)
 
         try:
             response = self.stub.SendActions(action_list)
