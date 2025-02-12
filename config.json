@@ -26,16 +26,16 @@
         "DQN": {
             "batch_size": 64,
             "seed": 0,
-            "traj_per_epoch": 64,
+            "traj_per_epoch": 4,
             "gamma": 0.99,
             "epsilon": 1.0,
             "epsilon_min": 0.01,
             "epsilon_decay": 5e-4,
             "tau": 1e-3,
             "train_update_freq": 1,
-            "q_lr": 1e-3,
-            "train_q_iters": 10,
-            "target_net_update_frequency": 100
+            "q_lr": 15e-4,
+            "train_q_iters": 5,
+            "target_net_update_frequency": 50
         },
         "PPO": {
             "batch_size": 12,

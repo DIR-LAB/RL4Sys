@@ -157,7 +157,7 @@ class DQN(AlgorithmAbstract):
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
 
         # get enough trajectories for training the model
-        if self.traj > 0:
+        if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             self.epoch += 1
             
             updated = self.train_model()
@@ -194,7 +194,8 @@ class DQN(AlgorithmAbstract):
             
             # Update target network periodically
             if self.total_steps % self.target_update_freq == 0:
-                self.soft_update()
+                #self.soft_update()
+                self.q_target.load_state_dict(self._model.state_dict())
 
         self.logger.store(StopIter=i)
         self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
