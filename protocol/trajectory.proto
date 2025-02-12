@@ -7,7 +7,7 @@ message RL4SysAction {
     bytes action = 2;   // Serialized action tensor as bytes
     bytes mask = 3;     // Serialized mask tensor as bytes
     int32 reward = 4;   // Reward as an integer
-    map<string, string> data = 5;  // Extra values from model.step()
+    map<string, bytes> data = 5;  // Changed from string to bytes to handle arrays
     bool done = 6;      // Indicates if this is the last action in trajectory
     bool reward_update_flag = 7; // Indicates if the reward was updated
 }

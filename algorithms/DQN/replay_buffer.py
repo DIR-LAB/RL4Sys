@@ -19,6 +19,7 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.ret_buf = np.zeros(buf_size, dtype=np.float32)
         self.q_val_buf = np.zeros(buf_size, dtype=np.float32)
+        self.done_buf = np.zeros(buf_size, dtype=np.bool_)  # or np.float32
         self.gamma, self.epsilon = gamma, epsilon
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
@@ -60,15 +61,15 @@ class ReplayBuffer(ReplayBufferAbstract):
             if self.ptr > 0:
                 self.next_obs_buf[last_idx - 1] = obs
     """
-    def store(self, obs, act, mask, rew, q_val):
-        # Use the same index for both obs and next_obs
-        idx = self.ptr % self.max_size  # or whatever indexing logic you like
-
+    def store(self, obs, act, mask, rew, q_val, done):
+        idx = self.ptr % self.max_size
         self.obs_buf[idx] = obs
         self.act_buf[idx] = act
         self.mask_buf[idx] = mask
         self.rew_buf[idx] = rew
-        self.q_val_buf[idx] = np.max(q_val)
+        self.done_buf[idx] = done
+        self.q_val_buf[idx] = q_val[act]
+
         if self.ptr > 0:
             self.next_obs_buf[idx - 1] = obs
 
@@ -108,6 +109,6 @@ class ReplayBuffer(ReplayBufferAbstract):
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     mask=self.mask_buf[batch], rew=self.rew_buf[batch], ret=self.ret_buf[batch],
-                    q_val=self.q_val_buf[batch])
+                    q_val=self.q_val_buf[batch], done=self.done_buf[batch])
 
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}, batch

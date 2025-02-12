@@ -65,14 +65,16 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
         Returns:
 
         """
+        # Get Q-values first, regardless of exploration
+        with torch.no_grad():
+            q = self.forward(obs, mask)
+        
         if np.random.rand() <= self._epsilon:
-            with torch.no_grad():
-                q = self.forward(obs, mask)
-            a = np.random.choice(self.act_dim)
+            # Random action
+            a = np.random.randint(self.act_dim)  # Changed from choice to randint
         else:
-            with torch.no_grad():
-                q = self.forward(obs, mask)
-                a = q.argmax().item()
+            # Greedy action
+            a = q.argmax().item()
 
         data = {'q_val': q.detach().numpy(), 'epsilon': self._epsilon}
         self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)

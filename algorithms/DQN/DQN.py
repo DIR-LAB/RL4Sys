@@ -150,62 +150,57 @@ class DQN(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'], r4a.done)
                 self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
 
         # get enough trajectories for training the model
-        if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
+        if self.traj > 0:
             self.epoch += 1
-            # TODO send client a signal to tell client ingore all trajectory collected. Resume after client model update
-            self.client_stop_collect_traj('stop')
-
-            self.train_model()
+            
+            updated = self.train_model()
             self.log_epoch()
-            return True
+
+            if updated:
+                return True
+            else:
+                return False
 
         return False
 
-    def client_stop_collect_traj(self, msg):
-        """
-        msg = "stop" means stop collecting staled traj during model training
-        """
-        context = zmq.Context()
-        socket = context.socket(zmq.PUSH)  # REP socket for replies
-        socket.connect("tcp://127.0.0.1:5554") # TODO fix after
-        print("Server told Client stop collecting on port 5554")
-        socket.send_string(msg)
 
-        socket.close()
-        context.term()
+    def train_model(self) -> bool:
+        """Train model on data from DQN replay_buffer."""
+        # Skip training if buffer doesn't have enough samples
+        if self._replay_buffer.ptr < self._batch_size:
+            return False
 
-    def train_model(self) -> None:
-        """Train model on data from DQN replay_buffer.
-        """
         data, batch = self._replay_buffer.get(self._batch_size)
-
         q_l_old = self.compute_loss_q(data)[0]
         q_l_old = q_l_old.item()
 
-        # Train Q network for n iterations of gradient descent
+        # Train Q network
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
             loss_q, q_target = self.compute_loss_q(data)
             loss_q.backward()
+            # Gradient clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(self._model.parameters(), 1.0) # TODO: check if this is needed
             self._q_optimizer.step()
 
             self.total_steps += 1
             
+            # Update target network periodically
             if self.total_steps % self.target_update_freq == 0:
                 self.soft_update()
 
         self.logger.store(StopIter=i)
-
         self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
 
-        
+        return True
+
     def soft_update(self):
         """Soft update target network parameters."""
         for main_param, target_param in zip(self._model.parameters(), self.q_target.parameters()):
@@ -229,27 +224,28 @@ class DQN(AlgorithmAbstract):
         self.logger.dump_tabular()
 
     def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
-        """Compute loss for Q function.
-
-        Args:
-            data: dictionary containing batched data from replay buffer
-        Returns:
-            Loss for Q function, Q target for logging
-
-        """
+        """Compute loss for Q function."""
         mask = data['mask']
-        obs, act, rew, next_obs = data['obs'], data['act'], data['rew'], data['next_obs']
+        obs, act, rew, next_obs, done = data['obs'], data['act'], data['rew'], data['next_obs'], data['done']
 
-        # Q loss
+        # Current Q values
         q_val = self._model.forward(obs, mask)
         q_taken = q_val.gather(1, act.long().unsqueeze(-1)).squeeze(-1)
 
+        # Target Q values
         with torch.no_grad():
-            q_next_values = self.q_target(next_obs, mask) # ADDED
-            q_next_max = q_next_values.max(dim=1)[0]
-            q_targ = rew + self._gamma * q_next_max
+            # Double DQN: use online network to select action, target network to evaluate
+            next_q_val = self._model.forward(next_obs, mask)  # Use online network for action selection
+            next_actions = next_q_val.argmax(dim=1, keepdim=True)
+            
+            # Use target network to evaluate the Q-value of the selected action
+            next_q_target = self.q_target.forward(next_obs, mask)
+            next_q_value = next_q_target.gather(1, next_actions).squeeze(-1)
+            
+            # Compute target value
+            q_targ = rew + (1 - done) * self._gamma * next_q_value
 
-        # Mean Square Error (MSE) loss
-        loss_q = ((q_taken - q_targ)**2).mean()
+        # MSE loss
+        loss_q = F.mse_loss(q_taken, q_targ)
 
         return loss_q, q_targ.detach().numpy()

@@ -30,11 +30,7 @@ the current instance.
 
 Loads defaults if config.json is unavailable or key error thrown.
 """
-config_loader = ConfigLoader()
-train_server = config_loader.train_server
-traj_server = config_loader.traj_server
-save_model_path = config_loader.save_model_path
-hyperparam_server = config_loader.algorithm_params
+
 
 
 class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
@@ -55,6 +51,10 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         algorithm_module: str = ALGORITHMS_PATH + ".{}".format(algorithm_name) + ".{}".format(algorithm_name)
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)
         algorithm_class = getattr(algorithm_module, algorithm_name)
+
+        config_loader = ConfigLoader(algorithm=algorithm_name)
+        self.save_model_path = config_loader.save_model_path
+        self.hyperparam_server = config_loader.algorithm_params
         
         # if hyperparams are a list of command-line arguments, parse into a hyperparam dict
         if isinstance(hyperparams, list):
@@ -92,9 +92,12 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         self.idle_timeout = 30 # TODO do it in config loader
         self.lock = threading.Lock()
         self.model_ready = 0
-        self.trained_model_path = os.path.join(os.path.dirname(__file__), save_model_path, f"{algorithm_name}_model.pth")
+        self.trained_model_path = os.path.join(os.path.dirname(__file__), self.save_model_path, f"{algorithm_name}_model.pth")
         self.trained_model = None
         self.error_message = None
+
+        # for trajectory buffer, if trajectory is not enough, we will keep it in buffer
+        self.trajectory_buffer = []
 
         if tensorboard:
             self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
@@ -104,7 +107,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
     def save_model(self, model_data):
         """Save model to persistent storage."""
-        os.makedirs(os.path.join(os.path.dirname(__file__), save_model_path), exist_ok=True)  # Ensure the directory exists
+        os.makedirs(os.path.join(os.path.dirname(__file__), self.save_model_path), exist_ok=True)  # Ensure the directory exists
         with open(self.trained_model_path, "wb") as f:
             f.write(model_data)
 
@@ -118,11 +121,12 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         """
         Client uses this gRPC method to send trajectories; the server starts training.
         """
-        # Validate batch size
-        if len(request.actions) <= hyperparam_server['batch_size']:
+        # add trajectory to buffer and check if enough for training
+        self.trajectory_buffer.extend(request.actions)
+        if len(self.trajectory_buffer) <= self.hyperparam_server['batch_size']:
             return trajectory_pb2.ActionResponse(
                 code=0,
-                message=f"Not enough trajectory for training, need at least {hyperparam_server['batch_size']} actions."
+                message=f"Not enough trajectory for training, need at least {self.hyperparam_server['batch_size']} actions."
             )
         
         print(f"Received {len(request.actions)} actions for training from client.")
@@ -137,6 +141,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         # 2) Start a background thread to do the training
         def training_worker():
             updated = self._algorithm.receive_trajectory(actions)
+            print(f"[TrainingServer] Training worker finished. updated: {updated}")
             # 'updated' is a boolean indicating if training actually happened
             if updated:
                 # If we have a new trained model, store it so that ClientPoll can pick it up
@@ -148,9 +153,15 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
                 # Now we indicate the model is good to go
                 self.model_ready = 1
+
+                # clear trajectory buffer
+                self.trajectory_buffer = []
             else:
                 # If no epoch triggered, no new model
-                self.model_ready = 0
+                self.model_ready = -1
+                self.error_message = "No new model trained, please collect more trajectory (which shouldn't happen cause we deal with it before)."
+            
+            
 
         # Launch the worker
         thread = threading.Thread(target=training_worker)
@@ -175,6 +186,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
             if timeout >= self.idle_timeout:
                 return trajectory_pb2.RL4SysModel(code=0, model=b"", error="Model is still training.")
 
+            print(f"[Client Poll] Waiting for model update...")
             with self.lock:
                 # Initial handshake
                 if request.first_time == 1:
@@ -197,10 +209,10 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
     def _get_actions(self, actions, verbose = False):
         """This function deserialize tensors from byte and return a list of actions"""
-        actions = []
+        deserialized_actions = []  # New list for storing deserialized actions
         for action in actions:
             action = deserialize_action(action)
-            actions.append(action)
+            deserialized_actions.append(action)
 
             if verbose:
                 print("Deserialized Action Fields:")
@@ -212,7 +224,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                 print(f"  done: {action.done}")
                 print(f"  reward_update_flag: {action.reward_update_flag}")
         
-        return actions
+        return deserialized_actions
     
 def start_training_server(algorithm_name: str,
                          input_size: int,

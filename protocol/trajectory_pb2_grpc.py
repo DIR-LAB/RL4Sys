@@ -3,12 +3,9 @@
 import grpc
 import warnings
 
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-import trajectory_pb2 as trajectory__pb2
+from protocol import trajectory_pb2 as protocol_dot_trajectory__pb2
 
-GRPC_GENERATED_VERSION = '1.69.0'
+GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -21,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in trajectory_pb2_grpc.py depends on'
+        + f' but the generated code in protocol/trajectory_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -40,13 +37,13 @@ class RL4SysRouteStub(object):
         """
         self.SendActions = channel.unary_unary(
                 '/rl4sys.RL4SysRoute/SendActions',
-                request_serializer=trajectory__pb2.RL4SysActionList.SerializeToString,
-                response_deserializer=trajectory__pb2.ActionResponse.FromString,
+                request_serializer=protocol_dot_trajectory__pb2.RL4SysActionList.SerializeToString,
+                response_deserializer=protocol_dot_trajectory__pb2.ActionResponse.FromString,
                 _registered_method=True)
         self.ClientPoll = channel.unary_unary(
                 '/rl4sys.RL4SysRoute/ClientPoll',
-                request_serializer=trajectory__pb2.RequestModel.SerializeToString,
-                response_deserializer=trajectory__pb2.RL4SysModel.FromString,
+                request_serializer=protocol_dot_trajectory__pb2.RequestModel.SerializeToString,
+                response_deserializer=protocol_dot_trajectory__pb2.RL4SysModel.FromString,
                 _registered_method=True)
 
 
@@ -71,13 +68,13 @@ def add_RL4SysRouteServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SendActions': grpc.unary_unary_rpc_method_handler(
                     servicer.SendActions,
-                    request_deserializer=trajectory__pb2.RL4SysActionList.FromString,
-                    response_serializer=trajectory__pb2.ActionResponse.SerializeToString,
+                    request_deserializer=protocol_dot_trajectory__pb2.RL4SysActionList.FromString,
+                    response_serializer=protocol_dot_trajectory__pb2.ActionResponse.SerializeToString,
             ),
             'ClientPoll': grpc.unary_unary_rpc_method_handler(
                     servicer.ClientPoll,
-                    request_deserializer=trajectory__pb2.RequestModel.FromString,
-                    response_serializer=trajectory__pb2.RL4SysModel.SerializeToString,
+                    request_deserializer=protocol_dot_trajectory__pb2.RequestModel.FromString,
+                    response_serializer=protocol_dot_trajectory__pb2.RL4SysModel.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -106,8 +103,8 @@ class RL4SysRoute(object):
             request,
             target,
             '/rl4sys.RL4SysRoute/SendActions',
-            trajectory__pb2.RL4SysActionList.SerializeToString,
-            trajectory__pb2.ActionResponse.FromString,
+            protocol_dot_trajectory__pb2.RL4SysActionList.SerializeToString,
+            protocol_dot_trajectory__pb2.ActionResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -133,8 +130,8 @@ class RL4SysRoute(object):
             request,
             target,
             '/rl4sys.RL4SysRoute/ClientPoll',
-            trajectory__pb2.RequestModel.SerializeToString,
-            trajectory__pb2.RL4SysModel.FromString,
+            protocol_dot_trajectory__pb2.RequestModel.SerializeToString,
+            protocol_dot_trajectory__pb2.RL4SysModel.FromString,
             options,
             channel_credentials,
             insecure,

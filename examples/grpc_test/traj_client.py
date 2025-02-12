@@ -9,10 +9,35 @@ import io
 import torch
 import time
 from utils.util import serialize_tensor
-
+from protocol.action import RL4SysAction
 
 # Helper function to simulate creating a trajectory
 def create_trajectory():
+    dummy_action = RL4SysAction(
+        obs=torch.randn(4),  # Random observation tensor
+        action=torch.tensor(1),  # Actions 0-3 repeating
+        mask=torch.ones(4),  # All actions allowed
+        reward=1,  # Fixed reward
+        data={"key": "value"},  # Simple metadata
+        done=False  # Last action is done
+    )
+
+    serialized_obs = serialize_tensor(dummy_action.obs)
+    serialized_action = serialize_tensor(dummy_action.act)
+    serialized_mask = serialize_tensor(dummy_action.mask)
+
+    # Return a Protobuf RL4SysAction object with serialized tensors
+    action_proto = trajectory_pb2.RL4SysAction(
+        obs=serialized_obs,
+        action=serialized_action,
+        mask=serialized_mask,
+        reward=dummy_action.rew,  # Example reward
+        data=dummy_action.data,  # Example metadata
+        done=dummy_action.done,
+        reward_update_flag=True,
+    )
+
+    return action_proto
     # Generate real tensors
     obs_tensor = torch.randn(8,)  # Example: A 3x3 tensor
     action_tensor = torch.tensor(1)  # Example: A scalar tensor representing an action
@@ -51,7 +76,8 @@ def run():
         # Poll for model readiness
         while True:
             try:
-                poll_response = stub.ClientPoll(trajectory_pb2.Empty())
+                poll_request = trajectory_pb2.RequestModel(first_time=0, version=0)
+                poll_response = stub.ClientPoll(poll_request)
             except grpc.RpcError as e:
                 print(f"Error while polling the server: {e.details()}")
                 break

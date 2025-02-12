@@ -12,7 +12,7 @@ from protocol import trajectory_pb2, trajectory_pb2_grpc
 from protocol.trajectory import RL4SysTrajectory
 from protocol.action import RL4SysAction
 
-from utils.util import deserialize_model  # or your own full-model or state-dict deserializer
+from utils.util import deserialize_model, serialize_action, serialize_tensor  # or your own full-model or state-dict deserializer
 from utils.conf_loader import ConfigLoader
 
 config_loader = ConfigLoader()
@@ -111,8 +111,12 @@ class RL4SysAgent:
         self._current_traj.add_action(last_action)
 
         # 1) Send trajectory to server for training
-        self._send_trajectory_to_server()
-        print("[BaseTrajectory.py - whole traj - send to Training Server]")
+        response = self._send_trajectory_to_server()
+        print("[RL4SysAgent - whole traj - send to Training Server]")
+
+        if response == 0:
+            print("[RL4SysAgent] keep collect trajectory")
+            return
 
         # 2) Poll once for a new model (server may or may not have a fresh one yet)
         self._poll_for_model_update()
@@ -120,54 +124,30 @@ class RL4SysAgent:
         # 3) Clear local trajectory
         self._current_traj = RL4SysTrajectory()
 
-    def _send_trajectory_to_server(self) -> None:
+    def _send_trajectory_to_server(self) -> int:
         """
         Builds a gRPC ActionList message from self._current_traj and calls SendActions.
         """
         action_msgs = []
+        
+        # Comment out real action processing
         for action in self._current_traj.actions:
-            # Debug print to see what we're working with
-            print(f"[Debug] Processing action:")
-            print(f"  obs: {type(action.obs)}")
-            print(f"  act: {type(action.act)}")
-            print(f"  mask: {type(action.mask)}")
-            print(f"  rew: {type(action.rew)}")
-            print(f"  done: {action.done}")
-            print(f"  reward_update_flag: {action.reward_update_flag}")
-            print(f"  data: {action.data}")
-
-
-            action_proto = trajectory_pb2.RL4SysAction(
-                obs=action.obs.numpy().tobytes() if action.obs is not None else b"None",
-                action=action.act.to_bytes(4, byteorder='big', signed=True) if action.act is not None else b"None",
-                mask=action.mask.numpy().tobytes() if action.mask is not None else b"None",
-                reward=int(action.rew) if action.rew is not None else 0,
-                done=action.done if type(action.done) != None else False,
-                reward_update_flag=action.reward_update_flag if type(action.reward_update_flag) != None else False,
-                data={str(k): str(v) for k,v in (action.data or {}).items()} if action.data is not None else {"none":"none"}
-            )
-            print(action_proto.obs)
-            print(action_proto.action)
-            print(action_proto.mask)
-            print(action_proto.reward)
-            print(action_proto.done)
-            print(action_proto.reward_update_flag)
-            print(action_proto.data)
-
-
+            action_proto = serialize_action(action)
             action_msgs.append(action_proto)
 
         action_list = trajectory_pb2.RL4SysActionList(actions=action_msgs)
-        print(action_list)
 
         try:
             response = self.stub.SendActions(action_list)
             if response.code == 1:
                 print(f"[RL4SysAgent] Successfully sent trajectory: {response.message}")
+                return 1 # callee should wait for polling
             else:
                 print(f"[RL4SysAgent] Server rejected trajectory: {response.message}")
+                return 0 # callee shouldn't wait for polling
         except grpc.RpcError as e:
             print(f"[RL4SysAgent] gRPC error sending trajectory: {e.details()}")
+            exit()
 
     def _poll_for_model_update(self) -> None:
         """
@@ -175,6 +155,7 @@ class RL4SysAgent:
         If code=1 and we get non-empty model bytes, we load it.
         Otherwise we do nothing further.
         """
+        print("[RL4SysAgent - start polling for model update]")
         poll_req = trajectory_pb2.RequestModel(first_time=0, version=self.local_version)
         try:
             poll_resp = self.stub.ClientPoll(poll_req)

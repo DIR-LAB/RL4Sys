@@ -34,8 +34,8 @@
             "tau": 1e-3,
             "train_update_freq": 1,
             "q_lr": 1e-3,
-            "train_q_iters": 5,
-            "target_net_update_frequency": 500
+            "train_q_iters": 10,
+            "target_net_update_frequency": 100
         },
         "PPO": {
             "batch_size": 12,

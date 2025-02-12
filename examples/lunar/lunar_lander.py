@@ -271,7 +271,6 @@ if __name__ == '__main__':
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
         
-    # TODO
     time.sleep(1)
 
     # Load a model if specified
