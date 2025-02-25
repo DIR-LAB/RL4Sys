@@ -27,13 +27,11 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.q_network = nn.Sequential(
-                nn.Linear(input_size, 32),
+                nn.Linear(input_size, 64),
                 nn.ReLU(),
-                nn.Linear(32, 16),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(16, 8),
-                nn.ReLU(),
-                nn.Linear(8, act_dim)
+                nn.Linear(64, act_dim)
             )
         else:
             self.q_network = custom_network
@@ -58,25 +56,22 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
 
     def step(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
-            Select an action based on epsilon-greedy policy.
-        Args:
-            obs: current observation
-            mask: mask for current observation (unused in DQN)
-        Returns:
-
+            Select an action based on epsilon-greedy policy 
+            (but do *not* decay epsilon here).
         """
-        # Get Q-values first, regardless of exploration
+        # Get Q-values first
         with torch.no_grad():
             q = self.forward(obs, mask)
-        
+            
         if np.random.rand() <= self._epsilon:
             # Random action
-            a = np.random.randint(self.act_dim)  # Changed from choice to randint
+            a = np.random.randint(self.act_dim)
         else:
             # Greedy action
             a = q.argmax().item()
 
+        # Provide Q-values + current epsilon for logging
         data = {'q_val': q.detach().numpy(), 'epsilon': self._epsilon}
-        self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
+        self._epsilon = max(self._epsilon * self._epsilon_decay, self._epsilon_min)
 
         return a, data

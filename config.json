@@ -30,10 +30,10 @@
             "gamma": 0.99,
             "epsilon": 1.0,
             "epsilon_min": 0.01,
-            "epsilon_decay": 5e-4,
+            "epsilon_decay": 0.995,
             "tau": 1e-3,
             "train_update_freq": 1,
-            "q_lr": 15e-4,
+            "q_lr": 1e-3,
             "train_q_iters": 5,
             "target_net_update_frequency": 50
         },

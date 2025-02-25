@@ -67,7 +67,7 @@ class DQN(AlgorithmAbstract):
                  train_update_freq: float = hyperparams['train_update_freq'], 
                  q_lr: float = hyperparams['q_lr'],
                  train_q_iters: int = hyperparams['train_q_iters'],
-                 target_net_update_frequency:int = hyperparams['target_net_update_frequency']):
+                 target_net_update_frequency: int = hyperparams['target_net_update_frequency']):
 
         super().__init__()
         # seed += 10000 * os.getpid()
@@ -94,7 +94,7 @@ class DQN(AlgorithmAbstract):
         self._tau = tau
         self._train_update_freq = train_update_freq
         self._train_q_iters = train_q_iters
-        self._target_net_update_frequency = target_net_update_frequency # update target net
+        self._target_net_update_frequency = target_net_update_frequency
 
         self._replay_buffer = ReplayBuffer(input_size, act_dim, buf_size, gamma=gamma, epsilon=epsilon)
         self._model = DeepQNetwork(input_size, act_dim, self._epsilon, self._epsilon_min, self._epsilon_decay)
@@ -114,8 +114,6 @@ class DQN(AlgorithmAbstract):
         self.traj = 0
         self.epoch = 0
 
-        # ADDED: for q target network
-        self.target_update_freq = target_net_update_frequency  # how often to sync weights # 500
         self.total_steps = 0
 
     def save(self, filename: str) -> None:
@@ -172,33 +170,38 @@ class DQN(AlgorithmAbstract):
 
 
     def train_model(self) -> bool:
-        """Train model on data from DQN replay_buffer."""
-        # Skip training if buffer doesn't have enough samples
+        """
+        Train model on data from DQN replay_buffer, then do a hard update on 
+        the target net every 'target_net_update_frequency' steps, and 
+        decay epsilon as in a simple DQN.
+        """
+        # Skip if not enough samples
         if self._replay_buffer.ptr < self._batch_size:
             return False
 
         data, batch = self._replay_buffer.get(self._batch_size)
-        q_l_old = self.compute_loss_q(data)[0]
-        q_l_old = q_l_old.item()
+        q_l_old = self.compute_loss_q(data)[0].item()
 
         # Train Q network
         for i in range(self._train_q_iters):
             self._q_optimizer.zero_grad()
-            loss_q, q_target = self.compute_loss_q(data)
+            loss_q, q_target_vals = self.compute_loss_q(data)
             loss_q.backward()
-            # Gradient clipping to prevent exploding gradients
-            torch.nn.utils.clip_grad_norm_(self._model.parameters(), 1.0) # TODO: check if this is needed
+            torch.nn.utils.clip_grad_norm_(self._model.parameters(), 1.0)
             self._q_optimizer.step()
 
             self.total_steps += 1
-            
-            # Update target network periodically
-            if self.total_steps % self.target_update_freq == 0:
-                #self.soft_update()
-                self.q_target.load_state_dict(self._model.state_dict())
+
+            self.soft_update()
+
+        # Decay epsilon *after* training
+        self._epsilon = max(self._epsilon - self._epsilon_decay, self._epsilon_min)
+        self._model._epsilon = self._epsilon  # update model's internal epsilon
+        self.q_target._epsilon = self._epsilon
 
         self.logger.store(StopIter=i)
-        self.logger.store(QTargets=q_target, LossQ=loss_q.item(), DeltaLossQ=abs(loss_q.item() - q_l_old))
+        self.logger.store(QTargets=q_target_vals, LossQ=loss_q.item(),
+                          DeltaLossQ=abs(loss_q.item() - q_l_old))
 
         return True
 
@@ -224,29 +227,23 @@ class DQN(AlgorithmAbstract):
         self.logger.log_tabular('StopIter', average_only=True)
         self.logger.dump_tabular()
 
-    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
-        """Compute loss for Q function."""
+    def compute_loss_q(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, np.ndarray]:
+        """
+        Basic, single-network Q target = r + gamma * max(Q_target(next_s)) 
+        (no double DQN).
+        """
         mask = data['mask']
         obs, act, rew, next_obs, done = data['obs'], data['act'], data['rew'], data['next_obs'], data['done']
 
-        # Current Q values
-        q_val = self._model.forward(obs, mask)
+        # Current Q
+        q_val = self._model.forward(obs, mask)      # shape: [batch_size, act_dim]
         q_taken = q_val.gather(1, act.long().unsqueeze(-1)).squeeze(-1)
 
-        # Target Q values
+        # Target Q
         with torch.no_grad():
-            # Double DQN: use online network to select action, target network to evaluate
-            next_q_val = self._model.forward(next_obs, mask)  # Use online network for action selection
-            next_actions = next_q_val.argmax(dim=1, keepdim=True)
-            
-            # Use target network to evaluate the Q-value of the selected action
-            next_q_target = self.q_target.forward(next_obs, mask)
-            next_q_value = next_q_target.gather(1, next_actions).squeeze(-1)
-            
-            # Compute target value
+            next_q_val = self.q_target.forward(next_obs, mask)  # shape: [batch_size, act_dim]
+            next_q_value, _ = next_q_val.max(dim=1)             # pick max action
             q_targ = rew + (1 - done) * self._gamma * next_q_value
 
-        # MSE loss
         loss_q = F.mse_loss(q_taken, q_targ)
-
-        return loss_q, q_targ.detach().numpy()
+        return loss_q, q_targ.detach().cpu().numpy()

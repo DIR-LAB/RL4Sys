@@ -123,10 +123,12 @@ class LunarLanderSim(ApplicationAbstract):
                 if rl_runs >= MOVE_SEQUENCE_SIZE:
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                    print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
                     self.simulator_stats['moves'] = moves
                     rl_runs = 0
-                    rl_total = self.calculate_performance_return(self.simulator_stats)
-                    rew = -rl_total
+                    #rl_total = self.calculate_performance_return(self.simulator_stats)
+                    #rew = -rl_total
+                    rew = reward
                     self.simulator_stats['performance_rewards'].append(rew)
                     self.rlagent.flag_last_action(rew)
                     break
@@ -134,10 +136,12 @@ class LunarLanderSim(ApplicationAbstract):
 
                 if done:
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                    print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
                     self.simulator_stats['moves'] = moves
                     rl_runs = 0
-                    rl_total = self.calculate_performance_return(self.simulator_stats)
-                    rew = -rl_total
+                    #rl_total = self.calculate_performance_return(self.simulator_stats)
+                    #rew = -rl_total
+                    rew = reward
                     self.rlagent.flag_last_action(rew)
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
