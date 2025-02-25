@@ -70,11 +70,20 @@ class PPO(AlgorithmAbstract):
             for early stopping. (Usually small, 0.01 or 0.05.)
 
     """
-    def __init__(self, env_dir: str, input_size: int, act_dim:int, buf_size: int, seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
-                 gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
-                 pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
-                 train_pi_iters: int = hyperparams['train_pi_iters'], train_v_iters: int = hyperparams['train_v_iters'],
+    def __init__(self, env_dir: str, 
+                 input_size: int, 
+                 act_dim:int, 
+                 buf_size: int, 
+                 batch_size: int = hyperparams['batch_size'], 
+                 seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'], 
+                 clip_ratio: float = hyperparams['clip_ratio'],
+                 gamma: float = hyperparams['gamma'], 
+                 lam: float = hyperparams['lam'],
+                 pi_lr: float = hyperparams['pi_lr'], 
+                 vf_lr: float = hyperparams['vf_lr'],
+                 train_pi_iters: int = hyperparams['train_pi_iters'], 
+                 train_v_iters: int = hyperparams['train_v_iters'],
                  target_kl: float = hyperparams['target_kl']):
 
         super().__init__()
@@ -85,6 +94,7 @@ class PPO(AlgorithmAbstract):
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch
         self._clip_ratio = clip_ratio
+        self._batch_size = batch_size
         self._train_pi_iters = train_pi_iters
         self._train_v_iters = train_v_iters
         self._target_kl = target_kl
@@ -132,12 +142,12 @@ class PPO(AlgorithmAbstract):
         self.traj += 1
         ep_ret, ep_len = 0, 0
         
-        for r4a in trajectory.actions:
+        for r4a in trajectory:
             # Process each RL4SysAction in the trajectory
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['v'], r4a.data['logp_a'])
+                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['v'], r4a.data['logp_a'],r4a.done)
                 self.logger.store(VVals=r4a.data['v'])
             else:
                 self._replay_buffer.finish_path(r4a.rew)
@@ -155,8 +165,8 @@ class PPO(AlgorithmAbstract):
     def train_model(self) -> None:
         """Train model on data from replay_buffer.
         """
-        # data holds all timesteps since last epoch
-        data = self._replay_buffer.get()
+        # data holds all timesteps since last epoch 
+        data, batch = self._replay_buffer.get(self._batch_size)
 
         # calculate loss
         pi_l_old, pi_info_old = self.compute_loss_pi(data)

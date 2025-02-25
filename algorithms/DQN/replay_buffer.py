@@ -24,43 +24,7 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
-    """
-    def store(self, obs, act, mask, rew, q_val):
-        assert self.ptr <= self.max_size
-        if self.ptr < self.max_size:
-            self.obs_buf[self.ptr] = obs
-            self.act_buf[self.ptr] = act
-            self.mask_buf[self.ptr] = mask
-            self.rew_buf[self.ptr] = rew
-            self.q_val_buf[self.ptr] = q_val
-            # most accurate way to retrieve next observation, I imagine.
-            if self.ptr > 0:
-                self.next_obs_buf[self.ptr - 1] = obs
-            self.ptr += 1
-        else:
-            # Buffer is full: remove the oldest trajectory and shift everything left by one.
-            # By doing this, index 0 will always be the oldest entry, and ptr remains max_size.
 
-            # Shift all buffer contents one step to the left
-            self.obs_buf[:-1] = self.obs_buf[1:]
-            self.act_buf[:-1] = self.act_buf[1:]
-            self.mask_buf[:-1] = self.mask_buf[1:]
-            self.rew_buf[:-1] = self.rew_buf[1:]
-            self.q_val_buf[:-1] = self.q_val_buf[1:]
-            self.next_obs_buf[:-1] = self.next_obs_buf[1:]
-
-            # Insert the new trajectory at the last position
-            last_idx = self.max_size - 1
-            self.obs_buf[last_idx] = obs
-            self.act_buf[last_idx] = act
-            self.mask_buf[last_idx] = mask
-            self.rew_buf[last_idx] = rew
-            self.q_val_buf[last_idx] = q_val
-
-            # Update the next_obs for the second-to-last entry
-            if self.ptr > 0:
-                self.next_obs_buf[last_idx - 1] = obs
-    """
     def store(self, obs, act, mask, rew, q_val, done):
         idx = self.ptr % self.max_size
         self.obs_buf[idx] = obs

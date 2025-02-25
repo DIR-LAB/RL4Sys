@@ -51,13 +51,11 @@ class RLActor(ForwardKernelAbstract):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(input_size, 32),
+                nn.Linear(input_size, 64),
                 nn.ReLU(),
-                nn.Linear(32, 16),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(16, 8),
-                nn.ReLU(),
-                nn.Linear(8, act_dim)
+                nn.Linear(64, act_dim)
             )
         else:
             self.pi_network = custom_network
@@ -81,12 +79,9 @@ class RLActor(ForwardKernelAbstract):
         #print('whats flattened obs? ', flattened_obs)
         # x = flattened_obs.view(-1, self.input_size) # unclear reason for -1 dimension
         x = self.pi_network(flattened_obs)
-        #print('what is result after network?', x)
-        logits = torch.squeeze(x, -1) # each action has only one feature now
         #print('what is x now:',logits)
 
-        logits = logits + (mask-1)*1000000 # when mask value < 1 corresponding logit should be extremely low to prevent selection
-        return Categorical(logits=logits)
+        return Categorical(logits=x)
 
     def _log_prob_from_distribution(self, pi: torch.distributions.distribution.Distribution, act: torch.Tensor) -> torch.Tensor:
         """Get log of the probability for specific action in a distribution.
@@ -156,9 +151,13 @@ class RLCritic(ForwardKernelAbstract):
         super().__init__()
         self.obs_dim = obs_dim
         if custom_network is None:
-            self.layer_sizes = [obs_dim] + list(hidden_sizes) + [1]
-            self.activation = activation
-            self.v_net = mlp(self.layer_sizes, self.activation)
+            self.v_net = nn.Sequential(
+                nn.Linear(obs_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1)
+            )
         else:
             self.v_net = custom_network
 
