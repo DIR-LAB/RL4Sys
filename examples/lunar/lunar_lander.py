@@ -36,8 +36,9 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class LunarLanderSim(ApplicationAbstract):
-    def __init__(self, seed, model=None, performance_metric=0, render_game=False):
+    def __init__(self, algorithm_name, seed, model=None, performance_metric=0, render_game=False):
         super().__init__()
+        self.algorithm_name = algorithm_name
         self._seed = seed
         self._performance_metric = performance_metric
         self._render_game = render_game
@@ -53,7 +54,7 @@ class LunarLanderSim(ApplicationAbstract):
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
-        self.rlagent = RL4SysAgent(model=model)
+        self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, input_size=self.env.observation_space.shape[0], act_dim=self.env.action_space.n, model=model)
 
         # To store simulator stats
         self.simulator_stats = {
@@ -170,6 +171,7 @@ class LunarLanderSim(ApplicationAbstract):
 
         return obs_tensor, mask
 
+
     def calculate_performance_return(self, elements) -> float:
         """
         Calculate performance score based on performance metric using captured simulator elements
@@ -239,7 +241,7 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard', type=bool, default=True,
                         help='enable tensorboard logging for training observations and insights.\n' +
                              'Make sure to properly configure tensorboard parameters in config.json before running.')
-    parser.add_argument('--seed', type=int, default=42,
+    parser.add_argument('--seed', type=int, default=1,
                         help='seed for random number generation in environment')
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
@@ -248,7 +250,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -284,6 +286,7 @@ if __name__ == '__main__':
 
     # Create the simulation environment with the agent
     lunar_lander_game = LunarLanderSim(
+        algorithm_name=args.algorithm,
         seed=args.seed,
         model=model_arg,
         performance_metric=args.score_type,

@@ -22,11 +22,12 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.act_buf = np.zeros(combined_shape(buf_size), dtype=np.int32)
         self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
-        self.ret_buf = np.zeros(buf_size, dtype=np.float32)
         self.val_buf = np.zeros(buf_size, dtype=np.float32)
         self.logp_buf = np.zeros(buf_size, dtype=np.float32)
-        self.adv_buf = np.zeros(buf_size, dtype=np.float32)
         self.done_buf = np.zeros(buf_size, dtype=np.bool_)
+
+        self.ret_buf = np.zeros(buf_size, dtype=np.float32)
+        self.adv_buf = np.zeros(buf_size, dtype=np.float32)
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size

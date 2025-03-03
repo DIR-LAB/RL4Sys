@@ -1,5 +1,6 @@
 import sys
 import os
+
 import time
 import threading
 import io
@@ -15,6 +16,9 @@ from protocol.action import RL4SysAction
 from utils.util import deserialize_model, serialize_action, serialize_tensor  # or your own full-model or state-dict deserializer
 from utils.conf_loader import ConfigLoader
 
+from algorithms.PPO.kernel import RLActorCritic
+from algorithms.DQN.kernel import DeepQNetwork
+
 config_loader = ConfigLoader()
 TRAINING_SERVER_ADDRESS = "localhost:50051"  # or from config
 load_model_path = config_loader.load_model_path  # if you want local fallback
@@ -28,13 +32,17 @@ class RL4SysAgent:
     """
 
     def __init__(self, 
+                 algorithm_name: str,
                  model: torch.nn.Module = None, 
+                 input_size: int = 0,
+                 act_dim: int = 0,
                  server_address: str = TRAINING_SERVER_ADDRESS):
         """
         Args:
             model: an optional PyTorch model. Must have .step(obs, mask) -> (action_ndarray, dict_info).
             server_address: "host:port" of the gRPC training server.
         """
+        self.algorithm_name = algorithm_name
         self.server_address = server_address
         self.channel = grpc.insecure_channel(self.server_address)
         self.stub = trajectory_pb2_grpc.RL4SysRouteStub(self.channel)
@@ -42,6 +50,9 @@ class RL4SysAgent:
         self._lock = threading.Lock()
         self._model = model
         self._current_traj = RL4SysTrajectory()
+
+        self.input_size = input_size
+        self.act_dim = act_dim
 
         # If a model was provided, validate it
         if self._model is not None:
@@ -70,7 +81,14 @@ class RL4SysAgent:
             self.local_version = resp.version
             if len(resp.model) > 0:
                 with self._lock:
-                    self._model = deserialize_model(resp.model)
+                    if self.algorithm_name == "DQN":
+                        self._model = DeepQNetwork(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.q_network = deserialize_model(resp.model)
+                    elif self.algorithm_name == "PPO":
+                        self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.actor = deserialize_model(resp.model)
+                        self._model.critic = deserialize_model(resp.model_critic)
+
                 print("[RL4SysAgent] Received and loaded initial model from server.")
             else:
                 print("[RL4SysAgent] Server has no initial model yet (model bytes empty).")
@@ -94,9 +112,16 @@ class RL4SysAgent:
         with self._lock:
             if self._model is None:
                 raise RuntimeError("No model available yet!")
-            action_nd, data_dict = self._model.step(obs, mask)
+            
+            if self.algorithm_name == "DQN":
+                action_nd, data_dict = self._model.step(obs, mask=mask)
+            elif self.algorithm_name == "PPO":
+                action_nd, logp_a, _, value = self._model.step(obs, mask=mask)
+                data_dict = {}
+                data_dict['logp_a'] = logp_a.detach().numpy()
+                data_dict['v'] = value.detach().numpy()
 
-        r4sa = RL4SysAction(obs, action_nd, mask, reward=-1, data=data_dict, done=False)
+        r4sa = RL4SysAction(obs, action_nd.numpy(), mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)
         return r4sa
 
@@ -167,7 +192,14 @@ class RL4SysAgent:
             # Possibly a new model or the same version
             if len(poll_resp.model) > 0:
                 with self._lock:
-                    self._model = deserialize_model(poll_resp.model)
+                    if self.algorithm_name == "DQN":
+                        self._model = DeepQNetwork(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.q_network = deserialize_model(poll_resp.model)
+                    elif self.algorithm_name == "PPO":
+                        self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.actor = deserialize_model(poll_resp.model)
+                        self._model.critic = deserialize_model(poll_resp.model_critic)
+
                 self.local_version = poll_resp.version
                 print("[RL4SysAgent] Updated local model from server (poll).")
             else:

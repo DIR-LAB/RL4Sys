@@ -5,7 +5,7 @@ import warnings
 
 from protocol import trajectory_pb2 as protocol_dot_trajectory__pb2
 
-GRPC_GENERATED_VERSION = '1.70.0'
+GRPC_GENERATED_VERSION = '1.69.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

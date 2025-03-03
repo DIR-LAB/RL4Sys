@@ -20,8 +20,9 @@ message RL4SysActionList {
 message RL4SysModel {
     int32 code = 1; // notify if model is ready. 1 is ready, 0 is not ready, -1 error
     bytes model = 2; // if done = 1, model should have something, else NaN
-    int64 version = 3; // current model version, client need to update
-    string error = 4; // if done = -1, this should response error message
+    bytes model_critic = 3; // if done = 1, model_critic should have something for PPO and other two network algorithms
+    int64 version = 4; // current model version, client need to update
+    string error = 5; // if done = -1, this should response error message
 }
 
 message RequestModel {

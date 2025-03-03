@@ -52,6 +52,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         algorithm_module: importlib.ModuleType = importlib.import_module(algorithm_module)
         algorithm_class = getattr(algorithm_module, algorithm_name)
 
+        self.algorithm_name = algorithm_name
         config_loader = ConfigLoader(algorithm=algorithm_name)
         self.save_model_path = config_loader.save_model_path
         self.hyperparam_server = config_loader.algorithm_params
@@ -93,7 +94,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         self.lock = threading.Lock()
         self.model_ready = 0
         self.trained_model_path = os.path.join(os.path.dirname(__file__), self.save_model_path, f"{algorithm_name}_model.pth")
-        self.trained_model = None
         self.error_message = None
 
         # for trajectory buffer, if trajectory is not enough, we will keep it in buffer
@@ -136,7 +136,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
         # 1) Clear out any previous model signals
         self.model_ready = 0
-        self.trained_model = None
 
         # 2) Start a background thread to do the training
         def training_worker():
@@ -149,7 +148,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
                 # Either serialize directly to memory, or use self._algorithm.save(...)
                 # Example: direct in-memory approach:
-                self.trained_model = self._algorithm._model
 
                 # Now we indicate the model is good to go
                 self.model_ready = 1
@@ -193,18 +191,30 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     print(f"Client model version {request.version}, Server model version ") # TODO model need to have version scheme
                     print(f"[Client Poll] Handshake initiated by client.")
                     model_data = serialize_model(self._algorithm._model)
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, version=0, error="Handshake successful.")
+
+                    # add for models have two networks
+                    if self.algorithm_name == "PPO":
+                        model_critic_data = serialize_model(self._algorithm._model_train.critic)
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
+                    else:
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=None, version=0, error="Handshake successful.")
 
                 if self.model_ready == 1:
                     print(f"[Client Poll] Model is ready for client. Sending model.")
-                    model_data = serialize_model(self.trained_model)
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+                    model_data = serialize_model(self._algorithm._model)
+
+                    # add for models have two networks
+                    if self.algorithm_name == "PPO":
+                        model_critic_data = serialize_model(self._algorithm._model_train.critic)
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="")
+                    else:
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=self.error_message)
             
             interval = 0.5
-            time.sleep(interval) # hyper 信号亮 TODO
+            time.sleep(interval) # hyper TODO
             timeout += interval
 
     def _get_actions(self, actions, verbose = False):

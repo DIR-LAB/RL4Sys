@@ -6,11 +6,11 @@ import torch.distributions as distributions
 
 import matplotlib.pyplot as plt
 import numpy as np
-import gym
+import gymnasium as gym
 
 # Initialize environments
-train_env = gym.make('LunarLander-v2')
-test_env = gym.make('LunarLander-v2')
+train_env = gym.make('LunarLander-v3')
+test_env = gym.make('LunarLander-v3')
 
 # Set random seeds
 SEED = 1234

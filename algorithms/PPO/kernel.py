@@ -1,11 +1,12 @@
 from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
 
-from typing import Optional, Type
+from typing import Optional, Type, Tuple
 
 import torch
 import torch.nn as nn
 from numpy import ndarray
 from torch.distributions.categorical import Categorical
+import numpy as np
 
 """
 Network configurations for PPO
@@ -47,15 +48,15 @@ class RLActor(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, input_size: int, act_dim: int , custom_network: nn.Sequential = None):
+    def __init__(self, input_size: int, act_dim: int, custom_network: nn.Sequential = None):
         super().__init__()
         if custom_network is None:
             self.pi_network = nn.Sequential(
-                nn.Linear(input_size, 64),
-                nn.ReLU(),
-                nn.Linear(64, 64),
-                nn.ReLU(),
-                nn.Linear(64, act_dim)
+                layer_init(nn.Linear(input_size, 64)),
+                nn.Tanh(),
+                layer_init(nn.Linear(64, 64)),
+                nn.Tanh(),
+                layer_init(nn.Linear(64, act_dim), std=0.01)
             )
         else:
             self.pi_network = custom_network
@@ -119,6 +120,29 @@ class RLActor(ForwardKernelAbstract):
         
         return pi, logp_a
 
+    def step(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> tuple[np.ndarray, np.ndarray]:
+        """
+        A simple step function for inference only, returning an action and
+        its log-prob under the current actor network.
+
+        Args:
+            flattened_obs (torch.Tensor): Flattened observation of shape (kernel_size, kernel_dim).
+            mask (torch.Tensor): A mask of shape (kernel_size) indicating valid vs. invalid actions.
+
+        Returns:
+            A tuple containing:
+                - action (np.ndarray): Sampled action index.
+                - logp (np.ndarray): Log prob of the sampled action.
+        """
+        with torch.no_grad():
+            pi, _ = self.forward(flattened_obs, mask)
+            action = pi.sample()                         # sample an action
+            logp = self._log_prob_from_distribution(pi, action)  # log prob of that action
+
+        data = {'logp_a': logp.numpy()}
+
+        return action.numpy(), data
+
 
 class RLCritic(ForwardKernelAbstract):
     """Neural network of Critic.
@@ -146,17 +170,16 @@ class RLCritic(ForwardKernelAbstract):
 
     """
 
-    def __init__(self, obs_dim: int, hidden_sizes: tuple[int, int, int] = (32, 16, 8), activation: Type[nn.Module] = nn.ReLU,
-                 custom_network: nn.Sequential = None):
+    def __init__(self, obs_dim: int, custom_network: nn.Sequential = None):
         super().__init__()
         self.obs_dim = obs_dim
         if custom_network is None:
             self.v_net = nn.Sequential(
-                nn.Linear(obs_dim, 64),
-                nn.ReLU(),
-                nn.Linear(64, 64),
-                nn.ReLU(),
-                nn.Linear(64, 1)
+                layer_init(nn.Linear(obs_dim, 64)),
+                nn.Tanh(),
+                layer_init(nn.Linear(64, 64)), 
+                nn.Tanh(),
+                layer_init(nn.Linear(64, 1), std=1.0)
             )
         else:
             self.v_net = custom_network
@@ -176,76 +199,104 @@ class RLCritic(ForwardKernelAbstract):
         # Critical to ensure v has right shape.
         return torch.squeeze(self.v_net(obs), -1)
 
+    def step(self, obs: torch.Tensor, mask: torch.Tensor) -> np.ndarray:
+        """
+        A simple step function for inference only, returning the critic's value estimate.
 
-class RLActorCritic(StepKernelAbstract):
-    """PPO Actor-Critic kernel.
+        Args:
+            obs (torch.Tensor): Flattened observation of shape (kernel_size * kernel_dim).
+            mask (torch.Tensor): A mask of shape (kernel_size), not used here but kept for consistency.
+
+        Returns:
+            A numpy array (with shape (kernel_size,) if batching) representing
+            the critic's value estimate (V) for each observation in the batch.
+        """
+        with torch.no_grad():
+            v = self.forward(obs, mask)
+        return v.numpy()
+
+
+class RLActorCritic(nn.Module):
+    """
+    A single PPO Actor-Critic network, similar to CleanRL's approach.
 
     Attributes:
-        flatten_obs_dim (int): length of the observation when flattened
-        kernel_size (int): Number of actions in observation. e.g. MAX_QUEUE_SIZE
-        kernel_dim (int): Number of features. e.g. JOB_FEATURES
+        actor (nn.Sequential):   Produces action logits.
+        critic (nn.Sequential):  Produces state-value estimates.
 
-        pi (RLActor): actor neural net
-        pi (RLActor): critic neural net
-
+    Example usage:
+        agent = RLActorCritic(input_size=8, act_dim=4)
+        # Forward pass:
+        obs = torch.randn((4, 8))   # batch of 4 with obs_dim=8
+        action, log_prob, entropy, value = agent.get_action_and_value(obs)
     """
-
     def __init__(self, input_size: int, act_dim: int):
         super().__init__()
-        self.flatten_obs_dim = input_size
-        self.act_dim = act_dim
+        # Actor network
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(input_size, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, act_dim), std=0.01),
+        )
 
-        # build actor function
-        self.pi = RLActor(self.flatten_obs_dim, act_dim)
-        # build value function
-        self.v = RLCritic(self.flatten_obs_dim)
+        # Critic network
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(input_size, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 1), std=1.0),
+        )
 
-    def step(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> (tuple[ndarray, dict[str, ndarray]] |
-                                                                        tuple[Type[ndarray], Type[dict[str, ndarray]]]):
-        """Get estimate for state-value
-
-        Mask should contain 1 for all actions which are able to be chosen, and 0 for disabled.
-        For example, if kernel_size is 6 but only 4 actions are available in this observation, mask unused spots:
-            [1, 1, 1, 1, 0, 0]
+    def get_value(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the value estimate (V) for the environment's state.
 
         Args:
-            flattened_obs: a tensor of shape (kernel_size, kernel_dim) that has been flattened
-            mask: a tensor of shape (kernel_size)
+            x (torch.Tensor): Network input of shape [batch_size, input_size].
         Returns:
-            policy-chosen action
-            dict:
-                {'v'      : state-value V,
-                 'logp_a' : log probability of chosen action}
-
+            A tensor of shape [batch_size] with the value estimates.
         """
-        # TODO masks may actually be ndarray type?
-        # TODO a might just return an index. make sure that's ok
-        if flattened_obs is not None and mask is not None:
-            with torch.no_grad():
-                # actor
-                pi, _ = self.pi(flattened_obs, mask)
-                a = pi.sample()
-                logp_a = self.pi._log_prob_from_distribution(pi, a)
-                # critic
-                v = self.v(flattened_obs, mask)
-            a = a.numpy()
-            data = {'v': v.numpy(), 'logp_a': logp_a.numpy()}
-            return a, data
-        return ndarray, dict[str, ndarray]
+        return self.critic(x).squeeze(-1)
 
-    # this method appears completely unused by the training server code
-    def act(self, flattened_obs: torch.Tensor, mask: torch.Tensor) -> ndarray:
-        """Select an action according to the learned policy.
+    def step(
+        self, 
+        x: torch.Tensor, 
+        action: Optional[torch.Tensor] = None,
+        mask: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Compute action, log probability of that action, the policy's entropy,
+        and the value estimate, all in one forward pass.
 
         Args:
-            flattened_obs: a tensor of shape (kernel_size, kernel_dim) that has been flattened
-            mask: a tensor of shape (kernel_size)
+            x (torch.Tensor): [batch_size, input_size] observation tensor.
+            action (Optional[torch.Tensor]): If given, we compute log_prob
+                for that action instead of sampling.
+
         Returns:
-            Action as numpy array
+            action (torch.Tensor): Sampled or provided discrete action.
+            logprob (torch.Tensor): The log probability of that action.
+            entropy (torch.Tensor): The policy entropy for exploration measure.
+            value (torch.Tensor): Value estimate, shape [batch_size].
 
+        Example:
+            act, logp, ent, val = agent.get_action_and_value(obs)
         """
+        logits = self.actor(x)
+        probs = Categorical(logits=logits)
+        if action is None:
+            action = probs.sample()
 
-        with torch.no_grad():
-            distribution, _ = self.pi(flattened_obs, mask)[0]
-            action = distribution.sample()
-            return action.numpy()
+        return action, probs.log_prob(action), probs.entropy(), self.get_value(x)
+
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    """
+    Initialize a linear layer using orthogonal initialization, then set bias.
+    By default, std is sqrt(2) (common in orthogonal init for ReLU/Tanh).
+    """
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
