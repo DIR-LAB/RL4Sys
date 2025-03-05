@@ -132,7 +132,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         print(f"Received {len(request.actions)} actions for training from client.")
 
         # Convert proto actions to your local RL4SysAction
-        actions = self._get_actions(request.actions)
+        actions = self._get_actions(request.actions, verbose=False)
 
         # 1) Clear out any previous model signals
         self.model_ready = 0
@@ -190,28 +190,35 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                 if request.first_time == 1:
                     print(f"Client model version {request.version}, Server model version ") # TODO model need to have version scheme
                     print(f"[Client Poll] Handshake initiated by client.")
-                    model_data = serialize_model(self._algorithm._model)
 
+                    model_data = None
+                    model_critic_data = None
+                    if self.algorithm_name == "DQN":
+                        model_data = serialize_model(self._algorithm._model)
                     # add for models have two networks
-                    if self.algorithm_name == "PPO":
-                        model_critic_data = serialize_model(self._algorithm._model_train.critic)
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
-                    else:
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=None, version=0, error="Handshake successful.")
+                    elif self.algorithm_name == "PPO":
+                        model_data = serialize_model(self._algorithm._model_train.actor)
+                        model_critic_data = serialize_model(self._algorithm._model_train.critic)    
+
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
 
                 if self.model_ready == 1:
                     print(f"[Client Poll] Model is ready for client. Sending model.")
-                    model_data = serialize_model(self._algorithm._model)
 
-                    # add for models have two networks
-                    if self.algorithm_name == "PPO":
-                        model_critic_data = serialize_model(self._algorithm._model_train.critic)
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="")
-                    else:
+                    model_data = None
+                    model_critic_data = None
+                    if self.algorithm_name == "DQN":
+                        model_data = serialize_model(self._algorithm._model)
                         return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+                    # add for models have two networks
+                    elif self.algorithm_name == "PPO":
+                        model_data = serialize_model(self._algorithm._model_train.actor)
+                        model_critic_data = serialize_model(self._algorithm._model_train.critic)
+
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
-                    return trajectory_pb2.RL4SysModel(code=-1, model=b"", error=self.error_message)
+                    return trajectory_pb2.RL4SysModel(code=-1, model=b"", model_critic=b"", error=self.error_message)
             
             interval = 0.5
             time.sleep(interval) # hyper TODO
@@ -226,10 +233,10 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
             if verbose:
                 print("Deserialized Action Fields:")
-                print(f"  obs: {action.obs_tensor}, {type(action.obs_tensor)}")
-                print(f"  action: {action.action_tensor}, {type(action.action_tensor)}")
-                print(f"  mask: {action.mask_tensor}, {type(action.mask_tensor)}")
-                print(f"  reward: {action.reward}")
+                print(f"  obs: {action.obs}, {type(action.obs)}")
+                print(f"  action: {action.act}, {type(action.act)}")
+                print(f"  mask: {action.mask}, {type(action.mask)}")
+                print(f"  reward: {action.rew}")
                 print(f"  data: {action.data}")
                 print(f"  done: {action.done}")
                 print(f"  reward_update_flag: {action.reward_update_flag}")

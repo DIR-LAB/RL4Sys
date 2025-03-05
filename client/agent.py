@@ -4,6 +4,9 @@ import os
 import time
 import threading
 import io
+import json
+import datetime
+from pathlib import Path
 
 import torch
 from numpy import ndarray
@@ -13,7 +16,7 @@ from protocol import trajectory_pb2, trajectory_pb2_grpc
 from protocol.trajectory import RL4SysTrajectory
 from protocol.action import RL4SysAction
 
-from utils.util import deserialize_model, serialize_action, serialize_tensor  # or your own full-model or state-dict deserializer
+from utils.util import deserialize_model, serialize_action, serialize_tensor, deserialize_action  # or your own full-model or state-dict deserializer
 from utils.conf_loader import ConfigLoader
 
 from algorithms.PPO.kernel import RLActorCritic
@@ -61,6 +64,10 @@ class RL4SysAgent:
         # 1) Single handshake at init: we attempt to get an initial model
         self.local_version = 0
         self._handshake_for_initial_model()
+
+        # Create debug directory if it doesn't exist
+        self.debug_dir = Path('debug')
+        self.debug_dir.mkdir(exist_ok=True)
 
     def _handshake_for_initial_model(self) -> None:
         """
@@ -116,10 +123,10 @@ class RL4SysAgent:
             if self.algorithm_name == "DQN":
                 action_nd, data_dict = self._model.step(obs, mask=mask)
             elif self.algorithm_name == "PPO":
-                action_nd, logp_a, _, value = self._model.step(obs, mask=mask)
+                action_nd, logp_a, _, value = self._model.get_action_and_value(obs, mask=mask)
                 data_dict = {}
-                data_dict['logp_a'] = logp_a.detach().numpy()
-                data_dict['v'] = value.detach().numpy()
+                data_dict['logp_a'] = logp_a
+                data_dict['v'] = value
 
         r4sa = RL4SysAction(obs, action_nd.numpy(), mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)

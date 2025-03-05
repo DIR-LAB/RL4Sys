@@ -47,15 +47,8 @@ def serialize_action(action: RL4SysAction) -> trajectory_pb2.RL4SysAction:
     serialized_data = {}
     if action.data:
         for k, v in action.data.items():
-            if isinstance(v, torch.Tensor):
-                serialized_data[str(k)] = v.numpy().tobytes()
-            elif isinstance(v, np.ndarray):
-                serialized_data[str(k)] = v.tobytes()
-            elif isinstance(v, (int, float)):
-                serialized_data[str(k)] = np.array([v]).tobytes()
-            else:
-                # For other types, convert to string then to bytes
-                serialized_data[str(k)] = str(v).encode('utf-8')
+            serialized_data[str(k)] = v.detach().numpy().tobytes()
+
 
     # Create the protobuf message
     action_proto = trajectory_pb2.RL4SysAction(

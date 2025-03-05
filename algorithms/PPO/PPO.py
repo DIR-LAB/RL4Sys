@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.optim import Adam
 import torch.nn as nn
-
+import random
 from .kernel import RLActorCritic
 from .replay_buffer import ReplayBuffer
 
@@ -26,13 +26,7 @@ save_model_path = config_loader.save_model_path
 
 class PPO(AlgorithmAbstract):
     """
-    A refactored PPO class inspired by ppo_cleanrl.py
-
-    Key changes:
-    - Single Adam optimizer for both actor and critic (self.optimizer).
-    - GAE-Lambda advantage calculations done in 'compute_advantages()'.
-    - We store all transitions in the replay buffer. On 'traj_per_epoch' triggers,
-      we compute advantages/returns and do a PPO update.
+    PPO implementation matching the CleanRL version.
     """
 
     def __init__(self, env_dir: str,
@@ -58,9 +52,13 @@ class PPO(AlgorithmAbstract):
                  ):
 
         super().__init__()
-        seed += 10000 * os.getpid()
+        # Set up random seeds
         torch.manual_seed(seed)
         np.random.seed(seed)
+        random.seed(seed)
+
+        # Set device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch
@@ -77,31 +75,33 @@ class PPO(AlgorithmAbstract):
         self.gamma = gamma
         self.lam = lam
 
-        # Create a single actor-critic "kernel" like ppo_cleanrl
-        self._model_train = RLActorCritic(input_size, act_dim)
-        self._model = self._model_train.actor  # for usage consistency
+        # Create actor-critic model
+        self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
+        self._model = self._model_train  # for usage consistency
 
         # Single Adam optimizer for both policy and value function
         self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
 
-        # set up logger
+        # Set up logger
         log_data_dir = os.path.join(env_dir, './logs/')
         logger_kwargs = setup_logger_kwargs("rl4sys-ppo-info", seed=seed, data_dir=log_data_dir)
         self.logger = EpochLogger(**logger_kwargs)
         self.logger.save_config(locals())
         self.logger.setup_pytorch_saver(self._model_train)
 
-        # Buffers for storing one "epoch" worth of transitions
-        # For simplicity, we store in lists, then convert to Tensors
+        # Storage buffers
         self.storage_obs = []
         self.storage_act = []
         self.storage_logp = []
         self.storage_rew = []
         self.storage_val = []
         self.storage_done = []
+        self.storage_next_obs = []  # Added to match CleanRL's approach
 
         self.traj = 0
         self.epoch = 0
+        self.global_step = 0
+        self.start_time = None
 
     def save(self, filename: str) -> None:
         """Save model as file.
@@ -110,7 +110,6 @@ class PPO(AlgorithmAbstract):
 
         Args:
             filename: name to save file as
-
         """
         new_path = os.path.join(save_model_path, filename +
                                 ('.pth' if not filename.__contains__('.pth') else ''))
@@ -118,40 +117,60 @@ class PPO(AlgorithmAbstract):
 
     def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
         """
-        Process a trajectory from the environment. For each step:
-         - store (obs, act, logp_a, rew, val, done) in local buffers
-        If an epoch is triggered, calls train_model().
-
-        Returns True if we just finished an epoch (implies new model).
+        Process a trajectory from the environment.
+        
+        Args:
+            trajectory: Trajectory from environment
+            
+        Returns:
+            bool: True if we just finished an epoch (implies new model)
         """
+        if self.start_time is None:
+            import time
+            self.start_time = time.time()
+            
         self.traj += 1
         ep_ret, ep_len = 0, 0
-
-        for r4a in trajectory:
+        
+        # Process each step in the trajectory
+        for i, r4a in enumerate(trajectory):
+            self.global_step += 1
             ep_ret += r4a.rew
             ep_len += 1
-
+            
+            # Store transition
             if not r4a.done:
                 self.storage_obs.append(r4a.obs)
                 self.storage_act.append(r4a.act)
                 self.storage_logp.append(r4a.data['logp_a'])
                 self.storage_rew.append(r4a.rew)
                 self.storage_val.append(r4a.data['v'])
-                self.storage_done.append(False)
-                self.logger.store(VVals=r4a.data['v'])
+                self.storage_done.append(r4a.done)
+            
+            # Store next observation for bootstrapping
+            if i < len(trajectory) - 1:
+                self.storage_next_obs.append(trajectory[i+1].obs)
             else:
-                # Mark a final 'done' transition for advantage logic
-                self.storage_obs.append(r4a.obs if r4a.obs is not None else np.zeros_like(self.storage_obs[-1]))
-                self.storage_act.append(r4a.act if r4a.act is not None else np.zeros_like(self.storage_act[-1]))
-                self.storage_logp.append(r4a.data['logp_a'] if r4a.data else 0.0)
-                self.storage_rew.append(r4a.rew if r4a.rew is not None else 0)
-                self.storage_val.append(r4a.data['v'] if (r4a.data and 'v' in r4a.data) else 0)
-                self.storage_done.append(True)
-
-                # Log episode stats
+                # For the last step, use the same observation if not done
+                # or zeros if done
+                if not r4a.done:
+                    self.storage_next_obs.append(r4a.obs)
+                else:
+                    self.storage_next_obs.append(np.zeros_like(r4a.obs))
+            
+            # Log value estimates
+            if r4a.done:
+                self.logger.store(VVals=None)
+            else:
+                self.logger.store(VVals=r4a.data['v'])
+            
+            # Log episode stats if done
+            if r4a.done:
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
-
-        # Once we have enough 'trajectories', do an update like ppo_cleanrl
+                ep_ret, ep_len = 0, 0
+            
+        
+        # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             self.epoch += 1
             self.train_model()
@@ -161,150 +180,150 @@ class PPO(AlgorithmAbstract):
 
     def train_model(self) -> None:
         """
-        Replaces the old train_model with a single method that:
-         1) Converts stored transitions to Tensors
-         2) Computes advantages/returns via GAE-Lambda (with proper bootstrapping)
-         3) Performs PPO update (policy and value) in mini-batches
-         4) Clears the storage buffers for next epoch
+        Train the model using the CleanRL PPO approach.
         """
-        # 1) Convert stored transitions to Tensors
-        obs_arr = np.array(self.storage_obs, dtype=np.float32)
-        act_arr = np.array(self.storage_act, dtype=np.int64)  # discrete actions
-        logp_arr = np.array(self.storage_logp, dtype=np.float32)
-        rew_arr = np.array(self.storage_rew, dtype=np.float32)
-        val_arr = np.array(self.storage_val, dtype=np.float32)
-        done_arr = np.array(self.storage_done, dtype=np.bool_)
-
-        # Compute bootstrap value for the final state if not terminal.
-        if not self.storage_done[-1]:
-            last_obs = torch.as_tensor(self.storage_obs[-1], dtype=torch.float32).unsqueeze(0)
-            last_value = self._model_train.get_value(last_obs).detach().cpu().numpy()[0]
-        else:
-            last_value = 0.0
-
-        # 2) Compute advantages using GAE-Lambda with bootstrapping (fixed)
-        advantages, returns = self.compute_advantages(
-            rew_arr, val_arr, done_arr, gamma=self.gamma, lam=self.lam, last_value=last_value
-        )
-
-        # Convert everything to Torch
-        obs_tensor = torch.as_tensor(obs_arr)
-        act_tensor = torch.as_tensor(act_arr)
-        logp_old_tensor = torch.as_tensor(logp_arr)
-        adv_tensor = torch.as_tensor(advantages)
-        ret_tensor = torch.as_tensor(returns)
-        val_old_tensor = torch.as_tensor(val_arr)
-
-        # 3) PPO update (like cleanrl) in mini-batches
-        dataset_size = len(obs_tensor)
-        indices = np.arange(dataset_size)
-        mini_batch_size = max(1, self._batch_size)
-        n_updates = self._train_pi_iters  # unified policy and value updates
-
-        for _ in range(n_updates):
-            np.random.shuffle(indices)
-            for start in range(0, dataset_size, mini_batch_size):
-                end = start + mini_batch_size
-                mb_inds = indices[start:end]
-
-                batch_obs = obs_tensor[mb_inds]
-                batch_act = act_tensor[mb_inds]
-                batch_adv = adv_tensor[mb_inds]
-                batch_ret = ret_tensor[mb_inds]
-                batch_logp_old = logp_old_tensor[mb_inds]
-                batch_val_old = val_old_tensor[mb_inds]
-
-                # Normalize advantages if desired
-                if self._norm_adv:
-                    # Normalize advantages if desired
-                    batch_adv = (batch_adv - batch_adv.mean()) / (batch_adv.std(unbiased=False) + 1e-8)
-
-
-                # Forward pass using updated model
-                _, logp_new, ent, v_new = self._model_train.step(batch_obs, action=batch_act)
-
-                ratio = torch.exp(logp_new - batch_logp_old)
-                pg_loss1 = -batch_adv * ratio
-                pg_loss2 = -batch_adv * torch.clamp(
-                    ratio,
-                    1.0 - self._clip_ratio,
-                    1.0 + self._clip_ratio
-                )
-                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
-
-                if self._clip_vloss:
-                    v_loss_unclipped = (v_new - batch_ret) ** 2
-                    v_clipped = batch_val_old + torch.clamp(
-                        v_new - batch_val_old,
-                        -self._clip_ratio,
-                        self._clip_ratio
-                    )
-                    v_loss_clipped = (v_clipped - batch_ret) ** 2
-                    v_loss = 0.5 * torch.max(v_loss_unclipped, v_loss_clipped).mean()
+        # Convert stored transitions to numpy arrays
+        obs = np.array(self.storage_obs, dtype=np.float32)
+        actions = np.array(self.storage_act, dtype=np.int64)
+        logprobs = np.array(self.storage_logp, dtype=np.float32)
+        rewards = np.array(self.storage_rew, dtype=np.float32)
+        values = np.array(self.storage_val, dtype=np.float32)
+        dones = np.array(self.storage_done, dtype=np.bool_)
+        next_obs = np.array(self.storage_next_obs, dtype=np.float32)
+        
+        # Convert to tensors and move to device
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        actions_tensor = torch.tensor(actions, dtype=torch.long).to(self.device)
+        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32).to(self.device)
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        values_tensor = torch.tensor(values, dtype=torch.float32).to(self.device)
+        dones_tensor = torch.tensor(dones, dtype=torch.bool).to(self.device)
+        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32).to(self.device)
+        
+        # Calculate advantages and returns
+        with torch.no_grad():
+            next_values = self._model_train.get_value(next_obs_tensor)
+            advantages = torch.zeros_like(rewards_tensor).to(self.device)
+            lastgaelam = 0
+            
+            # GAE calculation
+            for t in reversed(range(len(rewards))):
+                if t == len(rewards) - 1:
+                    nextnonterminal = 1.0 - dones_tensor[t].float()
+                    nextvalues = next_values[t]
                 else:
-                    v_loss = 0.5 * ((v_new - batch_ret) ** 2).mean()
-
-                ent_loss = ent.mean()
-                loss = pg_loss - self._ent_coef * ent_loss + self._vf_coef * v_loss
-
-                approx_kl = 0.5 * ((logp_new - batch_logp_old) ** 2).mean().item()
-                if self._target_kl and approx_kl > 1.5 * self._target_kl:
-                    break
-
+                    nextnonterminal = 1.0 - dones_tensor[t].float()
+                    nextvalues = values_tensor[t + 1]
+                
+                delta = rewards_tensor[t] + self.gamma * nextvalues * nextnonterminal - values_tensor[t]
+                advantages[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
+            
+            returns = advantages + values_tensor
+        
+        # Flatten the batch
+        b_obs = obs_tensor.reshape(-1, obs.shape[-1])
+        b_actions = actions_tensor.reshape(-1)
+        b_logprobs = logprobs_tensor.reshape(-1)
+        b_advantages = advantages.reshape(-1)
+        b_returns = returns.reshape(-1)
+        b_values = values_tensor.reshape(-1)
+        
+        # Optimize policy and value networks
+        batch_size = len(b_obs)
+        minibatch_size = max(1, self._batch_size)
+        b_inds = np.arange(batch_size)
+        clipfracs = []
+        
+        for epoch in range(self._train_pi_iters):
+            np.random.shuffle(b_inds)
+            for start in range(0, batch_size, minibatch_size):
+                end = start + minibatch_size
+                mb_inds = b_inds[start:end]
+                
+                _, newlogprob, entropy, newvalue = self._model_train.get_action_and_value(
+                    b_obs[mb_inds], b_actions[mb_inds]
+                )
+                
+                # Policy loss
+                logratio = newlogprob - b_logprobs[mb_inds]
+                ratio = logratio.exp()
+                
+                with torch.no_grad():
+                    # Calculate approx_kl
+                    old_approx_kl = (-logratio).mean().item()
+                    approx_kl = ((ratio - 1) - logratio).mean().item()
+                    clipfracs += [((ratio - 1.0).abs() > self._clip_ratio).float().mean().item()]
+                
+                # Normalize advantages
+                mb_advantages = b_advantages[mb_inds]
+                if self._norm_adv:
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                
+                # PPO policy loss
+                pg_loss1 = -mb_advantages * ratio
+                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+                
+                # Value loss
+                newvalue = newvalue.view(-1)
+                if self._clip_vloss:
+                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
+                    v_clipped = b_values[mb_inds] + torch.clamp(
+                        newvalue - b_values[mb_inds],
+                        -self._clip_ratio,
+                        self._clip_ratio,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
+                else:
+                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+                
+                # Entropy loss
+                entropy_loss = entropy.mean()
+                
+                # Total loss
+                loss = pg_loss - self._ent_coef * entropy_loss + v_loss * self._vf_coef
+                
+                # Gradient step
                 self.optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self._model_train.parameters(), self._max_grad_norm)
                 self.optimizer.step()
-
+            
+            # Early stopping based on KL divergence
+            if self._target_kl is not None and approx_kl > 1.5 * self._target_kl:
+                break
+        
+        # Calculate explained variance for logging
+        y_pred = b_values.cpu().numpy()
+        y_true = b_returns.cpu().numpy()
+        var_y = np.var(y_true)
+        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        
+        # Store metrics for logging
         self.logger.store(
             LossPi=pg_loss.item(),
             LossV=v_loss.item(),
-            Entropy=ent_loss.item(),
-            KL=approx_kl
+            Entropy=entropy_loss.item(),
+            KL=approx_kl,
+            ClipFrac=np.mean(clipfracs),
+            ExplainedVar=explained_var
         )
-
-        # 4) Clear our local storage
-        del self.storage_obs[:]
-        del self.storage_act[:]
-        del self.storage_logp[:]
-        del self.storage_rew[:]
-        del self.storage_val[:]
-        del self.storage_done[:]
-
-    def compute_advantages(self, rewards, values, dones, gamma, lam, last_value):
-        """
-        Compute advantages using GAE-Lambda with proper bootstrapping for non-terminal episodes.
-
-        Args:
-            rewards: array of rewards.
-            values: array of value estimates.
-            dones: array indicating terminal transitions.
-            gamma: discount factor.
-            lam: GAE lambda.
-            last_value: bootstrap value for the final state if not terminal.
-        Returns:
-            advantages and returns.
-        """
-        length = len(rewards)
-        advantages = np.zeros(length, dtype=np.float32)
-        lastgaelam = 0.0
         
-        for t in reversed(range(length)):
-            if t == length - 1:
-                next_nonterminal = 1.0 - float(dones[t])
-                next_value = last_value
-            else:
-                next_nonterminal = 1.0 - float(dones[t+1])
-                next_value = values[t+1]
-            delta = rewards[t] + gamma * next_value * next_nonterminal - values[t]
-            advantages[t] = lastgaelam = delta + gamma * lam * next_nonterminal * lastgaelam
-
-        returns = advantages + values
-        return advantages, returns
+        # Clear storage buffers
+        self.storage_obs.clear()
+        self.storage_act.clear()
+        self.storage_logp.clear()
+        self.storage_rew.clear()
+        self.storage_val.clear()
+        self.storage_done.clear()
+        self.storage_next_obs.clear()
 
     def log_epoch(self) -> None:
-        """Log the information collected in logger over the course of the last epoch.
-        """
+        """Log the information collected in logger over the course of the last epoch."""
+        import time
+        
         self.logger.log_tabular('Epoch', self.epoch)
         self.logger.log_tabular('EpRet', with_min_and_max=True)
         self.logger.log_tabular('EpLen', with_min_and_max=True)
@@ -313,4 +332,10 @@ class PPO(AlgorithmAbstract):
         self.logger.log_tabular('LossV', average_only=True)
         self.logger.log_tabular('Entropy', average_only=True)
         self.logger.log_tabular('KL', average_only=True)
+        
+        # Calculate and log SPS (steps per second)
+        if self.start_time is not None:
+            fps = int(self.global_step / (time.time() - self.start_time))
+            self.logger.log_tabular('SPS', fps)
+        
         self.logger.dump_tabular()
