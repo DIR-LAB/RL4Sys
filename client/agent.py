@@ -132,14 +132,13 @@ class RL4SysAgent:
         self._current_traj.add_action(r4sa)
         return r4sa
 
-    def flag_last_action(self, reward: int) -> None:
+    def flag_last_action(self, obs, action, mask, reward: int, data: dict) -> None:
         """
         Mark the end of the current trajectory, send it to the server, and poll for an updated model.
         """
         # Create terminal action
-        last_action = RL4SysAction(obs=None, action=None, mask=None, reward=None,
-                                   data=None, done=True)
-        last_action.update_reward(reward)
+        last_action = RL4SysAction(obs=obs, action=action, mask=mask, reward=reward,
+                                   data=data, done=True)
         self._current_traj.add_action(last_action)
 
         # 1) Send trajectory to server for training
