@@ -139,13 +139,12 @@ class PPO(AlgorithmAbstract):
             ep_len += 1
             
             # Store transition
-            if not r4a.done:
-                self.storage_obs.append(r4a.obs)
-                self.storage_act.append(r4a.act)
-                self.storage_logp.append(r4a.data['logp_a'])
-                self.storage_rew.append(r4a.rew)
-                self.storage_val.append(r4a.data['v'])
-                self.storage_done.append(r4a.done)
+            self.storage_obs.append(r4a.obs)
+            self.storage_act.append(r4a.act)
+            self.storage_logp.append(r4a.data['logp_a'])
+            self.storage_rew.append(r4a.rew)
+            self.storage_val.append(r4a.data['v'])
+            self.storage_done.append(r4a.done)
             
             # Store next observation for bootstrapping
             if i < len(trajectory) - 1:
@@ -158,16 +157,14 @@ class PPO(AlgorithmAbstract):
                 else:
                     self.storage_next_obs.append(np.zeros_like(r4a.obs))
             
-            # Log value estimates
-            if r4a.done:
-                self.logger.store(VVals=None)
-            else:
-                self.logger.store(VVals=r4a.data['v'])
-            
-            # Log episode stats if done
+
+            self.logger.store(VVals=r4a.data['v'])
+
             if r4a.done:
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
                 ep_ret, ep_len = 0, 0
+            
+            
             
         
         # Once we have enough trajectories, do an update
@@ -212,7 +209,7 @@ class PPO(AlgorithmAbstract):
                     nextnonterminal = 1.0 - dones_tensor[t].float()
                     nextvalues = next_values[t]
                 else:
-                    nextnonterminal = 1.0 - dones_tensor[t].float()
+                    nextnonterminal = 1.0 - dones_tensor[t+1].float()
                     nextvalues = values_tensor[t + 1]
                 
                 delta = rewards_tensor[t] + self.gamma * nextvalues * nextnonterminal - values_tensor[t]

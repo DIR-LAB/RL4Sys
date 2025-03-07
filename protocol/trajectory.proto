@@ -6,7 +6,7 @@ message RL4SysAction {
     bytes obs = 1;      // Serialized tensor data as bytes
     bytes action = 2;   // Serialized action tensor as bytes
     bytes mask = 3;     // Serialized mask tensor as bytes
-    int32 reward = 4;   // Reward as an integer
+    bytes reward = 4;   // Reward as an float
     map<string, bytes> data = 5;  // Changed from string to bytes to handle arrays
     bool done = 6;      // Indicates if this is the last action in trajectory
     bool reward_update_flag = 7; // Indicates if the reward was updated

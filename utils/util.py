@@ -31,31 +31,44 @@ def deserialize_tensor(tensor_bytes):
         return None
 
 def serialize_action(action: RL4SysAction) -> trajectory_pb2.RL4SysAction:
-    """Serialize an RL4SysAction object into a protobuf message."""
-    # Handle the action value which could be a tensor, ndarray, or number
+    """
+    Serialize an RL4SysAction object into a protobuf message, 
+    and store reward as bytes (float->bytes).
+    """
+    # 1. Serialize the action
     action_bytes = b"None"
     if action.act is not None:
         if isinstance(action.act, torch.Tensor):
-            action_bytes = action.act.numpy().tobytes()
+            action_bytes = action.act.detach().cpu().numpy().astype(np.float32).tobytes()
         elif isinstance(action.act, np.ndarray):
-            action_bytes = action.act.tobytes()
+            action_bytes = action.act.astype(np.float32).tobytes()
         else:
-            # For scalar values, convert to int and then to bytes
-            action_bytes = int(action.act).to_bytes(4, byteorder='big', signed=True)
+            # For scalar values (int or float), convert to float32 single-element array
+            action_bytes = np.array([float(action.act)], dtype=np.float32).tobytes()
 
-    # Convert data values to bytes if they're numpy arrays or tensors
+    # 2. Serialize the reward as bytes
+    if action.rew is not None:
+        reward_bytes = np.array([float(action.rew)], dtype=np.float32).tobytes()
+    else:
+        reward_bytes = b"None"
+
+    # 3. Serialize data
     serialized_data = {}
     if action.data:
         for k, v in action.data.items():
-            serialized_data[str(k)] = v.detach().numpy().tobytes()
+            if isinstance(v, torch.Tensor):
+                serialized_data[str(k)] = v.detach().cpu().numpy().astype(np.float32).tobytes()
+            elif isinstance(v, np.ndarray):
+                serialized_data[str(k)] = v.astype(np.float32).tobytes()
+            else:
+                serialized_data[str(k)] = np.array([float(v)], dtype=np.float32).tobytes()
 
-
-    # Create the protobuf message
+    # 4. Build the protobuf
     action_proto = trajectory_pb2.RL4SysAction(
         obs=serialize_tensor(action.obs) if action.obs is not None else b"None",
         action=action_bytes,
         mask=serialize_tensor(action.mask) if action.mask is not None else b"None",
-        reward=int(action.rew) if action.rew is not None else 0,
+        reward=reward_bytes,  # store reward as bytes
         data=serialized_data,
         done=action.done if action.done is not None else False,
         reward_update_flag=action.reward_update_flag if action.reward_update_flag is not None else False,
@@ -63,48 +76,53 @@ def serialize_action(action: RL4SysAction) -> trajectory_pb2.RL4SysAction:
     return action_proto
 
 def deserialize_action(action):
-    """Deserialize a Protobuf message into an RL4SysAction object."""
-    # Handle action deserialization based on the content
+    """
+    Deserialize a Protobuf message into an RL4SysAction object, 
+    turning bytes->float for reward.
+    """
+    # 1. Deserialize the action
     action_bytes = action.action
     if action_bytes == b"None":
         action_value = None
     else:
         try:
-            # Try to deserialize as numpy array first
-            action_value = np.frombuffer(action_bytes)
-            if len(action_value) == 1:  # If it's a single value
-                action_value = action_value[0]
-        except:
-            # If that fails, try as integer
-            try:
-                action_value = int.from_bytes(action_bytes, byteorder='big', signed=True)
-            except:
-                print(f"Warning: Could not deserialize action bytes: {action_bytes}")
-                action_value = None
+            arr = np.frombuffer(action_bytes, dtype=np.float32)
+            action_value = float(arr[0]) if len(arr) == 1 else arr
+        except Exception:
+            print(f"Warning: Could not deserialize action: {action_bytes}")
+            action_value = None
 
-    # Deserialize data dictionary values from bytes
+    # 2. Deserialize the reward (bytes->float)
+    reward_bytes = action.reward
+    if reward_bytes == b"None":
+        rew_value = None
+    else:
+        try:
+            arr = np.frombuffer(reward_bytes, dtype=np.float32)
+            rew_value = float(arr[0]) if len(arr) == 1 else arr
+        except Exception:
+            print(f"Warning: Could not deserialize reward bytes: {reward_bytes}")
+            rew_value = 0.0
+
+    # 3. Deserialize data into dictionary
     deserialized_data = {}
     for k, v in action.data.items():
         try:
-            # Try to deserialize as numpy array
             arr = np.frombuffer(v, dtype=np.float32)
-            if len(arr) == 1:
-                deserialized_data[k] = float(arr[0])
-            else:
-                deserialized_data[k] = arr
+            deserialized_data[k] = float(arr[0]) if len(arr) == 1 else arr
         except:
-            # If that fails, try as string
             try:
-                deserialized_data[k] = v.decode('utf-8')
+                deserialized_data[k] = v.decode("utf-8")
             except:
-                print(f"Warning: Could not deserialize data value for key {k}")
+                print(f"Warning: Could not deserialize data for key {k}")
                 deserialized_data[k] = None
 
+    # 4. Rebuild the RL4SysAction
     return RL4SysAction(
         obs=deserialize_tensor(action.obs),
         action=action_value,
         mask=deserialize_tensor(action.mask),
-        reward=action.reward,
+        reward=rew_value,
         data=deserialized_data,
         done=action.done
     )

@@ -88,7 +88,7 @@ class LunarLanderSim(ApplicationAbstract):
             obs_tensor, mask = self.build_observation(obs)
 
             # while not done and moves < num_moves: # Modified
-            while not done:  
+            while not done or moves < 50:   # TODO debug only, remove after
                 if self._render_game:
                     self.env.render()
 
@@ -119,31 +119,16 @@ class LunarLanderSim(ApplicationAbstract):
                 self.simulator_stats['action_rewards'].append(reward)
 
                 obs_tensor = next_obs_tensor  # Update current observation
-
                 
-                if rl_runs >= MOVE_SEQUENCE_SIZE:
+                if rl_runs >= MOVE_SEQUENCE_SIZE or done:
+                    # Flag last action
+                    rl4sys_action.done = True
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
                     print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
-                    self.simulator_stats['moves'] = moves
-                    rl_runs = 0
-                    #rl_total = self.calculate_performance_return(self.simulator_stats)
-                    #rew = -rl_total
-                    rew = reward
-                    self.simulator_stats['performance_rewards'].append(rew)
-                    self.rlagent.flag_last_action(rew)
-                    break
-                
 
-                if done:
-                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                    print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
-                    self.simulator_stats['moves'] = moves
-                    rl_runs = 0
-                    #rl_total = self.calculate_performance_return(self.simulator_stats)
-                    #rew = -rl_total
-                    rew = reward
-                    self.rlagent.flag_last_action(rew)
+                    self.rlagent.send_actions()
+
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
                         self.simulator_stats['time_to_goal'].append(time.time() - start_time)
@@ -151,6 +136,7 @@ class LunarLanderSim(ApplicationAbstract):
                         self.simulator_stats['death_count'] += 1
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
                     break
+                    
 
             if self._render_game:
                 self.env.close()
