@@ -32,7 +32,7 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.mask_buf[idx] = mask
         self.rew_buf[idx] = rew
         self.done_buf[idx] = done
-        self.q_val_buf[idx] = q_val[act]
+        self.q_val_buf[idx] = q_val[int(act)]
 
         if self.ptr > 0:
             self.next_obs_buf[idx - 1] = obs

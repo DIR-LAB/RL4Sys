@@ -127,8 +127,9 @@ class RL4SysAgent:
                 data_dict = {}
                 data_dict['logp_a'] = logp_a
                 data_dict['v'] = value
+                action_nd = action_nd.numpy()
 
-        r4sa = RL4SysAction(obs, action_nd.numpy(), mask=mask, reward=-1, data=data_dict, done=False)
+        r4sa = RL4SysAction(obs, action_nd, mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)
         return r4sa
 
