@@ -25,37 +25,37 @@ env = DummyVecEnv([lambda: Monitor(make_env())])
 # Generate a unique TensorBoard log folder
 script_dir = os.path.dirname(os.path.abspath(__file__))
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-log_dir = os.path.join(script_dir, "logs", f"dqn_baseline3_{timestamp}")
+log_dir = os.path.join("runs", f"dqn_baseline3_{timestamp}")
 os.makedirs(log_dir, exist_ok=True)
 
 # Configure logger for TensorBoard
 new_logger = configure(log_dir, ["stdout","tensorboard"])
 
-# Hyperparameters for Double DQN
+# Hyperparameters from cleanRL
 policy_kwargs = dict(
-    net_arch=[64, 64],  # Two fully connected layers with 64 units each
+    net_arch=[120, 84],  # Match cleanRL's network architecture
 )
 
 # Initialize the Double DQN model
 model = DQN(
     "MlpPolicy", 
     env, 
-    learning_rate=1e-3,
-    buffer_size=50000,  # Replay buffer size
-    learning_starts=0,  # Start learning after this many steps
-    batch_size=64,
-    tau=1e-3,  # Soft update coefficient
-    gamma=0.99,  # Discount factor
-    train_freq=64,  # Train every 4 steps
-    gradient_steps=5,  # Gradient updates per training step
-    target_update_interval=500,  # Target network update frequency
-    exploration_fraction=5e-4,  # Fraction of steps for exploration
-    exploration_initial_eps=1.0,  # Initial epsilon for exploration
-    exploration_final_eps=0.01,  # Final epsilon for exploration
-    policy_kwargs=policy_kwargs,  # Custom policy network
+    learning_rate=2.5e-4,  # Match cleanRL's learning rate
+    buffer_size=10000,     # Match cleanRL's buffer size
+    learning_starts=10000, # Match cleanRL's learning starts
+    batch_size=128,       # Match cleanRL's batch size
+    tau=1.0,             # Match cleanRL's tau
+    gamma=0.99,          # Same as cleanRL
+    train_freq=10,       # Match cleanRL's train frequency
+    gradient_steps=1,    # cleanRL does one update per training step
+    target_update_interval=500,  # Match cleanRL's target network frequency
+    exploration_fraction=0.5,    # Match cleanRL's exploration fraction
+    exploration_initial_eps=1.0, # Match cleanRL's start epsilon
+    exploration_final_eps=0.05,  # Match cleanRL's end epsilon
+    policy_kwargs=policy_kwargs,
     verbose=1,
     seed=SEED,
-    device=torch.device("cpu")  # Run on CPU
+    device=torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Match cleanRL's device logic
 )
 
 # Attach the custom logger to the model

@@ -211,6 +211,7 @@ class RL4SysAgent:
                 pass
         elif poll_resp.code == 0:
             # Model not ready or server is still training
+            print("[RL4SysAgent] Model not ready or server is still training.")
             pass
         elif poll_resp.code == -1:
             print(f"[RL4SysAgent] Server reported error: {poll_resp.error}")

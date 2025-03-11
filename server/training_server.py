@@ -90,7 +90,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         self._algorithm = algorithm_class(**hyperparams)
 
         # for server components
-        self.idle_timeout = 30 # TODO do it in config loader
+        self.idle_timeout = 5 # TODO do it in config loader
         self.lock = threading.Lock()
         self.model_ready = 0
         self.trained_model_path = os.path.join(os.path.dirname(__file__), self.save_model_path, f"{algorithm_name}_model.pth")
@@ -223,6 +223,8 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
             interval = 0.5
             time.sleep(interval) # hyper TODO
             timeout += interval
+            if timeout >= self.idle_timeout:
+                return trajectory_pb2.RL4SysModel(code=0, model=b"", error="Model is still training.")
 
     def _get_actions(self, actions, verbose = False):
         """This function deserialize tensors from byte and return a list of actions"""

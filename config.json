@@ -24,18 +24,19 @@
             "train_q_iters": 50
         },
         "DQN": {
-            "batch_size": 64,
-            "seed": 0,
-            "traj_per_epoch": 4,
+            "seed": 1,
+            "learning_rate": 1e-3,
+            "batch_size": 128,
             "gamma": 0.99,
-            "epsilon": 1.0,
-            "epsilon_min": 0.01,
-            "epsilon_decay": 0.995,
-            "tau": 1e-3,
-            "train_update_freq": 1,
-            "q_lr": 1e-3,
-            "train_q_iters": 5,
-            "target_net_update_frequency": 50
+            "tau": 1.0,
+            "target_network_frequency": 4,
+            "buffer_size": 10000,
+            "start_e": 1.0,
+            "end_e": 0.05,
+            "exploration_fraction": 0.5,
+            "learning_starts": 128,
+            "train_frequency": 10,
+            "total_timesteps": 500000
         },
         "PPO": {
             "batch_size": 512,
