@@ -33,7 +33,9 @@ INPUT_DIM = 8
 ACT_DIM = 4
 
 MOVE_SEQUENCE_SIZE = 500
-
+LEARNING_STARTS = 10000
+TOTAL_TIMESTEPS = 500000
+TRAIN_FREQUENCY = 10
 
 class LunarLanderSim(ApplicationAbstract):
     def __init__(self, algorithm_name, seed, model=None, performance_metric=0, render_game=False):
@@ -69,77 +71,66 @@ class LunarLanderSim(ApplicationAbstract):
         }
 
     def run_application(self, num_iterations=1, num_moves=1000):
-        for iteration in range(num_iterations):
-            self.simulator_stats['total_iterations'] += 1
-            print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
+        iteration = 0
 
-            # Reset the environment with the seed
-            obs, info = self.env.reset(seed=self._seed + iteration)
-            done = False
-            moves = 0
-            rl_runs = 0
-            cumulative_reward = 0
-            start_time = time.time()
+        # Reset the environment with the seed
+        obs, info = self.env.reset(seed=self._seed + iteration)
+        done = False
+        moves = 0
+        rl_runs = 0
+        cumulative_reward = 0
 
-            ##TODO Debug only
-            #print("---> OBS is: ", obs)
+        # Build initial observation
+        obs_tensor, mask = self.build_observation(obs)
 
-            # Build initial observation
-            obs_tensor, mask = self.build_observation(obs)
-
-            # while not done and moves < num_moves: # Modified
-            while not done or moves < 500:   # TODO debug only, remove after
-                if self._render_game:
-                    self.env.render()
-
-                # Get action from agent
-                rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask)
-                action = rl4sys_action.act
-
-                # Ensure action is compatible
-                if isinstance(action, torch.Tensor):
-                    action = action.item()
-                elif isinstance(action, np.ndarray):
-                    action = action[0]
-                action = int(action)
-
-                # Step the environment
-                next_obs, reward, terminated, truncated, info = self.env.step(action)
-                done = terminated or truncated
-                cumulative_reward += reward
-
-                # Build next observation
-                next_obs_tensor, mask = self.build_observation(next_obs)
-
-                # record trajectory
-                rl4sys_action.update_reward(reward)
-                rl_runs += 1
-                moves += 1
-                self.simulator_stats['moves'] += 1
-                self.simulator_stats['action_rewards'].append(reward)
-
-                obs_tensor = next_obs_tensor  # Update current observation
-                
-                if rl_runs >= MOVE_SEQUENCE_SIZE or done:
-                    # Flag last action
-                    rl4sys_action.done = True
-                    # Flag last action
-                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                    print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
-
-                    self.rlagent.send_actions()
-
-                    if reward >= 200:  # Successful landing threshold
-                        self.simulator_stats['success_count'] += 1
-                        self.simulator_stats['time_to_goal'].append(time.time() - start_time)
-                    else:
-                        self.simulator_stats['death_count'] += 1
-                        self.simulator_stats['time_to_death'].append(time.time() - start_time)
-                    break
-                    
-
+        # while not done and moves < num_moves: # Modified
+        while moves < TOTAL_TIMESTEPS:   # TODO debug only, remove after
             if self._render_game:
-                self.env.close()
+                self.env.render()
+
+            # Get action from agent
+            rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask)
+            action = rl4sys_action.act
+
+            # Ensure action is compatible
+            if isinstance(action, torch.Tensor):
+                action = action.item()
+            elif isinstance(action, np.ndarray):
+                action = action[0]
+            action = int(action)
+
+            # Step the environment
+            next_obs, reward, terminated, truncated, info = self.env.step(action)
+            done = terminated or truncated
+            cumulative_reward += reward
+
+            # Build next observation
+            next_obs_tensor, mask = self.build_observation(next_obs)
+
+            # record trajectory
+            rl4sys_action.update_reward(reward)
+            rl4sys_action.set_done(done)
+            rl_runs += 1
+            moves += 1
+            self.simulator_stats['moves'] += 1
+            self.simulator_stats['action_rewards'].append(reward)
+
+            obs_tensor = next_obs_tensor  # Update current observation
+            
+            if done:
+                print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
+                iteration += 1
+                obs, info = self.env.reset(seed=self._seed + iteration)
+
+            if moves % TRAIN_FREQUENCY == 0:
+                print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
+                print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
+
+                self.rlagent.send_actions()
+
+
+        if self._render_game:
+            self.env.close()
         
         
 
@@ -157,54 +148,8 @@ class LunarLanderSim(ApplicationAbstract):
 
         return obs_tensor, mask
 
-
-    def calculate_performance_return(self, elements) -> float:
-        """
-        Calculate performance score based on performance metric using captured simulator elements
-        :return: returns calculated performance score
-        """
-        if self._performance_metric == 0:
-            # avg cumulative reward per reward count
-            return float(sum(elements['action_rewards']) / len(elements['action_rewards']))
-        elif self._performance_metric == 1:
-            # avg cumulative reward per success rate
-            if elements['success_count'] > 0:
-                return float(sum(elements['action_rewards']) / elements['success_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 2:
-            # avg cumulative reward per death rate
-            if elements['death_count'] > 0:
-                return -float(sum(elements['action_rewards']) / elements['death_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 3:
-            # avg cumulative reward per collision rate (using death_count in Lunar Lander)
-            if elements['death_count'] > 0:
-                return -float(sum(elements['action_rewards']) / elements['death_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 4:
-            # avg cumulative reward per failure rate
-            total_failures = elements['death_count']
-            if total_failures > 0:
-                return float(sum(elements['action_rewards']) / total_failures)
-            else:
-                return 0.0
-        elif self._performance_metric == 5:
-            # avg cumulative time-to-goal per success
-            if elements['success_count'] > 0:
-                return float((sum(elements['time_to_goal']) / elements['success_count']))
-            else:
-                return 0.0
-        elif self._performance_metric == 6:
-            # time-to-death per death
-            if elements['death_count'] > 0:
-                return -float(sum(elements['time_to_death']) / elements['death_count'])
-            else:
-                return 0.0
-        else:
-            raise NotImplementedError
+    def calculate_performance_return(self, trajectory):
+        pass
 
 
 if __name__ == '__main__':

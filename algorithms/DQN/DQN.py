@@ -13,7 +13,7 @@ from utils.logger import EpochLogger, setup_logger_kwargs
 from utils.conf_loader import ConfigLoader
 from protocol.action import RL4SysAction
 from protocol.trajectory import RL4SysTrajectory
-
+from torch.utils.tensorboard import SummaryWriter
 
 ############
 #  CONFIG  #
@@ -62,10 +62,11 @@ class DQN(AlgorithmAbstract):
         random.seed(seed)
 
         # Log setup
-        log_data_dir = os.path.join(env_dir, './logs/')
-        logger_kwargs = setup_logger_kwargs("rl4sys-dqn-info", seed=seed, data_dir=log_data_dir)
-        self.logger = EpochLogger(**logger_kwargs)
-        self.logger.save_config(locals())
+        log_data_dir = os.path.join(env_dir, './logs/rl4sys-dqn-info')
+        log_data_dir = os.path.join(log_data_dir, f"{seed}__{int(time.time())}")
+        
+        os.makedirs(log_data_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=log_data_dir)
 
         # DQN networks
         self._model = DeepQNetwork(input_size, act_dim)
@@ -97,6 +98,8 @@ class DQN(AlgorithmAbstract):
         # New in this version:
         self._traj_per_epoch = traj_per_epoch
 
+        self.writer = self.create_logger()
+
         # Tracking
         self.global_step = 0
         self.epoch = 0
@@ -104,6 +107,14 @@ class DQN(AlgorithmAbstract):
         self.start_time = None
 
         self.logger.setup_pytorch_saver(self._model)
+
+    def create_logger(self) -> None:
+        """
+        Create a logger for the algorithm.
+        """
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=log_dir)
 
     def save(self, filename: str) -> None:
         new_path = os.path.join(save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
@@ -123,10 +134,11 @@ class DQN(AlgorithmAbstract):
             self.start_time = time.time()
 
         update = False
-        self.traj += 1
+        
         ep_ret, ep_len = 0.0, 0
 
         for i, r4a in enumerate(trajectory):
+            self.traj += 1
             self.global_step += 1
             ep_ret += r4a.rew
             ep_len += 1
@@ -135,21 +147,21 @@ class DQN(AlgorithmAbstract):
             # Our PPO snippet simply stored transitions in a list, but for DQN,
             # we store them into replay_buffer.
             self.replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'], r4a.done)
-            self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
 
-            if r4a.done:
+            if self.global_step > self.learning_starts and self.global_step % 100 == 0:
+                self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)
                 ep_ret, ep_len = 0.0, 0
+                    
+                    
 
-        if self.traj > self.learning_starts:
+        if self.global_step > self.learning_starts:
             self.epoch += 1
             self.train_model()
             self.log_epoch()
             update = True
 
-                
-        self.logger.store(EpRet=ep_ret, EpLen=ep_len)
-        ep_ret, ep_len = 0.0, 0
+            
                 
 
         # Once we have enough trajectories, do an update

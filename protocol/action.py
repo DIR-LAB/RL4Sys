@@ -31,7 +31,7 @@ class RL4SysAction(RL4SysActionAbstract):
                  mask: Optional['torch.Tensor'] = None,
                  reward: int = 0, 
                  data: Optional[dict] = {}, 
-                 done: bool = False):
+                 done: bool = None):
         super().__init__()
         self.obs = obs
         self.act = action
@@ -44,3 +44,6 @@ class RL4SysAction(RL4SysActionAbstract):
     def update_reward(self, reward: int) -> None:
         self.rew = reward
         self.reward_update_flag = True
+
+    def set_done(self, done: bool) -> None:
+        self.done = done

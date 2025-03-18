@@ -157,9 +157,6 @@ class RL4SysAgent:
         action_msgs = []
         
 
-        
-
-        # TODO: add flag for last action
         for action in self._current_traj.actions:
             action_proto = serialize_action(action)
             action_msgs.append(action_proto)

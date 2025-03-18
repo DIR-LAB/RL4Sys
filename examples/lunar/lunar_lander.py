@@ -113,6 +113,7 @@ class LunarLanderSim(ApplicationAbstract):
 
                 # record trajectory
                 rl4sys_action.update_reward(reward)
+                rl4sys_action.set_done(done)
                 rl_runs += 1
                 moves += 1
                 self.simulator_stats['moves'] += 1
@@ -121,8 +122,6 @@ class LunarLanderSim(ApplicationAbstract):
                 obs_tensor = next_obs_tensor  # Update current observation
                 
                 if rl_runs >= MOVE_SEQUENCE_SIZE or done:
-                    # Flag last action
-                    rl4sys_action.done = True
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
                     print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
