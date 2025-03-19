@@ -44,7 +44,7 @@ class LunarLanderSim(ApplicationAbstract):
         self._render_game = render_game
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3')
+        self.env = gym.make('LunarLander-v3', continuous=True)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -54,7 +54,19 @@ class LunarLanderSim(ApplicationAbstract):
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
-        self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, input_size=self.env.observation_space.shape[0], act_dim=self.env.action_space.n, model=model)
+        if isinstance(self.env.action_space, gym.spaces.Box):
+            # For continuous action spaces (DDPG, TD3, RPO)
+            act_dim = self.env.action_space.shape[0]
+            self.act_limit = self.env.action_space.high[0]  # Assuming symmetric limits
+        else:
+            # For discrete action spaces (DQN)
+            act_dim = self.env.action_space.n
+            self.act_limit = 1.0
+
+        self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
+                                  input_size=self.env.observation_space.shape[0], 
+                                  act_dim=act_dim,
+                                  model=model)
 
         # To store simulator stats
         self.simulator_stats = {

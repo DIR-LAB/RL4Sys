@@ -23,6 +23,17 @@
             "q_lr": 1e-5,
             "train_q_iters": 50
         },
+        "DDPG": {
+            "seed": 1,
+            "gamma": 0.99,
+            "tau": 0.005,
+            "learning_rate": 3e-4,
+            "batch_size": 256,
+            "buffer_size": 1000000,
+            "exploration_noise": 0.1,
+            "learning_starts": 25000,
+            "policy_frequency": 2
+        },
         "DQN": {
             "seed": 1,
             "learning_rate": 2.5e-4,
@@ -51,6 +62,20 @@
             "train_v_iters": 4,
             "target_kl": null
         },
+        "RPO": {
+            "seed": 1,
+            "learning_rate": 3e-4,
+            "num_steps": 2048,
+            "gamma": 0.99,
+            "gae_lambda": 0.95,
+            "clip_coef": 0.2,
+            "ent_coef": 0.0,
+            "vf_coef": 0.5,
+            "max_grad_norm": 0.5,
+            "rpo_alpha": 0.5,
+            "update_epochs": 10,
+            "num_minibatches": 32
+        },
         "SAC": {
             "discrete": true,
             "adaptive_alpha": false,
@@ -67,6 +92,19 @@
             "clip_grad_norm": 1,
             "train_update_freq": 1,
             "train_iters": 50
+        },
+        "TD3": {
+            "seed": 1,
+            "gamma": 0.99,
+            "tau": 0.005,
+            "learning_rate": 3e-4,
+            "batch_size": 256,
+            "buffer_size": 1000000,
+            "exploration_noise": 0.1,
+            "policy_noise": 0.2,
+            "noise_clip": 0.5,
+            "learning_starts": 25000,
+            "policy_frequency": 2
         },
         "TRPO": {
 

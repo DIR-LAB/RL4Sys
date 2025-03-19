@@ -24,7 +24,7 @@ class ConfigLoader:
             return {}
 
     def get_algorithm_params(self, algo: str):
-        available_algorithms = ['C51', 'DQN', 'PPO', 'SAC']
+        available_algorithms = ['C51', 'DQN', 'PPO', 'SAC', 'TD3', 'DDPG', 'RPO']
         if algo is None or algo not in available_algorithms:
             return None
         try:
