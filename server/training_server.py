@@ -123,11 +123,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         """
         # add trajectory to buffer and check if enough for training
         self.trajectory_buffer.extend(request.actions)
-        if len(self.trajectory_buffer) <= self.hyperparam_server['batch_size']:
-            return trajectory_pb2.ActionResponse(
-                code=0,
-                message=f"Not enough trajectory for training, need at least {self.hyperparam_server['batch_size']} actions."
-            )
         
         print(f"Received {len(request.actions)} actions for training from client.")
 

@@ -22,9 +22,15 @@ from utils.conf_loader import ConfigLoader
 from algorithms.PPO.kernel import RLActorCritic
 from algorithms.DQN.kernel import DeepQNetwork
 
+import random
+import numpy as np
+
+
 config_loader = ConfigLoader()
 TRAINING_SERVER_ADDRESS = "localhost:50051"  # or from config
 load_model_path = config_loader.load_model_path  # if you want local fallback
+config_loader = ConfigLoader(algorithm='DQN')
+hyperparams = config_loader.algorithm_params
 
 class RL4SysAgent:
     """
@@ -56,6 +62,9 @@ class RL4SysAgent:
 
         self.input_size = input_size
         self.act_dim = act_dim
+        
+        # explore rate
+        self.epsilon = hyperparams['start_e']
 
         # If a model was provided, validate it
         if self._model is not None:
@@ -120,6 +129,7 @@ class RL4SysAgent:
             if self._model is None:
                 raise RuntimeError("No model available yet!")
             
+
             if self.algorithm_name == "DQN":
                 action_nd, data_dict = self._model.step(obs, mask=mask)
             elif self.algorithm_name == "PPO":

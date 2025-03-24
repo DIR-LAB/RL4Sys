@@ -53,6 +53,7 @@ class DQN(AlgorithmAbstract):
         learning_starts: int = hyperparams['learning_starts'],
         train_frequency: int = hyperparams['train_frequency'],
         total_timesteps: int = hyperparams['total_timesteps'],
+        train_iters: int = hyperparams['train_iters'],
     ):
         super().__init__()
 
@@ -61,10 +62,9 @@ class DQN(AlgorithmAbstract):
         np.random.seed(seed)
         random.seed(seed)
 
-        # Log setup
+        # Logger setup
         log_data_dir = os.path.join(env_dir, './logs/rl4sys-dqn-info')
-        log_data_dir = os.path.join(log_data_dir, f"{seed}__{int(time.time())}")
-        
+        log_data_dir = os.path.join(log_data_dir, f"{int(time.time())}__{seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
 
@@ -95,26 +95,19 @@ class DQN(AlgorithmAbstract):
         self.learning_starts = learning_starts
         self.train_frequency = train_frequency
         self.total_timesteps = total_timesteps
+        self.train_iters = train_iters
         # New in this version:
         self._traj_per_epoch = traj_per_epoch
 
-        self.writer = self.create_logger()
 
         # Tracking
         self.global_step = 0
         self.epoch = 0
         self.traj = 0
         self.start_time = None
+        self.ep_rewards = 0
 
-        self.logger.setup_pytorch_saver(self._model)
 
-    def create_logger(self) -> None:
-        """
-        Create a logger for the algorithm.
-        """
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        self.writer = SummaryWriter(log_dir=log_dir)
 
     def save(self, filename: str) -> None:
         new_path = os.path.join(save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
@@ -134,36 +127,35 @@ class DQN(AlgorithmAbstract):
             self.start_time = time.time()
 
         update = False
-        
-        ep_ret, ep_len = 0.0, 0
 
         for i, r4a in enumerate(trajectory):
             self.traj += 1
             self.global_step += 1
-            ep_ret += r4a.rew
-            ep_len += 1
 
+            self.ep_rewards += r4a.rew
             # Store in replay buffer
             # Our PPO snippet simply stored transitions in a list, but for DQN,
             # we store them into replay_buffer.
             self.replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['q_val'], r4a.done)
 
-            if self.global_step > self.learning_starts and self.global_step % 100 == 0:
-                self.logger.store(QVals=r4a.data['q_val'], Epsilon=r4a.data['epsilon'])
-                self.logger.store(EpRet=ep_ret, EpLen=ep_len)
-                ep_ret, ep_len = 0.0, 0
-                    
-                    
+            if r4a.done:
+                self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
+                self.ep_rewards = 0
 
-        if self.global_step > self.learning_starts:
-            self.epoch += 1
-            self.train_model()
-            self.log_epoch()
-            update = True
+            if self.traj >= self.batch_size:
+                if self.global_step > self.learning_starts:
+                    self.epoch += 1
+                    loss_q, q_vals = self.train_model()
+                    #self.log_epoch()
+                    update = True
 
+                    self.writer.add_scalar("losses/td_loss", loss_q, self.global_step)
+                    self.writer.add_scalar("losses/q_values", q_vals, self.global_step)
+                    # print("SPS:", int(self.global_step / (time.time() - self.start_time)))
+                    self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
+                    
+        
             
-                
-
         # Once we have enough trajectories, do an update
         
         return update
@@ -174,10 +166,7 @@ class DQN(AlgorithmAbstract):
         You can choose how many minibatch updates to do per 'train_model()' call.
         Below we do a certain number of gradient steps, or you can do 1 step per call.
         """
-        # Example: let's do 10 gradient steps every epoch
-        num_train_steps = 10
-
-        for _ in range(num_train_steps):
+        for _ in range(self.train_iters):
             data, _ = self.replay_buffer.get(self.batch_size)
             obs      = data['obs']
             next_obs = data['next_obs']
@@ -203,9 +192,10 @@ class DQN(AlgorithmAbstract):
             # Possibly update target net
             if self.epoch % self.target_network_frequency == 0:
                 self._update_target()
+            
+        return loss_q, q_vals.mean().item()
 
-            # Optionally log
-            self.logger.store(LossQ=loss_q.item())
+
 
     def _update_target(self):
         """

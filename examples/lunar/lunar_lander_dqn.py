@@ -122,10 +122,7 @@ class LunarLanderSim(ApplicationAbstract):
                 iteration += 1
                 obs, info = self.env.reset(seed=self._seed + iteration)
 
-            if moves % TRAIN_FREQUENCY == 0:
-                print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
-
+            if moves % 20 == 0:
                 self.rlagent.send_actions()
 
 

@@ -44,7 +44,7 @@ class LunarLanderSim(ApplicationAbstract):
         self._render_game = render_game
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3', continuous=True)
+        self.env = gym.make('LunarLander-v3', continuous=False)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -125,7 +125,7 @@ class LunarLanderSim(ApplicationAbstract):
 
                 # record trajectory
                 rl4sys_action.update_reward(reward)
-                rl4sys_action.set_done(done)
+                
                 rl_runs += 1
                 moves += 1
                 self.simulator_stats['moves'] += 1
@@ -136,8 +136,10 @@ class LunarLanderSim(ApplicationAbstract):
                 if rl_runs >= MOVE_SEQUENCE_SIZE or done:
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                    print(f'[LunarLanderSim - simulator] Average reward: {cumulative_reward/rl_runs}')
+                    print(f'[LunarLanderSim - simulator] Final epoch reward: {cumulative_reward}')
 
+                    # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
+                    rl4sys_action.set_done(True)
                     self.rlagent.send_actions()
 
                     if reward >= 200:  # Successful landing threshold

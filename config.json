@@ -36,17 +36,18 @@
         },
         "DQN": {
             "seed": 1,
-            "learning_rate": 2.5e-4,
+            "learning_rate": 4e-4,
             "batch_size": 128,
             "gamma": 0.99,
-            "tau": 1.0,
-            "target_network_frequency": 500,
+            "tau": 1e-3,
+            "target_network_frequency": 1,
             "buffer_size": 10000,
             "start_e": 1.0,
-            "end_e": 0.05,
+            "end_e": 0.1,
             "exploration_fraction": 0.5,
             "learning_starts": 128,
             "train_frequency": 10,
+            "train_iters": 2,
             "total_timesteps": 500000
         },
         "PPO": {
