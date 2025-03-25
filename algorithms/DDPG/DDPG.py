@@ -10,7 +10,7 @@ from utils.conf_loader import ConfigLoader
 from protocol.trajectory import RL4SysTrajectory
 from torch.utils.tensorboard import SummaryWriter
 
-from .kernel import Actor, Critic
+from .kernel import DDPGActorCritic
 from .replay_buffer import ReplayBuffer
 
 ############
@@ -37,6 +37,7 @@ class DDPG(AlgorithmAbstract):
         exploration_noise: float = hyperparams['exploration_noise'],
         learning_starts: int = hyperparams['learning_starts'],
         policy_frequency: int = hyperparams['policy_frequency'],
+        noise_scale: float = hyperparams['noise_scale'],
         traj_per_epoch: int = 5,
     ):
         super().__init__()
@@ -45,21 +46,16 @@ class DDPG(AlgorithmAbstract):
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        # Create actor-critic module
-        self.actor = Actor(input_size, act_dim, act_limit)
-        self.critic = Critic(input_size, act_dim)
-        
-        # Create target networks
-        self.actor_target = Actor(input_size, act_dim, act_limit)
-        self.critic_target = Critic(input_size, act_dim)
+        # Create actor-critic module and its target
+        self.ac = DDPGActorCritic(input_size, act_dim, act_limit, noise_scale)
+        self.ac_target = DDPGActorCritic(input_size, act_dim, act_limit, noise_scale)
         
         # Copy target parameters
-        self.actor_target.load_state_dict(self.actor.state_dict())
-        self.critic_target.load_state_dict(self.critic.state_dict())
+        self.ac_target.load_state_dict(self.ac.state_dict())
 
         # Set up optimizers
-        self.pi_optimizer = Adam(self.actor.parameters(), lr=learning_rate)
-        self.q_optimizer = Adam(self.critic.parameters(), lr=learning_rate)
+        self.pi_optimizer = Adam(self.ac.actor.parameters(), lr=learning_rate)
+        self.q_optimizer = Adam(self.ac.critic.parameters(), lr=learning_rate)
 
         # Set up replay buffer
         self.replay_buffer = ReplayBuffer(
@@ -90,13 +86,12 @@ class DDPG(AlgorithmAbstract):
         self.start_time = None
 
         # Update hyperparameters to match cleanRL
-        self.actor.noise_scale = exploration_noise
+        self.ac.actor.noise_scale = exploration_noise
 
     def save(self, filename: str) -> None:
         new_path = os.path.join(save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
         torch.save({
-            'actor': self.actor.state_dict(),
-            'critic': self.critic.state_dict(),
+            'actor_critic': self.ac.state_dict(),
         }, new_path)
 
     def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
@@ -140,11 +135,11 @@ class DDPG(AlgorithmAbstract):
 
         # Update Q-function (similar to cleanRL)
         with torch.no_grad():
-            next_state_actions = self.actor_target(next_obs)
-            q_next_target = self.critic_target(next_obs, next_state_actions)
+            next_state_actions = self.ac_target.get_action(next_obs)
+            q_next_target = self.ac_target.get_value(next_obs, next_state_actions)
             next_q_value = rew + (1 - done) * self.gamma * q_next_target
 
-        current_q = self.critic(obs, act)
+        current_q = self.ac.get_value(obs, act)
         q_loss = F.mse_loss(current_q, next_q_value)
 
         self.q_optimizer.zero_grad()
@@ -154,7 +149,7 @@ class DDPG(AlgorithmAbstract):
         # Update policy (delayed)
         if self.global_step % self.policy_frequency == 0:
             # Actor loss
-            actor_loss = -self.critic(obs, self.actor(obs)).mean()
+            actor_loss = -self.ac.get_value(obs, self.ac.get_action(obs)).mean()
             
             self.pi_optimizer.zero_grad()
             actor_loss.backward()
@@ -162,9 +157,7 @@ class DDPG(AlgorithmAbstract):
 
             # Update target networks
             with torch.no_grad():
-                for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-                    target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-                for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+                for param, target_param in zip(self.ac.parameters(), self.ac_target.parameters()):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
             # Log losses

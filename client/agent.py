@@ -21,7 +21,7 @@ from utils.conf_loader import ConfigLoader
 
 from algorithms.PPO.kernel import RLActorCritic
 from algorithms.DQN.kernel import DeepQNetwork
-from algorithms.DDPG.kernel import DDPG
+from algorithms.DDPG.kernel import DDPGActorCritic
 import random
 import numpy as np
 
@@ -29,8 +29,7 @@ import numpy as np
 config_loader = ConfigLoader()
 TRAINING_SERVER_ADDRESS = "localhost:50051"  # or from config
 load_model_path = config_loader.load_model_path  # if you want local fallback
-config_loader = ConfigLoader(algorithm='DQN')
-hyperparams = config_loader.algorithm_params
+
 
 class RL4SysAgent:
     """
@@ -45,12 +44,16 @@ class RL4SysAgent:
                  model: torch.nn.Module = None, 
                  input_size: int = 0,
                  act_dim: int = 0,
+                 act_limit: float = 1.0,
                  server_address: str = TRAINING_SERVER_ADDRESS):
         """
         Args:
             model: an optional PyTorch model. Must have .step(obs, mask) -> (action_ndarray, dict_info).
             server_address: "host:port" of the gRPC training server.
         """
+        config_loader = ConfigLoader(algorithm=algorithm_name)
+        self.hyperparams = config_loader.algorithm_params
+
         self.algorithm_name = algorithm_name
         self.server_address = server_address
         self.channel = grpc.insecure_channel(self.server_address)
@@ -62,9 +65,7 @@ class RL4SysAgent:
 
         self.input_size = input_size
         self.act_dim = act_dim
-        
-        # explore rate
-        self.epsilon = hyperparams['start_e']
+        self.act_limit = act_limit
 
         # If a model was provided, validate it
         if self._model is not None:
@@ -77,6 +78,8 @@ class RL4SysAgent:
         # Create debug directory if it doesn't exist
         self.debug_dir = Path('debug')
         self.debug_dir.mkdir(exist_ok=True)
+
+        
 
     def _handshake_for_initial_model(self) -> None:
         """
@@ -102,6 +105,10 @@ class RL4SysAgent:
                         self._model.q_network = deserialize_model(resp.model)
                     elif self.algorithm_name == "PPO":
                         self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.actor = deserialize_model(resp.model)
+                        self._model.critic = deserialize_model(resp.model_critic)
+                    elif self.algorithm_name == "DDPG":
+                        self._model = DDPGActorCritic(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
                         self._model.actor = deserialize_model(resp.model)
                         self._model.critic = deserialize_model(resp.model_critic)
 
@@ -138,7 +145,9 @@ class RL4SysAgent:
                 data_dict['logp_a'] = logp_a
                 data_dict['v'] = value
                 action_nd = action_nd.numpy()
-
+            elif self.algorithm_name == "DDPG":
+                action_nd, data_dict = self._model.get_action(obs, mask=mask)
+                
         r4sa = RL4SysAction(obs, action_nd, mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)
         return r4sa

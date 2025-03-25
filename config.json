@@ -32,7 +32,8 @@
             "buffer_size": 1000000,
             "exploration_noise": 0.1,
             "learning_starts": 25000,
-            "policy_frequency": 2
+            "policy_frequency": 2,
+            "noise_scale": 0.1
         },
         "DQN": {
             "seed": 1,

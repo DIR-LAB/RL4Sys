@@ -66,6 +66,7 @@ class LunarLanderSim(ApplicationAbstract):
         self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
                                   input_size=self.env.observation_space.shape[0], 
                                   act_dim=act_dim,
+                                  act_limit=self.act_limit,
                                   model=model)
 
         # To store simulator stats
@@ -204,7 +205,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DDPG',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')

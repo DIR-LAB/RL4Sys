@@ -4,14 +4,35 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class Actor(StepAndForwardKernelAbstract):
-    def __init__(self, input_size: int, act_dim: int, act_limit: float):
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    """
+    Initialize a linear layer using orthogonal initialization, then set bias.
+    By default, std is sqrt(2) (common in orthogonal init for ReLU/Tanh).
+    """
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+class DDPGActorCritic(nn.Module):
+    def __init__(self, input_size: int, act_dim: int, act_limit: float, noise_scale: float = 0.1):
         super().__init__()
-        # Match cleanRL architecture
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, act_dim)
+        self.actor = Actor(input_size, act_dim, act_limit, noise_scale)
+        self.critic = Critic(input_size, act_dim)
         
+    def get_action(self, obs: torch.Tensor, mask: torch.Tensor = None):
+        return self.actor.step(obs, mask)
+    
+    def get_value(self, obs: torch.Tensor, act: torch.Tensor):
+        return self.critic(obs, act)
+
+class Actor(StepAndForwardKernelAbstract):
+    def __init__(self, input_size: int, act_dim: int, act_limit: float, noise_scale: float = 0.1):
+        super().__init__()
+        # Match cleanRL architecture with layer initialization
+        self.fc1 = layer_init(nn.Linear(input_size, 256))
+        self.fc2 = layer_init(nn.Linear(256, 256))
+        self.fc_mu = layer_init(nn.Linear(256, act_dim), std=0.01)  # Lower std for final layer
+        self.noise_scale = noise_scale
         # Action scaling
         self.action_scale = act_limit
         self.action_bias = 0.0
@@ -33,10 +54,10 @@ class Actor(StepAndForwardKernelAbstract):
 class Critic(nn.Module):
     def __init__(self, input_size: int, act_dim: int):
         super().__init__()
-        # Match cleanRL architecture
-        self.fc1 = nn.Linear(input_size + act_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+        # Match cleanRL architecture with layer initialization
+        self.fc1 = layer_init(nn.Linear(input_size + act_dim, 256))
+        self.fc2 = layer_init(nn.Linear(256, 256))
+        self.fc3 = layer_init(nn.Linear(256, 1), std=1.0)  # Higher std for value function
 
     def forward(self, obs: torch.Tensor, act: torch.Tensor):
         x = torch.cat([obs, act], dim=-1)
@@ -44,3 +65,4 @@ class Critic(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x.squeeze(-1)
+    
