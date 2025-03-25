@@ -21,7 +21,7 @@ from utils.conf_loader import ConfigLoader
 
 from algorithms.PPO.kernel import RLActorCritic
 from algorithms.DQN.kernel import DeepQNetwork
-
+from algorithms.DDPG.kernel import DDPG
 import random
 import numpy as np
 
@@ -208,6 +208,10 @@ class RL4SysAgent:
                         self._model.q_network = deserialize_model(poll_resp.model)
                     elif self.algorithm_name == "PPO":
                         self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
+                        self._model.actor = deserialize_model(poll_resp.model)
+                        self._model.critic = deserialize_model(poll_resp.model_critic)
+                    elif self.algorithm_name == "DDPG":
+                        self._model = DDPG(input_size=self.input_size, act_dim=self.act_dim)
                         self._model.actor = deserialize_model(poll_resp.model)
                         self._model.critic = deserialize_model(poll_resp.model_critic)
 

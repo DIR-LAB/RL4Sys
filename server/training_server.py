@@ -43,7 +43,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
     Can initalize algorithm object using python dict or command line arguments.
     """
-    def __init__(self, algorithm_name: str, input_size: int, action_dim: int, hyperparams: Union[dict | list[str]],
+    def __init__(self, algorithm_name: str, input_size: int, action_dim: int, act_limit: float, hyperparams: Union[dict | list[str]],
                  env_dir: str = os.getcwd(), tensorboard: bool = False, seed = 0):
         # super().__init__(algorithm_name, input_size==input_size, hyperparams=hyperparams, env_dir=env_dir)
 
@@ -63,7 +63,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
             # add each parameter of algorithm class
             parameters = inspect.signature(algorithm_class.__init__).parameters
-            no_parse = ('env_dir', 'input_size', 'act_dim', 'self')
+            no_parse = ('env_dir', 'input_size', 'act_dim', 'act_limit', 'self')
             for parameter in parameters.values():
                 if parameter.name in no_parse:
                     continue # parameter has already been taken out
@@ -85,6 +85,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         hyperparams['env_dir'] = env_dir
         hyperparams['input_size'] = input_size
         hyperparams['act_dim'] = action_dim
+        hyperparams['act_limit'] = act_limit
 
         # instantiate algorithm class
         self._algorithm = algorithm_class(**hyperparams)
@@ -194,6 +195,9 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     elif self.algorithm_name == "PPO":
                         model_data = serialize_model(self._algorithm._model_train.actor)
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)    
+                    elif self.algorithm_name == "DDPG":
+                        model_data = serialize_model(self._algorithm.actor)
+                        model_critic_data = serialize_model(self._algorithm.critic)
 
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
 
@@ -209,6 +213,9 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     elif self.algorithm_name == "PPO":
                         model_data = serialize_model(self._algorithm._model_train.actor)
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)
+                    elif self.algorithm_name == "DDPG":
+                        model_data = serialize_model(self._algorithm.actor)
+                        model_critic_data = serialize_model(self._algorithm.critic)
 
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
                 elif self.model_ready == -1:
@@ -243,6 +250,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 def start_training_server(algorithm_name: str,
                          input_size: int,
                          action_dim: int,
+                         act_limit: float,
                          hyperparams: list[str] | dict,
                          env_dir: str = os.getcwd(),
                          tensorboard: bool = False):
@@ -261,11 +269,17 @@ def start_training_server(algorithm_name: str,
     # 1. Create the gRPC server with a thread pool
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
+    if algorithm_name == "DDPG" or algorithm_name == "TD3" or algorithm_name == "RPO":
+        act_limit = act_limit
+    else:   
+        act_limit = 1.0
+
     # 2. Instantiate your TrainingServer class
     training_server = TrainingServer(
         algorithm_name=algorithm_name,
         input_size=input_size,
         action_dim=action_dim,
+        act_limit=act_limit,
         hyperparams=hyperparams,
         env_dir=env_dir,
         tensorboard=tensorboard

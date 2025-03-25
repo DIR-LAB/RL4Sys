@@ -27,6 +27,7 @@ class DDPG(AlgorithmAbstract):
         input_size: int,
         act_dim: int,
         act_limit: float,
+        buf_size: int,
         seed: int = hyperparams['seed'],
         gamma: float = hyperparams['gamma'],
         tau: float = hyperparams['tau'],

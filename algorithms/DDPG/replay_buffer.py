@@ -27,6 +27,9 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
+    def finish_path(self, last_val=0):
+        pass
+
     def get(self, batch_size):
         idxs = np.random.randint(0, self.size, size=batch_size)
         data = dict(

@@ -210,6 +210,13 @@ if __name__ == '__main__':
                         help='render the Lunar Lander environment')
     args, extras = parser.parse_known_args()
 
+    #make env for continuous action space
+    env = gym.make('LunarLander-v3', continuous=True)
+    # get env observation and action space and limit
+    observation_space = env.observation_space.shape[0]
+    action_space = env.action_space.shape[0]
+    action_limit = env.action_space.high[0]
+
     # If user wants to run a local gRPC server for training:
     if args.algorithm != 'NoServer':
         # example: append the buffer size for your DQN or PPO, etc.
@@ -221,8 +228,9 @@ if __name__ == '__main__':
             # so we run it in a thread.
             start_training_server(
                 algorithm_name=args.algorithm,
-                input_size=INPUT_DIM,
-                action_dim=ACT_DIM,
+                input_size=observation_space,
+                action_dim=action_space,
+                act_limit=action_limit,
                 hyperparams=extras,
                 env_dir=os.path.dirname(os.path.abspath(__file__)),
                 tensorboard=args.tensorboard
