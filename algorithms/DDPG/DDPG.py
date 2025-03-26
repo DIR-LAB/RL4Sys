@@ -5,7 +5,6 @@ from torch.optim import Adam
 import numpy as np
 import time
 import os
-from utils.logger import EpochLogger
 from utils.conf_loader import ConfigLoader
 from protocol.trajectory import RL4SysTrajectory
 from torch.utils.tensorboard import SummaryWriter
@@ -67,9 +66,10 @@ class DDPG(AlgorithmAbstract):
 
         # Logging
         log_data_dir = os.path.join(env_dir, './logs/rl4sys-ddpg-info')
-        log_data_dir = os.path.join(log_data_dir, f"{seed}__{int(time.time())}")
+        log_data_dir = os.path.join(log_data_dir, f"{int(time.time())}__{seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
+
 
         # Save hyperparameters
         self.gamma = gamma
@@ -84,6 +84,7 @@ class DDPG(AlgorithmAbstract):
         self.global_step = 0
         self.epoch = 0
         self.start_time = None
+        self.ep_rewards = 0
 
         # Update hyperparameters to match cleanRL
         self.ac.actor.noise_scale = exploration_noise
@@ -99,28 +100,28 @@ class DDPG(AlgorithmAbstract):
             self.start_time = time.time()
 
         update = False
-        ep_ret, ep_len = 0.0, 0
-
         for i, r4a in enumerate(trajectory):
             self.global_step += 1
-            ep_ret += r4a.rew
-            ep_len += 1
+            self.ep_rewards += r4a.rew
 
             # Store transition in buffer
             self.replay_buffer.store(r4a.obs, r4a.act, r4a.rew, r4a.done)
 
+            if r4a.done:
+                self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
+                self.ep_rewards = 0
+
             # Update handling
             if self.global_step >= self.learning_starts and self.global_step % self.policy_frequency == 0:
-                self.train_model()
+                loss_q, q_vals = self.train_model()
+                self.epoch += 1
                 update = True
 
-            if r4a.done:
-                self.logger.store(EpRet=ep_ret, EpLen=ep_len)
-                ep_ret, ep_len = 0.0, 0
+                self.writer.add_scalar("losses/td_loss", loss_q, self.global_step)
+                self.writer.add_scalar("losses/q_values", q_vals, self.global_step)
+                self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
 
-        if update:
-            self.epoch += 1
-            self.log_epoch()
+            
 
         return update
 
@@ -135,7 +136,8 @@ class DDPG(AlgorithmAbstract):
 
         # Update Q-function (similar to cleanRL)
         with torch.no_grad():
-            next_state_actions = self.ac_target.get_action(next_obs)
+            next_state_actions, _ = self.ac_target.get_action(next_obs)  # Unpack tuple
+            next_state_actions = torch.as_tensor(next_state_actions)  # Convert numpy to tensor
             q_next_target = self.ac_target.get_value(next_obs, next_state_actions)
             next_q_value = rew + (1 - done) * self.gamma * q_next_target
 
@@ -149,7 +151,9 @@ class DDPG(AlgorithmAbstract):
         # Update policy (delayed)
         if self.global_step % self.policy_frequency == 0:
             # Actor loss
-            actor_loss = -self.ac.get_value(obs, self.ac.get_action(obs)).mean()
+            actions, _ = self.ac.get_action(obs)  # Unpack tuple
+            actions = torch.as_tensor(actions)  # Convert numpy to tensor
+            actor_loss = -self.ac.get_value(obs, actions).mean()
             
             self.pi_optimizer.zero_grad()
             actor_loss.backward()
@@ -160,17 +164,7 @@ class DDPG(AlgorithmAbstract):
                 for param, target_param in zip(self.ac.parameters(), self.ac_target.parameters()):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-            # Log losses
-            self.logger.store(LossQ=q_loss.item(), LossPi=actor_loss.item())
-
+            return q_loss.item(), actor_loss.item()
+        
     def log_epoch(self) -> None:
-        elapsed = time.time() - self.start_time if self.start_time else 0
-        sps = int(self.global_step / elapsed) if elapsed > 0 else 0
-
-        self.logger.log_tabular('Epoch', self.epoch)
-        self.logger.log_tabular('EpRet', with_min_and_max=True)
-        self.logger.log_tabular('EpLen', average_only=True)
-        self.logger.log_tabular('LossQ', average_only=True)
-        self.logger.log_tabular('LossPi', average_only=True)
-        self.logger.log_tabular('SPS', sps)
-        self.logger.dump_tabular()
+        pass

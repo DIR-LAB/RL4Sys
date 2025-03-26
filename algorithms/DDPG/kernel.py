@@ -33,7 +33,8 @@ class Actor(StepAndForwardKernelAbstract):
         self.fc2 = layer_init(nn.Linear(256, 256))
         self.fc_mu = layer_init(nn.Linear(256, act_dim), std=0.01)  # Lower std for final layer
         self.noise_scale = noise_scale
-        # Action scaling
+        
+        # Action scaling (matching cleanRL)
         self.action_scale = act_limit
         self.action_bias = 0.0
 
@@ -47,9 +48,9 @@ class Actor(StepAndForwardKernelAbstract):
         with torch.no_grad():
             action = self.forward(obs, mask)
             # Add exploration noise like cleanRL
-            action += torch.normal(0, self.action_scale * self.noise_scale)
-            action = action.clamp(-self.action_scale, self.action_scale)
-        return action.numpy(), {}
+            noise = torch.randn_like(action) * self.action_scale * self.noise_scale
+            action = (action + noise).clamp(-self.action_scale, self.action_scale)
+            return action.cpu().numpy(), {}
 
 class Critic(nn.Module):
     def __init__(self, input_size: int, act_dim: int):

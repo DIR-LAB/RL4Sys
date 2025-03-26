@@ -106,16 +106,13 @@ class LunarLanderSim(ApplicationAbstract):
 
                 # Get action from agent
                 rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask)
-                action = rl4sys_action.act
+                action = rl4sys_action.act  # DDPG returns numpy array of continuous actions
+                
+                # Ensure action is in the correct format (flatten if nested)
+                if isinstance(action, np.ndarray) and action.ndim > 1:
+                    action = action.flatten()
 
-                # Ensure action is compatible
-                if isinstance(action, torch.Tensor):
-                    action = action.item()
-                elif isinstance(action, np.ndarray):
-                    action = action[0]
-                action = int(action)
-
-                # Step the environment
+                # Execute action in environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
                 done = terminated or truncated
                 cumulative_reward += reward
