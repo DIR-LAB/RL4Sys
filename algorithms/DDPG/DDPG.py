@@ -112,7 +112,7 @@ class DDPG(AlgorithmAbstract):
                 self.ep_rewards = 0
 
             # Update handling
-            if self.global_step >= self.learning_starts and self.global_step % self.policy_frequency == 0:
+            if self.global_step >= self.learning_starts:
                 loss_q, q_vals = self.train_model()
                 self.epoch += 1
                 update = True
