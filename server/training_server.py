@@ -208,18 +208,18 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     model_critic_data = None
                     if self.algorithm_name == "DQN":
                         model_data = serialize_model(self._algorithm._model)
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
                     # add for models have two networks
                     elif self.algorithm_name == "PPO":
                         model_data = serialize_model(self._algorithm._model_train.actor)
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
+
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
-                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
-                    #return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
+                    
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", model_critic=b"", error=self.error_message)
             
             interval = 0.5
