@@ -85,7 +85,8 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         hyperparams['env_dir'] = env_dir
         hyperparams['input_size'] = input_size
         hyperparams['act_dim'] = action_dim
-        hyperparams['act_limit'] = act_limit
+        if algorithm_name == "DDPG" or algorithm_name == "TD3" or algorithm_name == "RPO":
+            hyperparams['act_limit'] = act_limit
 
         # instantiate algorithm class
         self._algorithm = algorithm_class(**hyperparams)
@@ -212,10 +213,11 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                     elif self.algorithm_name == "PPO":
                         model_data = serialize_model(self._algorithm._model_train.actor)
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
-
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+                        return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
+                    #return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", model_critic=b"", error=self.error_message)
@@ -248,10 +250,10 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 def start_training_server(algorithm_name: str,
                          input_size: int,
                          action_dim: int,
-                         act_limit: float,
                          hyperparams: list[str] | dict,
                          env_dir: str = os.getcwd(),
-                         tensorboard: bool = False):
+                         tensorboard: bool = False,
+                         act_limit: float = 1.0):
     """
     Creates and starts the TrainingServer, which serves the RL4SysRoute gRPC service.
 

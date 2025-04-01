@@ -108,10 +108,6 @@ class RL4SysAgent:
                         self._model.actor = deserialize_model(resp.model)
                         self._model.critic = deserialize_model(resp.model_critic)
                     elif self.algorithm_name == "DDPG":
-                        if self._model == deserialize_model(resp.model):
-                            print("self._model is same as poll_resp.model")
-                        else:
-                            print("self._model is not same as poll_resp.model")
                         self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
                         self._model = deserialize_model(resp.model)
 
@@ -224,11 +220,6 @@ class RL4SysAgent:
                         self._model.actor = deserialize_model(poll_resp.model)
                         self._model.critic = deserialize_model(poll_resp.model_critic)
                     elif self.algorithm_name == "DDPG":
-                        # check if self._model is same as poll_resp.model
-                        if self._model == deserialize_model(poll_resp.model):
-                            print("self._model is same as poll_resp.model")
-                        else:
-                            print("self._model is not same as poll_resp.model")
                         self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit)
                         self._model = deserialize_model(poll_resp.model)
 
