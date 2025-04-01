@@ -197,7 +197,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)    
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
-                        model_critic_data = serialize_model(self._algorithm.ac.critic)
 
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
 
@@ -215,9 +214,8 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
-                        model_critic_data = serialize_model(self._algorithm.ac.critic)
 
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     return trajectory_pb2.RL4SysModel(code=-1, model=b"", model_critic=b"", error=self.error_message)

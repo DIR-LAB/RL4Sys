@@ -28,6 +28,7 @@ class DDPGActorCritic(nn.Module):
 class Actor(StepAndForwardKernelAbstract):
     def __init__(self, input_size: int, act_dim: int, act_limit: float, noise_scale: float = 0.1):
         super().__init__()
+        print("input_size, act_limit,act_dim", input_size, act_limit,act_dim)
         # Match cleanRL architecture with layer initialization
         self.fc1 = layer_init(nn.Linear(input_size, 256))
         self.fc2 = layer_init(nn.Linear(256, 256))
@@ -65,5 +66,6 @@ class Critic(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x.squeeze(-1)
+        
+        return x.view(-1)
     

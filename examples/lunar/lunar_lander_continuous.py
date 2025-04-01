@@ -93,14 +93,11 @@ class LunarLanderSim(ApplicationAbstract):
             cumulative_reward = 0
             start_time = time.time()
 
-            ##TODO Debug only
-            #print("---> OBS is: ", obs)
-
             # Build initial observation
             obs_tensor, mask = self.build_observation(obs)
 
             # while not done and moves < num_moves: # Modified
-            while not done or moves < 50:   # TODO debug only, remove after
+            while not done or moves < 500:   # TODO debug only, remove after
                 if self._render_game:
                     self.env.render()
 

@@ -101,6 +101,9 @@ if __name__ == "__main__":
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
+    print(envs.single_observation_space.shape)
+    print(envs.single_action_space.shape)
+
     actor = Actor(envs).to(device)
     qf1 = QNetwork(envs).to(device)
     qf1_target = QNetwork(envs).to(device)

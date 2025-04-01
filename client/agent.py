@@ -21,7 +21,7 @@ from utils.conf_loader import ConfigLoader
 
 from algorithms.PPO.kernel import RLActorCritic
 from algorithms.DQN.kernel import DeepQNetwork
-from algorithms.DDPG.kernel import DDPGActorCritic
+from algorithms.DDPG.kernel import Actor
 import random
 import numpy as np
 
@@ -108,9 +108,13 @@ class RL4SysAgent:
                         self._model.actor = deserialize_model(resp.model)
                         self._model.critic = deserialize_model(resp.model_critic)
                     elif self.algorithm_name == "DDPG":
-                        self._model = DDPGActorCritic(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
-                        self._model.actor = deserialize_model(resp.model)
-                        self._model.critic = deserialize_model(resp.model_critic)
+                        if self._model == deserialize_model(resp.model):
+                            print("self._model is same as poll_resp.model")
+                        else:
+                            print("self._model is not same as poll_resp.model")
+                        self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
+                        self._model = deserialize_model(resp.model)
+
 
                 print("[RL4SysAgent] Received and loaded initial model from server.")
             else:
@@ -146,7 +150,7 @@ class RL4SysAgent:
                 data_dict['v'] = value
                 action_nd = action_nd.numpy()
             elif self.algorithm_name == "DDPG":
-                action_nd, data_dict = self._model.get_action(obs, mask=mask)
+                action_nd, data_dict = self._model.step(obs, mask=mask)
                 
         r4sa = RL4SysAction(obs, action_nd, mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)
@@ -220,9 +224,15 @@ class RL4SysAgent:
                         self._model.actor = deserialize_model(poll_resp.model)
                         self._model.critic = deserialize_model(poll_resp.model_critic)
                     elif self.algorithm_name == "DDPG":
-                        self._model = DDPGActorCritic(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit)
-                        self._model.actor = deserialize_model(poll_resp.model)
-                        self._model.critic = deserialize_model(poll_resp.model_critic)
+                        # check if self._model is same as poll_resp.model
+                        if self._model == deserialize_model(poll_resp.model):
+                            print("self._model is same as poll_resp.model")
+                        else:
+                            print("self._model is not same as poll_resp.model")
+                        self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit)
+                        self._model = deserialize_model(poll_resp.model)
+
+
 
                 self.local_version = poll_resp.version
                 print("[RL4SysAgent] Updated local model from server (poll).")

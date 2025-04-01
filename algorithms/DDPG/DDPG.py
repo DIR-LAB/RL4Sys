@@ -33,11 +33,10 @@ class DDPG(AlgorithmAbstract):
         learning_rate: float = hyperparams['learning_rate'],
         batch_size: int = hyperparams['batch_size'],
         buffer_size: int = hyperparams['buffer_size'],
-        exploration_noise: float = hyperparams['exploration_noise'],
         learning_starts: int = hyperparams['learning_starts'],
         policy_frequency: int = hyperparams['policy_frequency'],
         noise_scale: float = hyperparams['noise_scale'],
-        traj_per_epoch: int = 5,
+        train_iters: int = hyperparams['train_iters'],  
     ):
         super().__init__()
         
@@ -75,10 +74,10 @@ class DDPG(AlgorithmAbstract):
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
-        self.exploration_noise = exploration_noise
         self.learning_starts = learning_starts
         self.policy_frequency = policy_frequency
         self.act_limit = act_limit
+        self.train_iters = train_iters
 
         # Initialize counters
         self.global_step = 0
@@ -86,8 +85,6 @@ class DDPG(AlgorithmAbstract):
         self.start_time = None
         self.ep_rewards = 0
 
-        # Update hyperparameters to match cleanRL
-        self.ac.actor.noise_scale = exploration_noise
 
     def save(self, filename: str) -> None:
         new_path = os.path.join(save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
@@ -126,45 +123,46 @@ class DDPG(AlgorithmAbstract):
         return update
 
     def train_model(self) -> None:
-        # Sample from replay buffer
-        data, _ = self.replay_buffer.get(self.batch_size)
-        obs = data['obs']
-        act = data['act']
-        rew = data['rew']
-        next_obs = data['next_obs']
-        done = data['done']
+        for _ in range(self.train_iters):
+            # Sample from replay buffer
+            data, _ = self.replay_buffer.get(self.batch_size)
+            obs = data['obs']
+            act = data['act']
+            rew = data['rew']
+            next_obs = data['next_obs']
+            done = data['done']
 
-        # Update Q-function (similar to cleanRL)
-        with torch.no_grad():
-            next_state_actions, _ = self.ac_target.get_action(next_obs)  # Unpack tuple
-            next_state_actions = torch.as_tensor(next_state_actions)  # Convert numpy to tensor
-            q_next_target = self.ac_target.get_value(next_obs, next_state_actions)
-            next_q_value = rew + (1 - done) * self.gamma * q_next_target
-
-        current_q = self.ac.get_value(obs, act)
-        q_loss = F.mse_loss(current_q, next_q_value)
-
-        self.q_optimizer.zero_grad()
-        q_loss.backward()
-        self.q_optimizer.step()
-
-        # Update policy (delayed)
-        if self.global_step % self.policy_frequency == 0:
-            # Actor loss
-            actions, _ = self.ac.get_action(obs)  # Unpack tuple
-            actions = torch.as_tensor(actions)  # Convert numpy to tensor
-            actor_loss = -self.ac.get_value(obs, actions).mean()
-            
-            self.pi_optimizer.zero_grad()
-            actor_loss.backward()
-            self.pi_optimizer.step()
-
-            # Update target networks
+            # Update Q-function (similar to cleanRL)
             with torch.no_grad():
-                for param, target_param in zip(self.ac.parameters(), self.ac_target.parameters()):
-                    target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+                next_state_actions, _ = self.ac_target.get_action(next_obs)  # Unpack tuple
+                next_state_actions = torch.as_tensor(next_state_actions)  # Convert numpy to tensor
+                q_next_target = self.ac_target.get_value(next_obs, next_state_actions)
+                next_q_value = rew + (1 - done) * self.gamma * q_next_target
 
-            return q_loss.item(), actor_loss.item()
+            current_q = self.ac.get_value(obs, act)
+            q_loss = F.mse_loss(current_q, next_q_value)
+
+            self.q_optimizer.zero_grad()
+            q_loss.backward()
+            self.q_optimizer.step()
+
+            # Update policy (delayed)
+            if self.global_step % self.policy_frequency == 0:
+                # Actor loss
+                actions, _ = self.ac.get_action(obs)  # Unpack tuple
+                actions = torch.as_tensor(actions)  # Convert numpy to tensor
+                actor_loss = -self.ac.get_value(obs, actions).mean()
+                
+                self.pi_optimizer.zero_grad()
+                actor_loss.backward()
+                self.pi_optimizer.step()
+
+                # Update target networks
+                with torch.no_grad():
+                    for param, target_param in zip(self.ac.parameters(), self.ac_target.parameters()):
+                        target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+                return q_loss.item(), actor_loss.item()
         
     def log_epoch(self) -> None:
         pass
