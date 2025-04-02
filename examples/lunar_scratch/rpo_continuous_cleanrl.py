@@ -213,6 +213,8 @@ if __name__ == "__main__":
     next_done = torch.zeros(args.num_envs).to(device)
     num_updates = args.total_timesteps // args.batch_size
 
+    cumulative_reward = 0
+
     for update in range(1, num_updates + 1):
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
@@ -237,6 +239,9 @@ if __name__ == "__main__":
             done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
+
+            cumulative_reward += reward[0]  # Get first element since we have one env
+                
 
             if "final_info" in infos:
                 for info in infos["final_info"]:
@@ -339,6 +344,8 @@ if __name__ == "__main__":
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar("charts/reward", cumulative_reward, global_step)
+        cumulative_reward = 0
 
     envs.close()
     writer.close()
