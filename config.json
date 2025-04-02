@@ -58,15 +58,15 @@
             "clip_ratio": 0.2,
             "gamma": 0.99,
             "lam": 0.95,
-            "pi_lr": 3e-4,
-            "vf_lr": 3e-4,
+            "pi_lr": 5e-4,
+            "vf_lr": 5e-4,
             "train_pi_iters": 4,
             "train_v_iters": 4,
             "target_kl": null
         },
         "RPO": {
             "seed": 1,
-            "learning_rate": 3e-4,
+            "learning_rate": 1e-4,
             "num_steps": 2048,
             "gamma": 0.99,
             "gae_lambda": 0.95,

@@ -16,12 +16,13 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
 
     def store(self, obs, act, rew, val, logp):
-        assert self.ptr < self.max_size
+        self.ptr = self.ptr % self.max_size
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
         self.rew_buf[self.ptr] = rew
         self.val_buf[self.ptr] = val
         self.logp_buf[self.ptr] = logp
+        
         self.ptr += 1
 
     def finish_path(self, last_val=0):
@@ -38,21 +39,25 @@ class ReplayBuffer(ReplayBufferAbstract):
         
         self.path_start_idx = self.ptr
 
-    def get(self):
-        assert self.ptr == self.max_size
-        self.ptr, self.path_start_idx = 0, 0
+    def get(self, batch_size: int):
+        # Get the last batch of samples up to the current pointer
+        end_idx = self.ptr
+        start_idx = max(0, end_idx - self.batch_size)
         
-        # Advantage normalization
-        adv_mean = np.mean(self.adv_buf)
-        adv_std = np.std(self.adv_buf)
-        self.adv_buf = (self.adv_buf - adv_mean) / (adv_std + 1e-8)
+        # Get the relevant slice of data
+        slice_indices = slice(start_idx, end_idx)
+        
+        # Advantage normalization for this batch
+        adv_mean = np.mean(self.adv_buf[slice_indices])
+        adv_std = np.std(self.adv_buf[slice_indices])
+        normalized_adv = (self.adv_buf[slice_indices] - adv_mean) / (adv_std + 1e-8)
         
         data = dict(
-            obs=self.obs_buf,
-            act=self.act_buf,
-            ret=self.ret_buf,
-            adv=self.adv_buf,
-            logp=self.logp_buf
+            obs=self.obs_buf[slice_indices],
+            act=self.act_buf[slice_indices], 
+            ret=self.ret_buf[slice_indices],
+            adv=normalized_adv,
+            logp=self.logp_buf[slice_indices]
         )
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}
 

@@ -85,7 +85,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         hyperparams['env_dir'] = env_dir
         hyperparams['input_size'] = input_size
         hyperparams['act_dim'] = action_dim
-        if algorithm_name == "DDPG" or algorithm_name == "TD3" or algorithm_name == "RPO":
+        if algorithm_name == "DDPG" or algorithm_name == "TD3":
             hyperparams['act_limit'] = act_limit
 
         # instantiate algorithm class
@@ -101,8 +101,6 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         # for trajectory buffer, if trajectory is not enough, we will keep it in buffer
         self.trajectory_buffer = []
 
-        if tensorboard:
-            self._tensorboard = TensorboardWriter(env_dir=env_dir, algorithm_name=algorithm_name)
 
         print("[TrainingServer] Finish Initilizating, Sending the model...")
 
@@ -198,6 +196,9 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                         model_critic_data = serialize_model(self._algorithm._model_train.critic)    
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
+                    elif self.algorithm_name == "RPO":
+                        model_data = serialize_model(self._algorithm.actor)
+                        model_critic_data = serialize_model(self._algorithm.critic)
 
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
 
@@ -215,6 +216,9 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
                     elif self.algorithm_name == "DDPG":
                         model_data = serialize_model(self._algorithm.ac.actor)
+                    elif self.algorithm_name == "RPO":
+                        model_data = serialize_model(self._algorithm.actor)
+                        model_critic_data = serialize_model(self._algorithm.critic)
 
                     return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
                 elif self.model_ready == -1:

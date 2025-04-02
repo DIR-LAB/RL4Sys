@@ -54,14 +54,17 @@ class LunarLanderSim(ApplicationAbstract):
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
+        # Get correct action dimension from environment
         if isinstance(self.env.action_space, gym.spaces.Box):
             # For continuous action spaces (DDPG, TD3, RPO)
-            act_dim = self.env.action_space.shape[0]
+            act_dim = self.env.action_space.shape[0]  # Should be 2 for LunarLander
             self.act_limit = self.env.action_space.high[0]  # Assuming symmetric limits
         else:
             # For discrete action spaces (DQN)
             act_dim = self.env.action_space.n
             self.act_limit = 1.0
+
+        print(f"Action space dimension: {act_dim}, Action limit: {self.act_limit}")
 
         self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
                                   input_size=self.env.observation_space.shape[0], 
@@ -198,7 +201,7 @@ if __name__ == '__main__':
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DDPG',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='RPO',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -214,8 +217,8 @@ if __name__ == '__main__':
     # If user wants to run a local gRPC server for training:
     if args.algorithm != 'NoServer':
         # example: append the buffer size for your DQN or PPO, etc.
-        extras.append('--buf_size')
-        extras.append(str(MOVE_SEQUENCE_SIZE * 100))
+        #extras.append('--buf_size')
+        #extras.append(str(MOVE_SEQUENCE_SIZE * 100))
 
         def run_server():
             # This blocks internally on server.wait_for_termination(),

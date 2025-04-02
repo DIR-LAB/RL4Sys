@@ -22,6 +22,7 @@ from utils.conf_loader import ConfigLoader
 from algorithms.PPO.kernel import RLActorCritic
 from algorithms.DQN.kernel import DeepQNetwork
 from algorithms.DDPG.kernel import Actor
+from algorithms.RPO.kernel import RPOActorCritic
 import random
 import numpy as np
 
@@ -111,6 +112,11 @@ class RL4SysAgent:
                         self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
                         self._model = deserialize_model(resp.model)
 
+                    elif self.algorithm_name == "RPO":
+                        self._model = RPOActorCritic(input_size=self.input_size, act_dim=self.act_dim, rpo_alpha=self.hyperparams['rpo_alpha'])
+                        self._model.actor = deserialize_model(resp.model)
+                        self._model.critic = deserialize_model(resp.model_critic)
+
 
                 print("[RL4SysAgent] Received and loaded initial model from server.")
             else:
@@ -147,6 +153,9 @@ class RL4SysAgent:
                 action_nd = action_nd.numpy()
             elif self.algorithm_name == "DDPG":
                 action_nd, data_dict = self._model.step(obs, mask=mask)
+            elif self.algorithm_name == "RPO":
+                action_nd, data_dict = self._model.get_action_and_value(obs, mask=mask)
+
                 
         r4sa = RL4SysAction(obs, action_nd, mask=mask, reward=-1, data=data_dict, done=False)
         self._current_traj.add_action(r4sa)
@@ -222,6 +231,10 @@ class RL4SysAgent:
                     elif self.algorithm_name == "DDPG":
                         self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit)
                         self._model = deserialize_model(poll_resp.model)
+                    elif self.algorithm_name == "RPO":
+                        self._model = RPOActorCritic(input_size=self.input_size, act_dim=self.act_dim, rpo_alpha=self.hyperparams['rpo_alpha'])
+                        self._model.actor = deserialize_model(poll_resp.model)
+                        self._model.critic = deserialize_model(poll_resp.model_critic)
 
 
 

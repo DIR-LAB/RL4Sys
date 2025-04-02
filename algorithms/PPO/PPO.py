@@ -7,7 +7,8 @@ import torch.nn as nn
 import random
 from .kernel import RLActorCritic
 from .replay_buffer import ReplayBuffer
-
+from torch.utils.tensorboard import SummaryWriter
+import time
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
@@ -83,11 +84,10 @@ class PPO(AlgorithmAbstract):
         self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
 
         # Set up logger
-        log_data_dir = os.path.join(env_dir, './logs/')
-        logger_kwargs = setup_logger_kwargs("rl4sys-ppo-info", seed=seed, data_dir=log_data_dir)
-        self.logger = EpochLogger(**logger_kwargs)
-        self.logger.save_config(locals())
-        self.logger.setup_pytorch_saver(self._model_train)
+        log_data_dir = os.path.join(env_dir, './logs/rl4sys-ppo-info')
+        log_data_dir = os.path.join(log_data_dir, f"{int(time.time())}__{seed}")
+        os.makedirs(log_data_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=log_data_dir)
 
         # Storage buffers
         self.storage_obs = []
@@ -102,7 +102,7 @@ class PPO(AlgorithmAbstract):
         self.epoch = 0
         self.global_step = 0
         self.start_time = None
-
+        self.ep_rewards = 0
     def save(self, filename: str) -> None:
         """Save model as file.
 
@@ -126,17 +126,13 @@ class PPO(AlgorithmAbstract):
             bool: True if we just finished an epoch (implies new model)
         """
         if self.start_time is None:
-            import time
             self.start_time = time.time()
             
-        self.traj += 1
-        ep_ret, ep_len = 0, 0
-        
         # Process each step in the trajectory
         for i, r4a in enumerate(trajectory):
+            self.traj += 1
             self.global_step += 1
-            ep_ret += r4a.rew
-            ep_len += 1
+            self.ep_rewards += r4a.rew
             
             # Store transition
             self.storage_obs.append(r4a.obs)
@@ -158,11 +154,11 @@ class PPO(AlgorithmAbstract):
                     self.storage_next_obs.append(np.zeros_like(r4a.obs))
             
 
-            self.logger.store(VVals=r4a.data['v'])
+            self.writer.add_scalar('charts/VVals', r4a.data['v'], self.global_step)
 
             if r4a.done:
-                self.logger.store(EpRet=ep_ret, EpLen=ep_len)
-                ep_ret, ep_len = 0, 0
+                self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
+                self.ep_rewards = 0
             
             
             
@@ -170,8 +166,14 @@ class PPO(AlgorithmAbstract):
         # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             self.epoch += 1
-            self.train_model()
-            self.log_epoch()
+            pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
+            self.writer.add_scalar("losses/pg_loss", pg_loss, self.global_step)
+            self.writer.add_scalar("losses/v_loss", v_loss, self.global_step)
+            self.writer.add_scalar("losses/entropy_loss", entropy_loss, self.global_step)
+            self.writer.add_scalar("losses/approx_kl", approx_kl, self.global_step)
+            self.writer.add_scalar("losses/clipfracs", clipfracs, self.global_step)
+            self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
+            self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
             return True  # indicates an updated model
         return False
 
@@ -299,40 +301,9 @@ class PPO(AlgorithmAbstract):
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
         
         # Store metrics for logging
-        self.logger.store(
-            LossPi=pg_loss.item(),
-            LossV=v_loss.item(),
-            Entropy=entropy_loss.item(),
-            KL=approx_kl,
-            ClipFrac=np.mean(clipfracs),
-            ExplainedVar=explained_var
-        )
+        return pg_loss.item(), v_loss.item(), entropy_loss.item(), approx_kl, np.mean(clipfracs), explained_var
         
-        # Clear storage buffers
-        self.storage_obs.clear()
-        self.storage_act.clear()
-        self.storage_logp.clear()
-        self.storage_rew.clear()
-        self.storage_val.clear()
-        self.storage_done.clear()
-        self.storage_next_obs.clear()
+
 
     def log_epoch(self) -> None:
-        """Log the information collected in logger over the course of the last epoch."""
-        import time
-        
-        self.logger.log_tabular('Epoch', self.epoch)
-        self.logger.log_tabular('EpRet', with_min_and_max=True)
-        self.logger.log_tabular('EpLen', with_min_and_max=True)
-        self.logger.log_tabular('VVals', with_min_and_max=True)
-        self.logger.log_tabular('LossPi', average_only=True)
-        self.logger.log_tabular('LossV', average_only=True)
-        self.logger.log_tabular('Entropy', average_only=True)
-        self.logger.log_tabular('KL', average_only=True)
-        
-        # Calculate and log SPS (steps per second)
-        if self.start_time is not None:
-            fps = int(self.global_step / (time.time() - self.start_time))
-            self.logger.log_tabular('SPS', fps)
-        
-        self.logger.dump_tabular()
+        pass
