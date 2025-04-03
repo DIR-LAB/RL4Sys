@@ -38,6 +38,10 @@ class RPO(AlgorithmAbstract):
         rpo_alpha: float = hyperparams['rpo_alpha'],
         update_epochs: int = hyperparams['update_epochs'],
         num_minibatches: int = hyperparams['num_minibatches'],
+        anneal_lr: bool = hyperparams['anneal_lr'],
+        total_timesteps: int = hyperparams['total_timesteps_anneal_lr'],
+        clip_vloss: bool = hyperparams['clip_vloss'],
+        target_kl: float = hyperparams['target_kl'],
     ):
         super().__init__()
         
@@ -88,6 +92,17 @@ class RPO(AlgorithmAbstract):
         self.start_time = None
         self.ep_rewards = 0
 
+        # Save additional hyperparameters for LR annealing
+        self.learning_rate = learning_rate
+        self.anneal_lr = anneal_lr
+        self.total_timesteps = total_timesteps
+        self.num_updates = total_timesteps // num_steps
+        self.update_count = 0
+
+        # Save additional hyperparameters
+        self.clip_vloss = clip_vloss
+        self.target_kl = target_kl
+
     def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
         if self.start_time is None:
             self.start_time = time.time()
@@ -115,7 +130,22 @@ class RPO(AlgorithmAbstract):
             # If buffer is full, update policy
             if self.buffer_pos >= self.num_steps:
                 self.buffer_pos = 0
-                pg_loss, v_loss, entropy_loss = self.train_model()
+                
+                # Anneal learning rate if enabled
+                if self.anneal_lr:
+                    self.update_count += 1
+                    frac = 1.0 - (self.update_count - 1.0) / self.num_updates
+                    lrnow = frac * self.learning_rate
+                    for param_group in self.optimizer.param_groups:
+                        param_group['lr'] = lrnow
+                    self.writer.add_scalar("charts/learning_rate", lrnow, self.global_step)
+                
+                pg_loss, v_loss, entropy_loss, old_approx_kl, approx_kl, clipfracs, explained_var = self.train_model()
+                # Log additional metrics
+                self.writer.add_scalar("losses/approx_kl", approx_kl.item(), self.global_step)
+                self.writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), self.global_step)
+                self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), self.global_step)
+                self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
                 self.writer.add_scalar("losses/policy_loss", pg_loss, self.global_step)
                 self.writer.add_scalar("losses/value_loss", v_loss, self.global_step)
                 self.writer.add_scalar("losses/entropy_loss", entropy_loss, self.global_step)
@@ -152,6 +182,7 @@ class RPO(AlgorithmAbstract):
         b_values = self.values.reshape(-1)
 
         # Optimize policy for K epochs
+        clipfracs = []
         for epoch in range(self.update_epochs):
             # Generate random indices
             indices = np.random.permutation(self.num_steps)
@@ -170,6 +201,12 @@ class RPO(AlgorithmAbstract):
                 # Policy loss
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
+                
+                # Calculate approx_kl for early stopping
+                with torch.no_grad():
+                    old_approx_kl = (-logratio).mean()
+                    approx_kl = ((ratio - 1) - logratio).mean()
+                    clipfracs += [((ratio - 1.0).abs() > self.clip_coef).float().mean().item()]
 
                 # RPO policy loss
                 mb_advantages = b_advantages[mb_inds]
@@ -181,7 +218,18 @@ class RPO(AlgorithmAbstract):
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
-                v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+                if self.clip_vloss:
+                    v_loss_unclipped = ((newvalue - b_returns[mb_inds]) ** 2)
+                    v_clipped = b_values[mb_inds] + torch.clamp(
+                        newvalue - b_values[mb_inds],
+                        -self.clip_coef,
+                        self.clip_coef,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
+                else:
+                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
                 # Entropy loss
                 entropy_loss = entropy.mean()
@@ -198,7 +246,22 @@ class RPO(AlgorithmAbstract):
                 )
                 self.optimizer.step()
 
-        return pg_loss.item(), v_loss.item(), entropy_loss.item()
+            # Early stopping based on KL divergence
+            if self.target_kl is not None:
+                if approx_kl > self.target_kl:
+                    break
+        
+        
+        
+        # Calculate explained variance
+        y_pred = b_values.detach().numpy()
+        y_true = b_returns.detach().numpy()
+        var_y = np.var(y_true)
+        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
+        
+        return (pg_loss.item(), v_loss.item(), entropy_loss.item(), 
+                old_approx_kl.item(), approx_kl.item(), np.mean(clipfracs), explained_var)
 
     def save(self, filename: str) -> None:
         new_path = os.path.join(save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))

@@ -199,7 +199,7 @@ if __name__ == '__main__':
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
     parser.add_argument('--number-of-iterations', type=int, default=10000,
                         help='number of iterations to train the agent')
-    parser.add_argument('--number-of-moves', type=int, default=10000,
+    parser.add_argument('--number-of-moves', type=int, default=500,
                         help='maximum number of moves allowed per iteration')
     parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='RPO',
                         help='run a local training server, using a specific algorithm')
