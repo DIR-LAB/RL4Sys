@@ -142,9 +142,9 @@ class RPO(AlgorithmAbstract):
                 
                 pg_loss, v_loss, entropy_loss, old_approx_kl, approx_kl, clipfracs, explained_var = self.train_model()
                 # Log additional metrics
-                self.writer.add_scalar("losses/approx_kl", approx_kl.item(), self.global_step)
-                self.writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), self.global_step)
-                self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), self.global_step)
+                self.writer.add_scalar("losses/approx_kl", approx_kl, self.global_step)
+                self.writer.add_scalar("losses/old_approx_kl", old_approx_kl, self.global_step)
+                self.writer.add_scalar("losses/clipfrac", clipfracs, self.global_step)
                 self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
                 self.writer.add_scalar("losses/policy_loss", pg_loss, self.global_step)
                 self.writer.add_scalar("losses/value_loss", v_loss, self.global_step)
