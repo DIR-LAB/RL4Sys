@@ -5,7 +5,7 @@ import zmq
 
 from _common._rl4sys.BaseAction import RL4SysActionAbstract
 
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 
 config_loader = ConfigLoader()
 traj_server = config_loader.traj_server

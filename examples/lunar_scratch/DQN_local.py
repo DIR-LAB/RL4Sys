@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 from torch.optim import Adam
@@ -136,6 +136,7 @@ class DeepQNetwork(nn.Module):
         super().__init__()
 
         # For LunarLander-v2, obs_dim=8
+        """
         self.q_network = nn.Sequential(
             nn.Linear(obs_dim, 32),
             nn.ReLU(),
@@ -144,6 +145,16 @@ class DeepQNetwork(nn.Module):
             nn.Linear(16, 8),
             nn.ReLU(),
             nn.Linear(8, act_dim)
+        )
+        """
+        
+
+        self.q_network = nn.Sequential(
+            nn.Linear(obs_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Linear(64, act_dim)
         )
 
         self.epsilon = epsilon
@@ -220,10 +231,14 @@ class DQNAgent:
         self.writer = SummaryWriter(log_dir=unique_log_dir)
 
         # Set random seed
-        seed += 10000 * os.getpid()  # to differentiate seeds if multi-process
+        #seed += 10000 * os.getpid()  # to differentiate seeds if multi-process
+        self.seed = seed
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
+        env.reset(seed=seed)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
 
         self.env = gym.make(env_name)
         obs_dim = self.env.observation_space.shape[0]
@@ -247,7 +262,7 @@ class DQNAgent:
                                   epsilon_decay=epsilon_decay)
         self.q_target.load_state_dict(self.model.state_dict())
 
-        self.target_update_freq = 1000  # how often to sync weights
+        self.target_update_freq = 500  # how often to sync weights
         self.total_steps = 0
 
 
@@ -267,7 +282,8 @@ class DQNAgent:
         for ep in range(num_episodes):
             # new gym.reset in Gym >= 0.26 returns (obs, info) 
             # older gym versions just return obs
-            reset_out = self.env.reset()
+            reset_out = self.env.reset(seed= self.seed+num_episodes)
+            #reset_out = self.env.reset(seed= self.seed+num_episodes)
             if isinstance(reset_out, tuple):
                 obs, info = reset_out
             else:
@@ -379,11 +395,10 @@ class DQNAgent:
 # ---------------------
 
 if __name__ == "__main__":
-    env = gym.make("LunarLander-v2")
+    env = gym.make("LunarLander-v3")
     print(env.action_space.n)
-    exit()
     agent = DQNAgent(
-        env_name='LunarLander-v2',
+        env_name='LunarLander-v3',
         gamma=0.99,
         epsilon=1.0,
         epsilon_min=0.01,
@@ -391,8 +406,8 @@ if __name__ == "__main__":
         q_lr=1e-3,
         buf_size=10000,
         batch_size=64,
-        train_q_iters=1,
-        seed=0
+        train_q_iters=5,
+        seed=6
     )
     # Train for 500 episodes
     agent.train(num_episodes=1000)

@@ -3,17 +3,18 @@ from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
 import numpy as np
 import torch
 from torch.optim import Adam
-
+import torch.nn as nn
+import random
 from .kernel import RLActorCritic
 from .replay_buffer import ReplayBuffer
-
+from torch.utils.tensorboard import SummaryWriter
+import time
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
-from trajectory import RL4SysTrajectory
+from protocol.trajectory import RL4SysTrajectory
 
-
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
 the current instance.
 
@@ -25,86 +26,83 @@ save_model_path = config_loader.save_model_path
 
 
 class PPO(AlgorithmAbstract):
-    """Algorithm class for PPO.
-
-    See OpenAI Spinning Up PPO implementation:
-    https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ppo
-
-    Attributes:
-        traj (int): number of trajectories that have occured.
-        epoch (int): number of epochs that have occured.
-
-    Hyperparameters without defaults:
-
-        kernel_size (int): number of observations. e.g. MAX_QUEUE_SIZE
-        kernel_dim (int): number of features. e.g. JOB_FEATURES
-        buf_size (int): size of replay buffer.
-        
-    Hyperparameters with defaults:
-    
-        seed (int): seed for torch and numpy random number generators.
-
-        traj_per_epoch (int): number of trajectories to receive before training the model.
-
-        clip_ratio (float): Hyperparameter for clipping in the policy objective.
-            Roughly: how far can the new policy go from the old policy while 
-            still profiting (improving the objective function)? The new policy 
-            can still go farther than the clip_ratio says, but it doesn't help
-            on the objective anymore. (Usually small, 0.1 to 0.3.) Typically
-            denoted by :math:`\epsilon`. 
-
-        gamma (float): Discount factor. (Always between 0 and 1.)
-        lam (float): Lambda for GAE-Lambda. (Always between 0 and 1,
-            close to 1.)
-
-        pi_lr (float): Learning rate for policy optimizer.
-        vf_lr (float): Learning rate for value function optimizer.
-
-        train_pi_iters (int): Maximum number of gradient descent steps to take 
-            on policy loss per epoch. (Early stopping may cause optimizer
-            to take fewer than this.)
-        train_v_iters (int): Number of gradient descent steps to take on 
-            value function per epoch.  
-        target_kl (float): Roughly what KL divergence we think is appropriate
-            between new and old policies after an update. This will get used 
-            for early stopping. (Usually small, 0.01 or 0.05.)
-
     """
-    def __init__(self, env_dir: str, kernel_size: int, kernel_dim: int, act_dim:int, buf_size: int, seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'], clip_ratio: float = hyperparams['clip_ratio'],
-                 gamma: float = hyperparams['gamma'], lam: float = hyperparams['lam'],
-                 pi_lr: float = hyperparams['pi_lr'], vf_lr: float = hyperparams['vf_lr'],
-                 train_pi_iters: int = hyperparams['train_pi_iters'], train_v_iters: int = hyperparams['train_v_iters'],
-                 target_kl: float = hyperparams['target_kl']):
+    PPO implementation matching the CleanRL version.
+    """
+
+    def __init__(self, env_dir: str,
+                 input_size: int,
+                 act_dim: int,
+                 buf_size: int,
+                 batch_size: int = hyperparams['batch_size'],
+                 seed: int = hyperparams['seed'],
+                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
+                 clip_ratio: float = hyperparams['clip_ratio'],
+                 gamma: float = hyperparams['gamma'],
+                 lam: float = hyperparams['lam'],
+                 pi_lr: float = hyperparams['pi_lr'],
+                 vf_lr: float = hyperparams['vf_lr'],
+                 train_pi_iters: int = hyperparams['train_pi_iters'],
+                 train_v_iters: int = hyperparams['train_v_iters'],
+                 target_kl: float = hyperparams['target_kl'],
+                 max_grad_norm: float = 0.5,
+                 norm_adv: bool = True,
+                 clip_vloss: bool = True,
+                 ent_coef: float = 0.01,
+                 vf_coef: float = 0.5,
+                 ):
 
         super().__init__()
-        seed += 10000 * os.getpid()
+        # Set up random seeds
         torch.manual_seed(seed)
         np.random.seed(seed)
-        
+        random.seed(seed)
+
+        # Set device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         # Hyperparameters
         self._traj_per_epoch = traj_per_epoch
         self._clip_ratio = clip_ratio
+        self._batch_size = batch_size
         self._train_pi_iters = train_pi_iters
         self._train_v_iters = train_v_iters
         self._target_kl = target_kl
-        
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, act_dim, buf_size, gamma=gamma, lam=lam)
-        self._model = RLActorCritic(kernel_size, kernel_dim, act_dim)
-        self._pi_optimizer = Adam(self._model.pi.parameters(), lr=pi_lr)
-        self._vf_optimizer = Adam(self._model.v.parameters(), lr=vf_lr)
+        self._max_grad_norm = max_grad_norm
+        self._norm_adv = norm_adv
+        self._clip_vloss = clip_vloss
+        self._ent_coef = ent_coef
+        self._vf_coef = vf_coef
+        self.gamma = gamma
+        self.lam = lam
 
-        # set up logger
-        log_data_dir = os.path.join(env_dir, './logs/')
-        logger_kwargs = setup_logger_kwargs(
-            "rl4sys-ppo-info", seed=seed, data_dir=log_data_dir)
-        self.logger = EpochLogger(**logger_kwargs)
-        self.logger.save_config(locals())
-        self.logger.setup_pytorch_saver(self._model)
+        # Create actor-critic model
+        self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
+        self._model = self._model_train  # for usage consistency
+
+        # Single Adam optimizer for both policy and value function
+        self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
+
+        # Set up logger
+        log_data_dir = os.path.join(env_dir, './logs/rl4sys-ppo-info')
+        log_data_dir = os.path.join(log_data_dir, f"{int(time.time())}__{seed}")
+        os.makedirs(log_data_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=log_data_dir)
+
+        # Storage buffers
+        self.storage_obs = []
+        self.storage_act = []
+        self.storage_logp = []
+        self.storage_rew = []
+        self.storage_val = []
+        self.storage_done = []
+        self.storage_next_obs = []  # Added to match CleanRL's approach
 
         self.traj = 0
         self.epoch = 0
-
+        self.global_step = 0
+        self.start_time = None
+        self.ep_rewards = 0
     def save(self, filename: str) -> None:
         """Save model as file.
 
@@ -112,134 +110,200 @@ class PPO(AlgorithmAbstract):
 
         Args:
             filename: name to save file as
-
         """
         new_path = os.path.join(save_model_path, filename +
                                 ('.pth' if not filename.__contains__('.pth') else ''))
-        torch.save(self._model, new_path)
+        torch.save(self._model_train, new_path)
 
     def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
-        """Process a trajectory received by training_server.
-
-        If an epoch is triggered, calls train_model().
-
-        Args:
-            trajectory: holds agent experiences since last trajectory
-        Returns:
-            True if an epoch was triggered and an updated model should be sent.
-
         """
-        self.traj += 1
-        ep_ret, ep_len = 0, 0
+        Process a trajectory from the environment.
         
-        for r4a in trajectory.actions:
-            # Process each RL4SysAction in the trajectory
-            ep_ret += r4a.rew
-            ep_len += 1
-            if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew, r4a.data['v'], r4a.data['logp_a'])
-                self.logger.store(VVals=r4a.data['v'])
+        Args:
+            trajectory: Trajectory from environment
+            
+        Returns:
+            bool: True if we just finished an epoch (implies new model)
+        """
+        if self.start_time is None:
+            self.start_time = time.time()
+            
+        # Process each step in the trajectory
+        for i, r4a in enumerate(trajectory):
+            self.traj += 1
+            self.global_step += 1
+            self.ep_rewards += r4a.rew
+            
+            # Store transition
+            self.storage_obs.append(r4a.obs)
+            self.storage_act.append(r4a.act)
+            self.storage_logp.append(r4a.data['logp_a'])
+            self.storage_rew.append(r4a.rew)
+            self.storage_val.append(r4a.data['v'])
+            self.storage_done.append(r4a.done)
+            
+            # Store next observation for bootstrapping
+            if i < len(trajectory) - 1:
+                self.storage_next_obs.append(trajectory[i+1].obs)
             else:
-                self._replay_buffer.finish_path(r4a.rew)
-                self.logger.store(EpRet=ep_ret, EpLen=ep_len)
+                # For the last step, use the same observation if not done
+                # or zeros if done
+                if not r4a.done:
+                    self.storage_next_obs.append(r4a.obs)
+                else:
+                    self.storage_next_obs.append(np.zeros_like(r4a.obs))
+            
 
-        # get enough trajectories for training the model
+            self.writer.add_scalar('charts/VVals', r4a.data['v'], self.global_step)
+
+            if r4a.done:
+                self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
+                self.ep_rewards = 0
+            
+            
+            
+        
+        # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             self.epoch += 1
-            self.train_model()
-            self.log_epoch()
-            return True
-        
+            pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
+            self.writer.add_scalar("losses/pg_loss", pg_loss, self.global_step)
+            self.writer.add_scalar("losses/v_loss", v_loss, self.global_step)
+            self.writer.add_scalar("losses/entropy_loss", entropy_loss, self.global_step)
+            self.writer.add_scalar("losses/approx_kl", approx_kl, self.global_step)
+            self.writer.add_scalar("losses/clipfracs", clipfracs, self.global_step)
+            self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
+            self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
+            return True  # indicates an updated model
         return False
 
     def train_model(self) -> None:
-        """Train model on data from replay_buffer.
         """
-        # data holds all timesteps since last epoch
-        data = self._replay_buffer.get()
-
-        # calculate loss
-        pi_l_old, pi_info_old = self.compute_loss_pi(data)
-        pi_l_old = pi_l_old.item()
-        v_l_old = self.compute_loss_v(data).item()
-
-        # Train policy with multiple steps of gradient descent
-        for i in range(self._train_pi_iters):
-            self._pi_optimizer.zero_grad()
-            loss_pi, pi_info = self.compute_loss_pi(data)
-            kl = (pi_info['kl'])
-            if kl > 1.5 * self._target_kl:
-                self.logger.log('Early stopping at step %d due to reaching max kl.' % i)
-                break
-            loss_pi.backward()
-            self._pi_optimizer.step()
+        Train the model using the CleanRL PPO approach.
+        """
+        # Convert stored transitions to numpy arrays
+        obs = np.array(self.storage_obs, dtype=np.float32)
+        actions = np.array(self.storage_act, dtype=np.int64)
+        logprobs = np.array(self.storage_logp, dtype=np.float32)
+        rewards = np.array(self.storage_rew, dtype=np.float32)
+        values = np.array(self.storage_val, dtype=np.float32)
+        dones = np.array(self.storage_done, dtype=np.bool_)
+        next_obs = np.array(self.storage_next_obs, dtype=np.float32)
         
-        self.logger.store(StopIter=i)
+        # Convert to tensors and move to device
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        actions_tensor = torch.tensor(actions, dtype=torch.long).to(self.device)
+        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32).to(self.device)
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        values_tensor = torch.tensor(values, dtype=torch.float32).to(self.device)
+        dones_tensor = torch.tensor(dones, dtype=torch.bool).to(self.device)
+        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32).to(self.device)
+        
+        # Calculate advantages and returns
+        with torch.no_grad():
+            next_values = self._model_train.get_value(next_obs_tensor)
+            advantages = torch.zeros_like(rewards_tensor).to(self.device)
+            lastgaelam = 0
+            
+            # GAE calculation
+            for t in reversed(range(len(rewards))):
+                if t == len(rewards) - 1:
+                    nextnonterminal = 1.0 - dones_tensor[t].float()
+                    nextvalues = next_values[t]
+                else:
+                    nextnonterminal = 1.0 - dones_tensor[t+1].float()
+                    nextvalues = values_tensor[t + 1]
+                
+                delta = rewards_tensor[t] + self.gamma * nextvalues * nextnonterminal - values_tensor[t]
+                advantages[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
+            
+            returns = advantages + values_tensor
+        
+        # Flatten the batch
+        b_obs = obs_tensor.reshape(-1, obs.shape[-1])
+        b_actions = actions_tensor.reshape(-1)
+        b_logprobs = logprobs_tensor.reshape(-1)
+        b_advantages = advantages.reshape(-1)
+        b_returns = returns.reshape(-1)
+        b_values = values_tensor.reshape(-1)
+        
+        # Optimize policy and value networks
+        batch_size = len(b_obs)
+        minibatch_size = max(1, self._batch_size)
+        b_inds = np.arange(batch_size)
+        clipfracs = []
+        
+        for epoch in range(self._train_pi_iters):
+            np.random.shuffle(b_inds)
+            for start in range(0, batch_size, minibatch_size):
+                end = start + minibatch_size
+                mb_inds = b_inds[start:end]
+                
+                _, newlogprob, entropy, newvalue = self._model_train.get_action_and_value(
+                    b_obs[mb_inds], b_actions[mb_inds]
+                )
+                
+                # Policy loss
+                logratio = newlogprob - b_logprobs[mb_inds]
+                ratio = logratio.exp()
+                
+                with torch.no_grad():
+                    # Calculate approx_kl
+                    old_approx_kl = (-logratio).mean().item()
+                    approx_kl = ((ratio - 1) - logratio).mean().item()
+                    clipfracs += [((ratio - 1.0).abs() > self._clip_ratio).float().mean().item()]
+                
+                # Normalize advantages
+                mb_advantages = b_advantages[mb_inds]
+                if self._norm_adv:
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                
+                # PPO policy loss
+                pg_loss1 = -mb_advantages * ratio
+                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+                
+                # Value loss
+                newvalue = newvalue.view(-1)
+                if self._clip_vloss:
+                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
+                    v_clipped = b_values[mb_inds] + torch.clamp(
+                        newvalue - b_values[mb_inds],
+                        -self._clip_ratio,
+                        self._clip_ratio,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
+                else:
+                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+                
+                # Entropy loss
+                entropy_loss = entropy.mean()
+                
+                # Total loss
+                loss = pg_loss - self._ent_coef * entropy_loss + v_loss * self._vf_coef
+                
+                # Gradient step
+                self.optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(self._model_train.parameters(), self._max_grad_norm)
+                self.optimizer.step()
+            
+            # Early stopping based on KL divergence
+            if self._target_kl is not None and approx_kl > 1.5 * self._target_kl:
+                break
+        
+        # Calculate explained variance for logging
+        y_pred = b_values.cpu().numpy()
+        y_true = b_returns.cpu().numpy()
+        var_y = np.var(y_true)
+        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        
+        # Store metrics for logging
+        return pg_loss.item(), v_loss.item(), entropy_loss.item(), approx_kl, np.mean(clipfracs), explained_var
+        
 
-        # Value function learning
-        for i in range(self._train_v_iters):
-            self._vf_optimizer.zero_grad()
-            loss_v = self.compute_loss_v(data)
-            loss_v.backward()
-            self._vf_optimizer.step()
-
-        # Log changes from update
-        kl, ent, cf = pi_info['kl'], pi_info_old['ent'], pi_info['cf']
-        self.logger.store(LossPi=pi_l_old, LossV=v_l_old,
-                     KL=kl, Entropy=ent, ClipFrac=cf,
-                     DeltaLossPi=(loss_pi.item() - pi_l_old),
-                     DeltaLossV=(loss_v.item() - v_l_old))
 
     def log_epoch(self) -> None:
-        """Log the information collected in logger over the course of the last epoch.
-        """
-        # Log info about epoch
-        self.logger.log_tabular('Epoch', self.epoch)
-        self.logger.log_tabular('EpRet', with_min_and_max=True)
-        self.logger.log_tabular('EpLen', with_min_and_max=True)
-        self.logger.log_tabular('VVals', with_min_and_max=True)
-        self.logger.log_tabular('LossPi', average_only=True)
-        self.logger.log_tabular('LossV', average_only=True)
-        self.logger.log_tabular('DeltaLossPi', average_only=True)
-        self.logger.log_tabular('DeltaLossV', average_only=True)
-        self.logger.log_tabular('Entropy', average_only=True)
-        self.logger.log_tabular('KL', average_only=True)
-        self.logger.log_tabular('ClipFrac', average_only=True)
-        self.logger.log_tabular('StopIter', average_only=True)
-        self.logger.dump_tabular()
-
-    def compute_loss_pi(self, data: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
-        """Compute loss for PPO policy.
-
-        Args:
-            data: properties from each timestep in replay buffer
-        Returns:
-            loss, statistics for logging
-        """
-        obs, act, adv, logp_old, mask = data['obs'], data['act'], data['adv'], data['logp'], data['mask']
-
-        # Policy loss
-        pi, logp = self._model.pi(obs, mask, act)
-        ratio = torch.exp(logp - logp_old)
-        clip_adv = torch.clamp(ratio, 1-self._clip_ratio, 1+self._clip_ratio) * adv
-        loss_pi = -(torch.min(ratio * adv, clip_adv)).mean()
-
-        # Useful extra info
-        approx_kl = (logp_old - logp).mean().item()
-        ent = pi.entropy().mean().item()
-        clipped = ratio.gt(1+self._clip_ratio) | ratio.lt(1-self._clip_ratio)
-        clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
-        pi_info = dict(kl=approx_kl, ent=ent, cf=clipfrac)
-
-        return loss_pi, pi_info
-
-    def compute_loss_v(self, data: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Compute value loss.
-
-        Args:
-            data: properties from each timestep in replay buffer
-        Returns:
-            loss
-        """
-        obs, ret, mask = data['obs'], data['ret'], data['mask']
-        return ((self._model.v(obs, mask) - ret)**2).mean()
+        pass

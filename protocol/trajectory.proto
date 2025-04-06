@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package rl4sys;
+
+message RL4SysAction {
+    bytes obs = 1;      // Serialized tensor data as bytes
+    bytes action = 2;   // Serialized action tensor as bytes
+    bytes mask = 3;     // Serialized mask tensor as bytes
+    bytes reward = 4;   // Reward as an float
+    map<string, bytes> data = 5;  // Changed from string to bytes to handle arrays
+    bool done = 6;      // Indicates if this is the last action in trajectory
+    bool reward_update_flag = 7; // Indicates if the reward was updated
+}
+
+// A message containing a list of RL4SysAction objects
+message RL4SysActionList {
+    repeated RL4SysAction actions = 1; // A list of RL4SysAction objects
+}
+
+message RL4SysModel {
+    int32 code = 1; // notify if model is ready. 1 is ready, 0 is not ready, -1 error
+    bytes model = 2; // if done = 1, model should have something, else NaN
+    bytes model_critic = 3; // if done = 1, model_critic should have something for PPO and other two network algorithms
+    int64 version = 4; // current model version, client need to update
+    string error = 5; // if done = -1, this should response error message
+}
+
+message RequestModel {
+    int32 first_time = 1; // 1 means initialize with server, 0 means already handshaked with server, server send model to client
+    int64 version = 2; // current version # of client have, if match with server, no update
+}
+
+// Define the service to send the list of RL4SysAction objects
+service RL4SysRoute {
+    rpc SendActions (RL4SysActionList) returns (ActionResponse);
+    rpc ClientPoll (RequestModel) returns (RL4SysModel);
+}
+
+// A message for the response
+message ActionResponse {
+    int32 code = 1; // 1 normal, 0 bad response
+    string message = 2; // Acknowledgement message
+}

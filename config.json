@@ -23,30 +23,64 @@
             "q_lr": 1e-5,
             "train_q_iters": 50
         },
-        "DQN": {
-            "batch_size": 64,
-            "seed": 0,
-            "traj_per_epoch": 64,
+        "DDPG": {
+            "seed": 1,
             "gamma": 0.99,
-            "epsilon": 1.0,
-            "epsilon_min": 0.01,
-            "epsilon_decay": 5e-4,
-            "train_update_freq": 1,
-            "q_lr": 1e-3,
-            "train_q_iters": 1
+            "tau": 1e-2,
+            "learning_rate": 3e-3,
+            "batch_size": 128,
+            "buffer_size": 50000,
+            "learning_starts": 128,
+            "policy_frequency": 1,
+            "noise_scale": 1e-3,
+            "train_iters": 10
+        },
+        "DQN": {
+            "seed": 1,
+            "learning_rate": 4e-4,
+            "batch_size": 128,
+            "gamma": 0.99,
+            "tau": 1e-3,
+            "target_network_frequency": 1,
+            "buffer_size": 10000,
+            "start_e": 1.0,
+            "end_e": 0.1,
+            "exploration_fraction": 0.5,
+            "learning_starts": 128,
+            "train_frequency": 10,
+            "train_iters": 2,
+            "total_timesteps": 500000
         },
         "PPO": {
-            "batch_size": 12,
+            "batch_size": 512,
             "seed": 0,
-            "traj_per_epoch": 5,
-            "clip_ratio": 0.1,
+            "traj_per_epoch": 4,
+            "clip_ratio": 0.2,
             "gamma": 0.99,
-            "lam": 0.97,
-            "pi_lr": 3e-4,
-            "vf_lr": 3e-4,
-            "train_pi_iters": 40,
-            "train_v_iters": 40,
-            "target_kl": 0.01
+            "lam": 0.95,
+            "pi_lr": 5e-4,
+            "vf_lr": 5e-4,
+            "train_pi_iters": 4,
+            "train_v_iters": 4,
+            "target_kl": null
+        },
+        "RPO": {
+            "seed": 1,
+            "learning_rate": 3e-4,
+            "num_steps": 2048,
+            "gamma": 0.99,
+            "gae_lambda": 0.95,
+            "clip_coef": 0.2,
+            "ent_coef": 0.0,
+            "vf_coef": 0.5,
+            "max_grad_norm": 0.5,
+            "rpo_alpha": 0.5,
+            "update_epochs": 10,
+            "num_minibatches": 32,
+            "anneal_lr": true,
+            "clip_vloss": true,
+            "target_kl": null,
+            "total_timesteps_anneal_lr": 1000000
         },
         "REINFORCE": {
             "discrete": true,
@@ -65,16 +99,29 @@
             "act_dim": 4,
             "batch_size": 128,
             "seed": 0,
-            "traj_per_epoch": 10,
+            "traj_per_epoch": 128,
             "log_std_min": -20,
             "log_std_max": 2,
             "gamma": 0.99,
-            "polyak": 1e-2,
-            "alpha": 0.1,
-            "lr": 5e-4,
+            "polyak": 0.995,
+            "alpha": 0.2,
+            "lr": 3e-4,
             "clip_grad_norm": 1,
-            "train_update_freq": 8,
+            "train_update_freq": 1,
             "train_iters": 50
+        },
+        "TD3": {
+            "seed": 1,
+            "gamma": 0.99,
+            "tau": 0.005,
+            "learning_rate": 3e-4,
+            "batch_size": 256,
+            "buffer_size": 1000000,
+            "exploration_noise": 0.1,
+            "policy_noise": 0.2,
+            "noise_clip": 0.5,
+            "learning_starts": 25000,
+            "policy_frequency": 2
         },
         "TRPO": {
 
@@ -87,8 +134,8 @@
     "model_paths": {
         "_comment1": "Model paths are relative to root directory.",
         "_comment2": "save and load share the same path (in all likelihood).",
-        "load_model": "examples/maze-game/model.pth",
-        "save_model": "examples/maze-game/model.pth"
+        "load_model": "models/",
+        "save_model": "models/"
     },
     "server": {
         "training_server": {

@@ -19,57 +19,23 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.ret_buf = np.zeros(buf_size, dtype=np.float32)
         self.q_val_buf = np.zeros(buf_size, dtype=np.float32)
+        self.done_buf = np.zeros(buf_size, dtype=np.bool_)  # or np.float32
         self.gamma, self.epsilon = gamma, epsilon
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
-    """
-    def store(self, obs, act, mask, rew, q_val):
-        assert self.ptr <= self.max_size
-        if self.ptr < self.max_size:
-            self.obs_buf[self.ptr] = obs
-            self.act_buf[self.ptr] = act
-            self.mask_buf[self.ptr] = mask
-            self.rew_buf[self.ptr] = rew
-            self.q_val_buf[self.ptr] = q_val
-            # most accurate way to retrieve next observation, I imagine.
-            if self.ptr > 0:
-                self.next_obs_buf[self.ptr - 1] = obs
-            self.ptr += 1
-        else:
-            # Buffer is full: remove the oldest trajectory and shift everything left by one.
-            # By doing this, index 0 will always be the oldest entry, and ptr remains max_size.
 
-            # Shift all buffer contents one step to the left
-            self.obs_buf[:-1] = self.obs_buf[1:]
-            self.act_buf[:-1] = self.act_buf[1:]
-            self.mask_buf[:-1] = self.mask_buf[1:]
-            self.rew_buf[:-1] = self.rew_buf[1:]
-            self.q_val_buf[:-1] = self.q_val_buf[1:]
-            self.next_obs_buf[:-1] = self.next_obs_buf[1:]
-
-            # Insert the new trajectory at the last position
-            last_idx = self.max_size - 1
-            self.obs_buf[last_idx] = obs
-            self.act_buf[last_idx] = act
-            self.mask_buf[last_idx] = mask
-            self.rew_buf[last_idx] = rew
-            self.q_val_buf[last_idx] = q_val
-
-            # Update the next_obs for the second-to-last entry
-            if self.ptr > 0:
-                self.next_obs_buf[last_idx - 1] = obs
-    """
-    def store(self, obs, next_obs, act, mask, rew, q_val):
-        # Use the same index for both obs and next_obs
-        idx = self.ptr % self.max_size  # or whatever indexing logic you like
-
+    def store(self, obs, act, mask, rew, q_val, done):
+        idx = self.ptr % self.max_size
         self.obs_buf[idx] = obs
-        self.next_obs_buf[idx] = next_obs
         self.act_buf[idx] = act
         self.mask_buf[idx] = mask
         self.rew_buf[idx] = rew
-        self.q_val_buf[idx] = np.max(q_val)
+        self.done_buf[idx] = done
+        self.q_val_buf[idx] = q_val[int(act)] if len(q_val) > act else 0.0 # TODO check if this is correct
+
+        if self.ptr > 0:
+            self.next_obs_buf[idx - 1] = obs
 
         self.ptr += 1
 
@@ -107,6 +73,6 @@ class ReplayBuffer(ReplayBufferAbstract):
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     mask=self.mask_buf[batch], rew=self.rew_buf[batch], ret=self.ret_buf[batch],
-                    q_val=self.q_val_buf[batch])
+                    q_val=self.q_val_buf[batch], done=self.done_buf[batch])
 
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}, batch

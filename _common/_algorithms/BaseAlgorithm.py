@@ -10,6 +10,8 @@ class AlgorithmAbstract(ABC):
     """
     def __init__(self):
         super(AlgorithmAbstract, self).__init__()
+        
+        
 
 
     @abstractmethod

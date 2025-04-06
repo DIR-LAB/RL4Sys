@@ -14,9 +14,9 @@ from copy import deepcopy
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from utils.logger import EpochLogger, setup_logger_kwargs
-from trajectory import RL4SysTrajectory
+from protocol.trajectory import RL4SysTrajectory
 
-from conf_loader import ConfigLoader
+from utils.conf_loader import ConfigLoader
 """Import and load RL4Sys/config.json SAC algorithm configurations and applies them to
 the current instance.
 
@@ -55,7 +55,7 @@ class SAC(AlgorithmAbstract):
         self._train_update_freq = train_update_freq
         self._train_iters = train_iters
 
-        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, kernel_size, buf_size, gamma)
+        self._replay_buffer = ReplayBuffer(kernel_size * kernel_dim, act_dim, buf_size, gamma)
         self._model = DoubleQActorCritic(kernel_size * kernel_dim, kernel_dim, (256, 256),
                                          torch.nn.ReLU, log_std_min, log_std_max, discrete, seed)
 
@@ -117,7 +117,7 @@ class SAC(AlgorithmAbstract):
             ep_ret += r4a.rew
             ep_len += 1
             if not r4a.done:
-                self._replay_buffer.store(r4a.obs, r4a.act, r4a.mask, r4a.rew)
+                self._replay_buffer.store(r4a.obs, r4a.next_obs, r4a.act, r4a.mask, r4a.rew)
             else:
                 self._replay_buffer.finish_path(r4a.rew)
                 self.logger.store(EpRet=ep_ret, EpLen=ep_len)

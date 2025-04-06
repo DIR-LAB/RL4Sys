@@ -1,8 +1,8 @@
-from _common._algorithms.BaseReplayBuffer import combined_shape, discount_cumsum, statistics_scalar, ReplayBufferAbstract
+from _common._algorithms.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
 
 import numpy as np
 import torch
-
+import random
 """
 PPO Code
 """
@@ -15,32 +15,39 @@ class ReplayBuffer(ReplayBufferAbstract):
     for calculating the advantages of state-action pairs.
     """
 
-    def __init__(self, obs_dim, mask_dim, size, gamma=0.99, lam=0.95):
-        super().__init__()
-        self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
-        self.cobs_buf = None
-        self.act_buf = np.zeros(combined_shape(size), dtype=np.float32)
-        self.mask_buf = np.zeros(combined_shape(size, mask_dim), dtype=np.float32)
-        self.adv_buf = np.zeros(size, dtype=np.float32)
-        self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.ret_buf = np.zeros(size, dtype=np.float32)
-        self.val_buf = np.zeros(size, dtype=np.float32)
-        self.logp_buf = np.zeros(size, dtype=np.float32)
-        self.gamma, self.lam = gamma, lam
-        self.ptr, self.path_start_idx, self.max_size = 0, 0, size
-        self.capacity = size
+    def __init__(self, obs_dim, mask_dim, buf_size, gamma=0.99, lam=0.95, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
+        self.next_obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
+        self.act_buf = np.zeros(combined_shape(buf_size), dtype=np.int32)
+        self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
+        self.rew_buf = np.zeros(buf_size, dtype=np.float32)
+        self.val_buf = np.zeros(buf_size, dtype=np.float32)
+        self.logp_buf = np.zeros(buf_size, dtype=np.float32)
+        self.done_buf = np.zeros(buf_size, dtype=np.bool_)
 
-    def store(self, obs, act, mask, rew, val, logp):
+        self.ret_buf = np.zeros(buf_size, dtype=np.float32)
+        self.adv_buf = np.zeros(buf_size, dtype=np.float32)
+        self.gamma, self.lam = gamma, lam
+        self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
+        self.capacity = buf_size
+
+    def store(self, obs, act, mask, rew, val, logp, done):
         """
         Append one timestep of agent-environment interaction to the buffer.
         """
-        assert self.ptr < self.max_size     # buffer has to have room so you can store
-        self.obs_buf[self.ptr] = obs
-        self.act_buf[self.ptr] = act
-        self.mask_buf[self.ptr] = mask
-        self.rew_buf[self.ptr] = rew
-        self.val_buf[self.ptr] = val
-        self.logp_buf[self.ptr] = logp
+        idx = self.ptr % self.max_size
+        self.obs_buf[idx] = obs
+        self.act_buf[idx] = act
+        self.mask_buf[idx] = mask
+        self.rew_buf[idx] = rew
+        self.val_buf[idx] = val
+        self.logp_buf[idx] = logp
+        self.done_buf[idx] = done
+
+        if self.ptr > 0:
+            self.next_obs_buf[idx - 1] = obs
+
         self.ptr += 1
 
     def finish_path(self, last_val=0):
@@ -71,34 +78,25 @@ class ReplayBuffer(ReplayBufferAbstract):
 
         self.path_start_idx = self.ptr
 
-    def get(self):
+    def get(self, batch_size: int):
         """
-        Call this at the end of an epoch to get all of the data from
-        the buffer, with advantages appropriately normalized (shifted to have
-        mean zero and std one). Also, resets some pointers in the buffer.
+        Get a batch of data from the buffer.
         """
-        assert self.ptr < self.max_size
-        actual_size = self.ptr
-        self.ptr, self.path_start_idx = 0, 0
+        assert self.ptr >= batch_size
+        # Random sample of indices
+        batch = random.sample(range(len(self.obs_buf)), batch_size)
 
-        actual_adv_buf = np.array(self.adv_buf, dtype=np.float32)
-        actual_adv_buf = actual_adv_buf[:actual_size]
+        data = dict(
+            obs=self.obs_buf[batch],
+            next_obs=self.next_obs_buf[batch],
+            act=self.act_buf[batch],
+            mask=self.mask_buf[batch],
+            ret=self.ret_buf[batch],
+            adv=self.adv_buf[batch],
+            logp=self.logp_buf[batch],
+            val=self.val_buf[batch],
+            rew=self.rew_buf[batch],
+            done=self.done_buf[batch]
+        )
 
-        adv_mean, adv_std = statistics_scalar(actual_adv_buf)
-        
-        # This code is doing the advantage normalization trick; should be 
-        # print ("-----------------------> actual_adv_buf: ", actual_adv_buf)
-        '''adv_sum = np.sum(actual_adv_buf)
-        adv_n = len(actual_adv_buf)
-        adv_mean = adv_sum / adv_n
-        adv_sum_sq = np.sum((actual_adv_buf - adv_mean) ** 2)
-        adv_std = np.sqrt(adv_sum_sq / adv_n)'''
-        # print ("-----------------------> adv_std:", adv_std)
-        
-        actual_adv_buf = (actual_adv_buf - adv_mean) / adv_std
-
-        data = dict(obs=self.obs_buf[:actual_size], 
-                    act=self.act_buf[:actual_size], mask=self.mask_buf[:actual_size],
-                    ret=self.ret_buf[:actual_size], adv=actual_adv_buf, logp=self.logp_buf[:actual_size])
-
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}, batch
