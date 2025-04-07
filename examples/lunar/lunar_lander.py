@@ -14,7 +14,7 @@ import torch
 import gymnasium as gym
 import gymnasium.spaces
 
-import threading
+import multiprocessing
 from client.agent import RL4SysAgent
 from server.training_server import start_training_server
 
@@ -63,6 +63,7 @@ class LunarLanderSim(ApplicationAbstract):
             act_dim = self.env.action_space.n
             self.act_limit = 1.0
 
+        # Initialize the agent with model if available
         self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
                                   input_size=self.env.observation_space.shape[0], 
                                   act_dim=act_dim,
@@ -93,9 +94,6 @@ class LunarLanderSim(ApplicationAbstract):
             rl_runs = 0
             cumulative_reward = 0
             start_time = time.time()
-
-            ##TODO Debug only
-            #print("---> OBS is: ", obs)
 
             # Build initial observation
             obs_tensor, mask = self.build_observation(obs)
@@ -141,7 +139,7 @@ class LunarLanderSim(ApplicationAbstract):
 
                     # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
                     rl4sys_action.set_done(True)
-                    self.rlagent.send_actions()
+                    self.rlagent.send_actions()  # This now adds to sending queue, non-blocking
 
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
@@ -151,10 +149,11 @@ class LunarLanderSim(ApplicationAbstract):
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
                     break
                     
-
             if self._render_game:
                 self.env.close()
         
+        # Clean up when done with all iterations
+        self.rlagent.close()
         
 
     def build_observation(self, obs):
@@ -174,6 +173,7 @@ class LunarLanderSim(ApplicationAbstract):
 
     def calculate_performance_return(self, elements) -> float:
         pass
+
 
 
 if __name__ == '__main__':
@@ -201,11 +201,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=10000,
+    parser.add_argument('--number-of-iterations', type=int, default=20000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
@@ -217,22 +217,7 @@ if __name__ == '__main__':
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
 
-        def run_server():
-            # This blocks internally on server.wait_for_termination(),
-            # so we run it in a thread.
-            start_training_server(
-                algorithm_name=args.algorithm,
-                input_size=INPUT_DIM,
-                action_dim=ACT_DIM,
-                hyperparams=extras,
-                env_dir=os.path.dirname(os.path.abspath(__file__)),
-                tensorboard=args.tensorboard
-            )
 
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-        
-    time.sleep(1)
 
     # Load a model if specified
     model_arg = None

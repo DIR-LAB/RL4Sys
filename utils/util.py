@@ -4,6 +4,10 @@ from torch import nn
 from protocol.action import RL4SysAction
 from protocol import trajectory_pb2
 import numpy as np
+import threading
+import time
+import queue
+import collections
 
 # for gRPC transfering. Torch tensors will be conver into bytes
 def serialize_tensor(tensor):
@@ -146,5 +150,97 @@ def deserialize_model(raw_bytes: bytes) -> nn.Module:
     buffer = io.BytesIO(raw_bytes)
     model = torch.load(buffer, map_location='cpu')
     return model
+
+# Default maximum trajectories to buffer
+DEFAULT_BUFFER_SIZE = 1000
+
+class CircularTrajectoryBuffer:
+    """
+    A thread-safe circular buffer for trajectories.
+    When the buffer is full, the oldest trajectory is overwritten.
+    """
+    def __init__(self, max_size=DEFAULT_BUFFER_SIZE):
+        self.max_size = max_size
+        self.buffer = collections.deque(maxlen=max_size)
+        self.lock = threading.Lock()
+        self.total_added = 0
+        self.total_removed = 0
+        self.total_discarded = 0
+    
+    def put(self, trajectory):
+        """Add a trajectory to the buffer, potentially discarding the oldest one"""
+        with self.lock:
+            if len(self.buffer) >= self.max_size:
+                # Buffer is full, oldest trajectory will be automatically discarded
+                self.total_discarded += 1
+                print(f"[CircularBuffer] Buffer full, discarding oldest trajectory (total discarded: {self.total_discarded})")
+            
+            self.buffer.append(trajectory)
+            self.total_added += 1
+            
+            
+    
+    def get(self, block=True, timeout=None):
+        """Get the next trajectory from the buffer"""
+        with self.lock:
+            if not self.buffer:
+                if block:
+                    # If blocking is requested, we need to release the lock and wait
+                    start_time = time.time()
+                    while not self.buffer:
+                        self.lock.release()
+                        time.sleep(0.1)
+                        self.lock.acquire()
+                        if timeout is not None and time.time() - start_time > timeout:
+                            raise queue.Empty("Timeout waiting for trajectory")
+                else:
+                    raise queue.Empty("No trajectories available")
+            
+            trajectory = self.buffer.popleft()
+            self.total_removed += 1
+            return trajectory
+    
+    def get_all(self):
+        """Get all trajectories from the buffer and clear it"""
+        with self.lock:
+            trajectories = list(self.buffer)
+            self.total_removed += len(trajectories)
+            self.buffer.clear()
+            return trajectories
+    
+    def task_done(self):
+        """Mark task as done (compatibility with Queue interface)"""
+        pass
+    
+    def qsize(self):
+        """Return the approximate size of the buffer"""
+        with self.lock:
+            return len(self.buffer)
+    
+    def empty(self):
+        """Return True if the buffer is empty, False otherwise"""
+        with self.lock:
+            return len(self.buffer) == 0
+    
+    def full(self):
+        """Return True if the buffer is full, False otherwise"""
+        with self.lock:
+            return len(self.buffer) >= self.max_size
+    
+    def clear(self):
+        """Clear all trajectories from the buffer"""
+        with self.lock:
+            self.buffer.clear()
+    
+    def stats(self):
+        """Return statistics about the buffer usage"""
+        with self.lock:
+            return {
+                "current_size": len(self.buffer),
+                "max_size": self.max_size,
+                "total_added": self.total_added,
+                "total_removed": self.total_removed,
+                "total_discarded": self.total_discarded
+            }
 
 

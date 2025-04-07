@@ -5,7 +5,7 @@ import warnings
 
 from protocol import trajectory_pb2 as protocol_dot_trajectory__pb2
 
-GRPC_GENERATED_VERSION = '1.69.0'
+GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -45,6 +45,11 @@ class RL4SysRouteStub(object):
                 request_serializer=protocol_dot_trajectory__pb2.RequestModel.SerializeToString,
                 response_deserializer=protocol_dot_trajectory__pb2.RL4SysModel.FromString,
                 _registered_method=True)
+        self.RegisterForUpdates = channel.unary_stream(
+                '/rl4sys.RL4SysRoute/RegisterForUpdates',
+                request_serializer=protocol_dot_trajectory__pb2.ClientRegistration.SerializeToString,
+                response_deserializer=protocol_dot_trajectory__pb2.RL4SysModel.FromString,
+                _registered_method=True)
 
 
 class RL4SysRouteServicer(object):
@@ -63,6 +68,13 @@ class RL4SysRouteServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RegisterForUpdates(self, request, context):
+        """New streaming RPC for server-push model updates
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RL4SysRouteServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -74,6 +86,11 @@ def add_RL4SysRouteServicer_to_server(servicer, server):
             'ClientPoll': grpc.unary_unary_rpc_method_handler(
                     servicer.ClientPoll,
                     request_deserializer=protocol_dot_trajectory__pb2.RequestModel.FromString,
+                    response_serializer=protocol_dot_trajectory__pb2.RL4SysModel.SerializeToString,
+            ),
+            'RegisterForUpdates': grpc.unary_stream_rpc_method_handler(
+                    servicer.RegisterForUpdates,
+                    request_deserializer=protocol_dot_trajectory__pb2.ClientRegistration.FromString,
                     response_serializer=protocol_dot_trajectory__pb2.RL4SysModel.SerializeToString,
             ),
     }
@@ -131,6 +148,33 @@ class RL4SysRoute(object):
             target,
             '/rl4sys.RL4SysRoute/ClientPoll',
             protocol_dot_trajectory__pb2.RequestModel.SerializeToString,
+            protocol_dot_trajectory__pb2.RL4SysModel.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RegisterForUpdates(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/rl4sys.RL4SysRoute/RegisterForUpdates',
+            protocol_dot_trajectory__pb2.ClientRegistration.SerializeToString,
             protocol_dot_trajectory__pb2.RL4SysModel.FromString,
             options,
             channel_credentials,

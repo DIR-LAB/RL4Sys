@@ -14,8 +14,9 @@ import torch
 import gymnasium as gym
 import gymnasium.spaces
 
+import threading
 from client.agent import RL4SysAgent
-from server.training_server import TrainingServer
+from server.training_server import start_training_server
 
 from utils.plot import get_newest_dataset
 
@@ -35,14 +36,15 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class LunarLanderSim(ApplicationAbstract):
-    def __init__(self, seed, model=None, performance_metric=0, render_game=False):
+    def __init__(self, algorithm_name, seed, model=None, performance_metric=0, render_game=False):
         super().__init__()
+        self.algorithm_name = algorithm_name
         self._seed = seed
         self._performance_metric = performance_metric
         self._render_game = render_game
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3')
+        self.env = gym.make('LunarLander-v3', continuous=False)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -52,7 +54,20 @@ class LunarLanderSim(ApplicationAbstract):
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
-        self.rlagent = RL4SysAgent(model=model)
+        if isinstance(self.env.action_space, gym.spaces.Box):
+            # For continuous action spaces (DDPG, TD3, RPO)
+            act_dim = self.env.action_space.shape[0]
+            self.act_limit = self.env.action_space.high[0]  # Assuming symmetric limits
+        else:
+            # For discrete action spaces (DQN)
+            act_dim = self.env.action_space.n
+            self.act_limit = 1.0
+
+        self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
+                                  input_size=self.env.observation_space.shape[0], 
+                                  act_dim=act_dim,
+                                  act_limit=self.act_limit,
+                                  model=model)
 
         # To store simulator stats
         self.simulator_stats = {
@@ -86,7 +101,7 @@ class LunarLanderSim(ApplicationAbstract):
             obs_tensor, mask = self.build_observation(obs)
 
             # while not done and moves < num_moves: # Modified
-            while not done:  
+            while not done or moves < 500:   
                 if self._render_game:
                     self.env.render()
 
@@ -111,33 +126,23 @@ class LunarLanderSim(ApplicationAbstract):
 
                 # record trajectory
                 rl4sys_action.update_reward(reward)
+                
                 rl_runs += 1
                 moves += 1
                 self.simulator_stats['moves'] += 1
                 self.simulator_stats['action_rewards'].append(reward)
 
                 obs_tensor = next_obs_tensor  # Update current observation
-
                 
-                if rl_runs >= MOVE_SEQUENCE_SIZE:
+                if rl_runs >= MOVE_SEQUENCE_SIZE or done:
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                    self.simulator_stats['moves'] = moves
-                    rl_runs = 0
-                    rl_total = self.calculate_performance_return(self.simulator_stats)
-                    rew = -rl_total
-                    self.simulator_stats['performance_rewards'].append(rew)
-                    self.rlagent.flag_last_action(rew)
-                    break
-                
+                    print(f'[LunarLanderSim - simulator] Final epoch reward: {cumulative_reward}')
 
-                if done:
-                    print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
-                    self.simulator_stats['moves'] = moves
-                    rl_runs = 0
-                    rl_total = self.calculate_performance_return(self.simulator_stats)
-                    rew = -rl_total
-                    self.rlagent.flag_last_action(rew)
+                    # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
+                    rl4sys_action.set_done(True)
+                    self.rlagent.send_actions()
+
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
                         self.simulator_stats['time_to_goal'].append(time.time() - start_time)
@@ -145,6 +150,7 @@ class LunarLanderSim(ApplicationAbstract):
                         self.simulator_stats['death_count'] += 1
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
                     break
+                    
 
             if self._render_game:
                 self.env.close()
@@ -165,53 +171,9 @@ class LunarLanderSim(ApplicationAbstract):
 
         return obs_tensor, mask
 
+
     def calculate_performance_return(self, elements) -> float:
-        """
-        Calculate performance score based on performance metric using captured simulator elements
-        :return: returns calculated performance score
-        """
-        if self._performance_metric == 0:
-            # avg cumulative reward per reward count
-            return float(sum(elements['action_rewards']) / len(elements['action_rewards']))
-        elif self._performance_metric == 1:
-            # avg cumulative reward per success rate
-            if elements['success_count'] > 0:
-                return float(sum(elements['action_rewards']) / elements['success_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 2:
-            # avg cumulative reward per death rate
-            if elements['death_count'] > 0:
-                return -float(sum(elements['action_rewards']) / elements['death_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 3:
-            # avg cumulative reward per collision rate (using death_count in Lunar Lander)
-            if elements['death_count'] > 0:
-                return -float(sum(elements['action_rewards']) / elements['death_count'])
-            else:
-                return 0.0
-        elif self._performance_metric == 4:
-            # avg cumulative reward per failure rate
-            total_failures = elements['death_count']
-            if total_failures > 0:
-                return float(sum(elements['action_rewards']) / total_failures)
-            else:
-                return 0.0
-        elif self._performance_metric == 5:
-            # avg cumulative time-to-goal per success
-            if elements['success_count'] > 0:
-                return float((sum(elements['time_to_goal']) / elements['success_count']))
-            else:
-                return 0.0
-        elif self._performance_metric == 6:
-            # time-to-death per death
-            if elements['death_count'] > 0:
-                return -float(sum(elements['time_to_death']) / elements['death_count'])
-            else:
-                return 0.0
-        else:
-            raise NotImplementedError
+        pass
 
 
 if __name__ == '__main__':
@@ -234,7 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard', type=bool, default=True,
                         help='enable tensorboard logging for training observations and insights.\n' +
                              'Make sure to properly configure tensorboard parameters in config.json before running.')
-    parser.add_argument('--seed', type=int, default=42,
+    parser.add_argument('--seed', type=int, default=1,
                         help='seed for random number generation in environment')
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
@@ -249,27 +211,43 @@ if __name__ == '__main__':
                         help='render the Lunar Lander environment')
     args, extras = parser.parse_known_args()
 
-    # start training server
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    if args.algorithm != 'No Server':
+    # If user wants to run a local gRPC server for training:
+    if args.algorithm != 'NoServer':
+        # example: append the buffer size for your DQN or PPO, etc.
         extras.append('--buf_size')
         extras.append(str(MOVE_SEQUENCE_SIZE * 100))
-        rl_training_server = TrainingServer(algorithm_name=args.algorithm, 
-                                            input_size=INPUT_DIM, 
-                                            action_dim=ACT_DIM, 
-                                            hyperparams=extras, 
-                                            env_dir=app_dir, 
-                                            tensorboard=args.tensorboard)
-        print('[lunar_lander.py] Created Training Server')
 
-    # load model if applicable
-    model_arg = torch.load(args.model_path, map_location=torch.device('cpu')) if args.model_path else None
+        def run_server():
+            # This blocks internally on server.wait_for_termination(),
+            # so we run it in a process.
+            start_training_server(
+                algorithm_name=args.algorithm,
+                input_size=INPUT_DIM,
+                action_dim=ACT_DIM,
+                hyperparams=extras,
+                env_dir=os.path.dirname(os.path.abspath(__file__)),
+                tensorboard=args.tensorboard
+            )
 
-    # create simulation environment
-    lunar_lander_game = LunarLanderSim(args.seed, model=model_arg,
-                                       performance_metric=args.score_type,
-                                       render_game=args.render)
+        server_process = threading.Thread(target=run_server, daemon=True)
+        server_process.start()
+        
+    time.sleep(1)
 
-    # run simulation
-    print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations...")
-    lunar_lander_game.run_application(num_iterations=args.number_of_iterations, num_moves=args.number_of_moves)
+    # Load a model if specified
+    model_arg = None
+    if args.model_path:
+        model_arg = torch.load(args.model_path, map_location=torch.device('cpu'))
+
+    # Create the simulation environment with the agent
+    lunar_lander_game = LunarLanderSim(
+        algorithm_name=args.algorithm,
+        seed=args.seed,
+        model=model_arg,
+        performance_metric=args.score_type,
+        render_game=args.render
+    )
+
+    print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations with up to {args.number_of_moves} moves each.")
+    lunar_lander_game.run_application(num_iterations=args.number_of_iterations,
+                                      num_moves=args.number_of_moves)

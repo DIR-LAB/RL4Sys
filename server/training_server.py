@@ -6,6 +6,9 @@ import argparse
 import zmq
 import threading
 import pickle
+import queue
+import uuid
+import collections
 
 import importlib
 import inspect
@@ -14,7 +17,7 @@ from typing import NoReturn as Never
 
 from server.training_tensorboard import TensorboardWriter
 from utils.conf_loader import ConfigLoader
-from utils.util import deserialize_action, serialize_model
+from utils.util import deserialize_action, serialize_model, CircularTrajectoryBuffer, DEFAULT_BUFFER_SIZE
 
 import time
 import grpc
@@ -31,8 +34,6 @@ the current instance.
 Loads defaults if config.json is unavailable or key error thrown.
 """
 
-
-
 class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
     """Train a model for a remote agent.
 
@@ -44,7 +45,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
     Can initalize algorithm object using python dict or command line arguments.
     """
     def __init__(self, algorithm_name: str, input_size: int, action_dim: int, act_limit: float, hyperparams: Union[dict | list[str]],
-                 env_dir: str = os.getcwd(), tensorboard: bool = False, seed = 0):
+                 env_dir: str = os.getcwd(), tensorboard: bool = False, seed = 0, buffer_size = DEFAULT_BUFFER_SIZE):
         # super().__init__(algorithm_name, input_size==input_size, hyperparams=hyperparams, env_dir=env_dir)
 
         # get algorithm class
@@ -97,13 +98,129 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         self.model_ready = 0
         self.trained_model_path = os.path.join(os.path.dirname(__file__), self.save_model_path, f"{algorithm_name}_model.pth")
         self.error_message = None
-
-        # for trajectory buffer, if trajectory is not enough, we will keep it in buffer
-        self.trajectory_buffer = []
-
+        
+        # Queue for pending trajectories to be trained on - also use CircularTrajectoryBuffer
+        self.training_queue = CircularTrajectoryBuffer(max_size=buffer_size)
+        
+        # Track model version
+        self.model_version = 0
+        
+        # Dictionary to keep track of registered clients for model updates
+        # Map of client_id -> queue of model updates for that client
+        self.registered_clients = {}
+        self.client_lock = threading.Lock()
+        
+        # Flag to control the training thread
+        self._running = True
+        
+        # Start the dedicated training thread
+        self._training_thread = threading.Thread(target=self._training_worker, daemon=True)
+        self._training_thread.start()
 
         print("[TrainingServer] Finish Initilizating, Sending the model...")
+        print(f"[TrainingServer] Trajectory and training buffers initialized with max size: {buffer_size}")
 
+    def _training_worker(self):
+        """
+        Dedicated thread for processing training tasks from the queue.
+        This ensures only one training operation happens at a time, preventing race conditions.
+        """
+        while self._running:
+            try:
+                # Try to get a batch of actions from the queue with timeout
+                try:
+                    actions = self.training_queue.get(timeout=1.0)
+                except queue.Empty:
+                    # No trajectories to process, continue polling
+                    continue
+                
+                # Process the training with exclusive access to the algorithm
+                with self.lock:
+                    print(f"[TrainingServer] Training worker processing {len(actions)} actions")
+                    updated = self._algorithm.receive_trajectory(actions)
+                
+                print(f"[TrainingServer] Training worker finished. updated: {updated}")
+                
+                # Update model status based on training result
+                if updated:
+                    self.model_ready = 1
+                    # Increment model version
+                    self.model_version += 1
+                    
+                    # Push model updates to all registered clients
+                    self._push_model_update_to_clients()
+                    
+                    # Log buffer stats after successful training
+                    self._log_buffer_stats()
+                else:
+                    self.model_ready = -1
+                    self.error_message = "No new model trained, please collect more trajectory."
+                
+                # Mark the task as completed
+                self.training_queue.task_done()
+                
+            except Exception as e:
+                print(f"[TrainingServer] Error in training worker: {e}")
+                self.model_ready = -1
+                self.error_message = f"Error during training: {str(e)}"
+                # Sleep briefly to avoid tight loop on persistent errors
+                time.sleep(1)
+                
+    def _log_buffer_stats(self):
+        """Log statistics about the trajectory buffer"""
+        train_stats = self.training_queue.stats()
+        print(f"[TrainingServer] Training buffer stats: {train_stats}")
+
+    def _push_model_update_to_clients(self):
+        """
+        Push the latest model to all registered clients.
+        This is called when a new model is trained.
+        """
+        # Create model message
+        model_message = self._create_model_message()
+        
+        # Push to all clients
+        with self.client_lock:
+            if not self.registered_clients:
+                print("[TrainingServer] No clients registered for model updates.")
+                return
+                
+            print(f"[TrainingServer] Pushing model update to {len(self.registered_clients)} clients")
+            for client_id, update_queue in list(self.registered_clients.items()):
+                try:
+                    update_queue.put(model_message)
+                    print(f"[TrainingServer] Model update queued for client {client_id}")
+                except Exception as e:
+                    print(f"[TrainingServer] Error pushing update to client {client_id}: {e}")
+                    # Remove client on error
+                    self.registered_clients.pop(client_id, None)
+
+    def _create_model_message(self):
+        """
+        Create a model message with the latest model data.
+        """
+        with self.lock:
+            model_data = None
+            model_critic_data = None
+            
+            if self.algorithm_name == "DQN":
+                model_data = serialize_model(self._algorithm._model)
+            elif self.algorithm_name == "PPO":
+                model_data = serialize_model(self._algorithm._model_train.actor)
+                model_critic_data = serialize_model(self._algorithm._model_train.critic)
+            elif self.algorithm_name == "DDPG":
+                model_data = serialize_model(self._algorithm.ac.actor)
+            elif self.algorithm_name == "RPO":
+                model_data = serialize_model(self._algorithm.actor)
+                model_critic_data = serialize_model(self._algorithm.critic)
+                
+            return trajectory_pb2.RL4SysModel(
+                code=1, 
+                model=model_data, 
+                model_critic=model_critic_data, 
+                version=self.model_version,
+                error=""
+            )
 
     def save_model(self, model_data):
         """Save model to persistent storage."""
@@ -116,52 +233,82 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         with open(self.trained_model_path, "rb") as f:
             return f.read()
 
+    def RegisterForUpdates(self, request, context):
+        """
+        Implementation of the streaming RPC method for pushing model updates to clients.
+        Clients register with this method and receive model updates whenever available.
+        """
+        client_id = request.client_id or f"client-{uuid.uuid4()}"
+        client_version = request.current_version
+        
+        print(f"[TrainingServer] Client {client_id} registered for model updates (version: {client_version})")
+        
+        # Create a queue for this client's updates
+        update_queue = queue.Queue()
+        
+        # Register the client
+        with self.client_lock:
+            self.registered_clients[client_id] = update_queue
+        
+        # If we already have a model that's newer than what the client has, send it immediately
+        if self.model_ready == 1 and self.model_version > client_version:
+            initial_model = self._create_model_message()
+            update_queue.put(initial_model)
+            print(f"[TrainingServer] Sent initial model to client {client_id}")
+        
+        # Context.add_callback will let us know when the client disconnects
+        def on_client_disconnected():
+            with self.client_lock:
+                if client_id in self.registered_clients:
+                    del self.registered_clients[client_id]
+                    print(f"[TrainingServer] Client {client_id} disconnected")
+                    
+        context.add_callback(on_client_disconnected)
+        
+        # Yield model updates as they become available
+        try:
+            while context.is_active():
+                try:
+                    # Wait for update with timeout to periodically check if client is still active
+                    model_update = update_queue.get(timeout=3.0)
+                    yield model_update
+                except queue.Empty:
+                    # No update yet, continue waiting
+                    continue
+                except Exception as e:
+                    print(f"[TrainingServer] Error sending update to client {client_id}: {e}")
+                    break
+        except Exception as e:
+            print(f"[TrainingServer] Stream error for client {client_id}: {e}")
+        finally:
+            # Clean up when the stream ends
+            with self.client_lock:
+                if client_id in self.registered_clients:
+                    del self.registered_clients[client_id]
+                    print(f"[TrainingServer] Removed client {client_id} from registered clients")
 
     def SendActions(self, request, context):
         """
-        Client uses this gRPC method to send trajectories; the server starts training.
+        Client uses this gRPC method to send trajectories; the server adds them to the training queue.
         """
-        # add trajectory to buffer and check if enough for training
-        self.trajectory_buffer.extend(request.actions)
+        # Add received actions to the circular buffer
+        print(f"[TrainingServer] Received {len(request.actions)} actions for training")
         
-        print(f"Received {len(request.actions)} actions for training from client.")
-
-        # Convert proto actions to your local RL4SysAction
+        # Convert proto actions to local format
         actions = self._get_actions(request.actions, verbose=False)
-
-        # 1) Clear out any previous model signals
+        
+        # Reset model signal
         self.model_ready = 0
 
-        # 2) Start a background thread to do the training
-        def training_worker():
-            updated = self._algorithm.receive_trajectory(actions)
-            print(f"[TrainingServer] Training worker finished. updated: {updated}")
-            # 'updated' is a boolean indicating if training actually happened
-            if updated:
-                # If we have a new trained model, store it so that ClientPoll can pick it up
-                self.model_ready = 0  # in case the actual training is not instant
+        # Add the actions to the training queue for processing by the dedicated thread
+        self.training_queue.put(actions)
+        print("[TrainingServer] Added actions to training queue")
 
-                # Either serialize directly to memory, or use self._algorithm.save(...)
-                # Example: direct in-memory approach:
+        # Periodically log buffer stats (every 5 sends)
+        if self.training_queue.total_added % 10 == 0:
+            self._log_buffer_stats()
 
-                # Now we indicate the model is good to go
-                self.model_ready = 1
-
-                # clear trajectory buffer
-                self.trajectory_buffer = []
-            else:
-                # If no epoch triggered, no new model
-                self.model_ready = -1
-                self.error_message = "No new model trained, please collect more trajectory (which shouldn't happen cause we deal with it before)."
-            
-            
-
-        # Launch the worker
-        thread = threading.Thread(target=training_worker)
-        thread.daemon = True
-        thread.start()
-
-        return trajectory_pb2.ActionResponse(code=1, message="Training started successfully for client.")
+        return trajectory_pb2.ActionResponse(code=1, message="Actions queued for training successfully.")
 
     def ClientPoll(self, request, context):
         """
@@ -183,7 +330,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
             with self.lock:
                 # Initial handshake
                 if request.first_time == 1:
-                    print(f"Client model version {request.version}, Server model version ") # TODO model need to have version scheme
+                    print(f"Client model version {request.version}, Server model version {self.model_version}") 
                     print(f"[Client Poll] Handshake initiated by client.")
 
                     model_data = None
@@ -200,7 +347,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                         model_data = serialize_model(self._algorithm.actor)
                         model_critic_data = serialize_model(self._algorithm.critic)
 
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=0, error="Handshake successful.")
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=self.model_version, error="Handshake successful.")
 
                 if self.model_ready == 1:
                     print(f"[Client Poll] Model is ready for client. Sending model.")
@@ -220,7 +367,7 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
                         model_data = serialize_model(self._algorithm.actor)
                         model_critic_data = serialize_model(self._algorithm.critic)
 
-                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, error="")
+                    return trajectory_pb2.RL4SysModel(code=1, model=model_data, model_critic=model_critic_data, version=self.model_version, error="")
                 elif self.model_ready == -1:
                     print(f"[Client Poll] Error for client: {self.error_message}")
                     
@@ -251,13 +398,20 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
         
         return deserialized_actions
     
+    def __del__(self):
+        """Cleanup when the server is destroyed."""
+        self._running = False
+        if hasattr(self, '_training_thread') and self._training_thread.is_alive():
+            self._training_thread.join(timeout=2.0)
+     
 def start_training_server(algorithm_name: str,
                          input_size: int,
                          action_dim: int,
                          hyperparams: list[str] | dict,
                          env_dir: str = os.getcwd(),
                          tensorboard: bool = False,
-                         act_limit: float = 1.0):
+                         act_limit: float = 1.0,
+                         buffer_size: int = DEFAULT_BUFFER_SIZE):
     """
     Creates and starts the TrainingServer, which serves the RL4SysRoute gRPC service.
 
@@ -269,6 +423,7 @@ def start_training_server(algorithm_name: str,
                                         of hyperparameters to initialize the model.
         env_dir (str): Directory for environment or logging, defaults to current directory.
         tensorboard (bool): Whether to use Tensorboard logging.
+        buffer_size (int): Maximum size of the trajectory buffer.
     """
     # 1. Create the gRPC server with a thread pool
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -286,7 +441,8 @@ def start_training_server(algorithm_name: str,
         act_limit=act_limit,
         hyperparams=hyperparams,
         env_dir=env_dir,
-        tensorboard=tensorboard
+        tensorboard=tensorboard,
+        buffer_size=buffer_size
     )
 
     # 3. Add the servicer to the server
@@ -339,6 +495,14 @@ if __name__ == "__main__":
         default=False,
         help="Enable Tensorboard logging"
     )
+    
+    # Optional argument for buffer size
+    parser.add_argument(
+        "--buffer_size",
+        type=int,
+        default=DEFAULT_BUFFER_SIZE,
+        help=f"Maximum size of trajectory buffer (default: {DEFAULT_BUFFER_SIZE})"
+    )
 
     # Parse known args; everything else goes into `extras` for algorithm hyperparams
     args, extras = parser.parse_known_args()
@@ -350,5 +514,6 @@ if __name__ == "__main__":
         action_dim=args.kernel_dim,
         hyperparams=extras,
         env_dir=os.getcwd(),
-        tensorboard=args.tensorboard
+        tensorboard=args.tensorboard,
+        buffer_size=args.buffer_size
     )
