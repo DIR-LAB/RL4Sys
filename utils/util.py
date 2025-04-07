@@ -152,7 +152,7 @@ def deserialize_model(raw_bytes: bytes) -> nn.Module:
     return model
 
 # Default maximum trajectories to buffer
-DEFAULT_BUFFER_SIZE = 1000
+DEFAULT_BUFFER_SIZE = 10
 
 class CircularTrajectoryBuffer:
     """
