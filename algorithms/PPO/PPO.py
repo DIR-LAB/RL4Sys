@@ -160,9 +160,6 @@ class PPO(AlgorithmAbstract):
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
                 self.ep_rewards = 0
             
-            
-            
-        
         # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
             self.epoch += 1
@@ -175,6 +172,7 @@ class PPO(AlgorithmAbstract):
             self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
             self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
             return True  # indicates an updated model
+        
         return False
 
     def train_model(self) -> None:

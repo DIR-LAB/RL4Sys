@@ -49,7 +49,7 @@ def start_lunar_server(algorithm_name='DQN', seed=1, tensorboard=False, extras=N
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="RL4Sys Lunar Lander Training Server",
                                     formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--algorithm', '-a', type=str, default='DQN',
+    parser.add_argument('--algorithm', '-a', type=str, default='PPO',
                         help='RL algorithm to use (DQN, PPO, DDPG, etc.)')
     parser.add_argument('--tensorboard', '-t', action='store_true', default=False,
                         help='enable tensorboard logging for training observations')

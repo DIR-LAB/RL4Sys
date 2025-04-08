@@ -63,12 +63,15 @@ class LunarLanderSim(ApplicationAbstract):
             act_dim = self.env.action_space.n
             self.act_limit = 1.0
 
+        
         # Initialize the agent with model if available
         self.rlagent = RL4SysAgent(algorithm_name=self.algorithm_name, 
                                   input_size=self.env.observation_space.shape[0], 
                                   act_dim=act_dim,
                                   act_limit=self.act_limit,
                                   model=model)
+        
+       
 
         # To store simulator stats
         self.simulator_stats = {
@@ -83,6 +86,10 @@ class LunarLanderSim(ApplicationAbstract):
         }
 
     def run_application(self, num_iterations=1, num_moves=1000):
+        # set start time
+        measurement_start_time = time.time()
+        total_moves = 0
+
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
@@ -99,11 +106,12 @@ class LunarLanderSim(ApplicationAbstract):
             obs_tensor, mask = self.build_observation(obs)
 
             # while not done and moves < num_moves: # Modified
-            while not done or moves < 500:   
+            #while not done or moves < 500:   
+            while moves < 100:
                 if self._render_game:
                     self.env.render()
 
-                # Get action from agent
+                # Get action from agent 
                 rl4sys_action = self.rlagent.request_for_action(obs_tensor, mask)
                 action = rl4sys_action.act
 
@@ -113,9 +121,10 @@ class LunarLanderSim(ApplicationAbstract):
                 elif isinstance(action, np.ndarray):
                     action = action[0]
                 action = int(action)
+                
 
                 # Step the environment
-                next_obs, reward, terminated, truncated, info = self.env.step(action)
+                next_obs, reward, terminated, truncated, info = self.env.step(action) # TODO: change back to action
                 done = terminated or truncated
                 cumulative_reward += reward
 
@@ -123,7 +132,7 @@ class LunarLanderSim(ApplicationAbstract):
                 next_obs_tensor, mask = self.build_observation(next_obs)
 
                 # record trajectory
-                rl4sys_action.update_reward(reward)
+                #rl4sys_action.update_reward(reward) # TODO: remove this
                 
                 rl_runs += 1
                 moves += 1
@@ -132,14 +141,19 @@ class LunarLanderSim(ApplicationAbstract):
 
                 obs_tensor = next_obs_tensor  # Update current observation
                 
-                if rl_runs >= MOVE_SEQUENCE_SIZE or done:
+                #if rl_runs >= MOVE_SEQUENCE_SIZE or done:
+                if rl_runs >= 100:
+                    total_moves += moves
+
                     # Flag last action
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
                     print(f'[LunarLanderSim - simulator] Final epoch reward: {cumulative_reward}')
 
+                    """
                     # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
                     rl4sys_action.set_done(True)
                     self.rlagent.send_actions()  # This now adds to sending queue, non-blocking
+                    """
 
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1
@@ -148,12 +162,18 @@ class LunarLanderSim(ApplicationAbstract):
                         self.simulator_stats['death_count'] += 1
                         self.simulator_stats['time_to_death'].append(time.time() - start_time)
                     break
-                    
+            
             if self._render_game:
                 self.env.close()
         
+
+        # set end time
+        measurement_end_time = time.time()
+        print(f"[LunarLanderSim - simulator] Total time taken: {measurement_end_time - measurement_start_time} seconds")
+        print(f"[LunarLanderSim - simulator] Average moves: {total_moves / num_iterations}")
         # Clean up when done with all iterations
         self.rlagent.close()
+        
         
 
     def build_observation(self, obs):
@@ -201,11 +221,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=20000,
+    parser.add_argument('--number-of-iterations', type=int, default=2000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=10000,
                         help='maximum number of moves allowed per iteration')
-    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='DQN',
+    parser.add_argument('--start-server', '-s', dest='algorithm', type=str, default='PPO',
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
