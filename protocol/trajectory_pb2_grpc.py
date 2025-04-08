@@ -5,7 +5,7 @@ import warnings
 
 from protocol import trajectory_pb2 as protocol_dot_trajectory__pb2
 
-GRPC_GENERATED_VERSION = '1.70.0'
+GRPC_GENERATED_VERSION = '1.69.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -40,6 +40,11 @@ class RL4SysRouteStub(object):
                 request_serializer=protocol_dot_trajectory__pb2.RL4SysActionList.SerializeToString,
                 response_deserializer=protocol_dot_trajectory__pb2.ActionResponse.FromString,
                 _registered_method=True)
+        self.SendTrajectoryBatch = channel.unary_unary(
+                '/rl4sys.RL4SysRoute/SendTrajectoryBatch',
+                request_serializer=protocol_dot_trajectory__pb2.RL4SysTrajectoryBatch.SerializeToString,
+                response_deserializer=protocol_dot_trajectory__pb2.ActionResponse.FromString,
+                _registered_method=True)
         self.ClientPoll = channel.unary_unary(
                 '/rl4sys.RL4SysRoute/ClientPoll',
                 request_serializer=protocol_dot_trajectory__pb2.RequestModel.SerializeToString,
@@ -58,6 +63,13 @@ class RL4SysRouteServicer(object):
 
     def SendActions(self, request, context):
         """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendTrajectoryBatch(self, request, context):
+        """New RPC method for sending batches of trajectories
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -81,6 +93,11 @@ def add_RL4SysRouteServicer_to_server(servicer, server):
             'SendActions': grpc.unary_unary_rpc_method_handler(
                     servicer.SendActions,
                     request_deserializer=protocol_dot_trajectory__pb2.RL4SysActionList.FromString,
+                    response_serializer=protocol_dot_trajectory__pb2.ActionResponse.SerializeToString,
+            ),
+            'SendTrajectoryBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendTrajectoryBatch,
+                    request_deserializer=protocol_dot_trajectory__pb2.RL4SysTrajectoryBatch.FromString,
                     response_serializer=protocol_dot_trajectory__pb2.ActionResponse.SerializeToString,
             ),
             'ClientPoll': grpc.unary_unary_rpc_method_handler(
@@ -121,6 +138,33 @@ class RL4SysRoute(object):
             target,
             '/rl4sys.RL4SysRoute/SendActions',
             protocol_dot_trajectory__pb2.RL4SysActionList.SerializeToString,
+            protocol_dot_trajectory__pb2.ActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendTrajectoryBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rl4sys.RL4SysRoute/SendTrajectoryBatch',
+            protocol_dot_trajectory__pb2.RL4SysTrajectoryBatch.SerializeToString,
             protocol_dot_trajectory__pb2.ActionResponse.FromString,
             options,
             channel_credentials,

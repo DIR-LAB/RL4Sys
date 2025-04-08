@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19protocol/trajectory.proto\x12\x06rl4sys\"\xce\x01\n\x0cRL4SysAction\x12\x0b\n\x03obs\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\x0c\x12\x0c\n\x04mask\x18\x03 \x01(\x0c\x12\x0e\n\x06reward\x18\x04 \x01(\x0c\x12,\n\x04\x64\x61ta\x18\x05 \x03(\x0b\x32\x1e.rl4sys.RL4SysAction.DataEntry\x12\x0c\n\x04\x64one\x18\x06 \x01(\x08\x12\x1a\n\x12reward_update_flag\x18\x07 \x01(\x08\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x0c:\x02\x38\x01\"9\n\x10RL4SysActionList\x12%\n\x07\x61\x63tions\x18\x01 \x03(\x0b\x32\x14.rl4sys.RL4SysAction\"`\n\x0bRL4SysModel\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\r\n\x05model\x18\x02 \x01(\x0c\x12\x14\n\x0cmodel_critic\x18\x03 \x01(\x0c\x12\x0f\n\x07version\x18\x04 \x01(\x03\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"3\n\x0cRequestModel\x12\x12\n\nfirst_time\x18\x01 \x01(\x05\x12\x0f\n\x07version\x18\x02 \x01(\x03\"@\n\x12\x43lientRegistration\x12\x11\n\tclient_id\x18\x01 \x01(\t\x12\x17\n\x0f\x63urrent_version\x18\x02 \x01(\x03\"/\n\x0e\x41\x63tionResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd0\x01\n\x0bRL4SysRoute\x12?\n\x0bSendActions\x12\x18.rl4sys.RL4SysActionList\x1a\x16.rl4sys.ActionResponse\x12\x37\n\nClientPoll\x12\x14.rl4sys.RequestModel\x1a\x13.rl4sys.RL4SysModel\x12G\n\x12RegisterForUpdates\x12\x1a.rl4sys.ClientRegistration\x1a\x13.rl4sys.RL4SysModel0\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19protocol/trajectory.proto\x12\x06rl4sys\"\xce\x01\n\x0cRL4SysAction\x12\x0b\n\x03obs\x18\x01 \x01(\x0c\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\x0c\x12\x0c\n\x04mask\x18\x03 \x01(\x0c\x12\x0e\n\x06reward\x18\x04 \x01(\x0c\x12,\n\x04\x64\x61ta\x18\x05 \x03(\x0b\x32\x1e.rl4sys.RL4SysAction.DataEntry\x12\x0c\n\x04\x64one\x18\x06 \x01(\x08\x12\x1a\n\x12reward_update_flag\x18\x07 \x01(\x08\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x0c:\x02\x38\x01\"9\n\x10RL4SysActionList\x12%\n\x07\x61\x63tions\x18\x01 \x03(\x0b\x32\x14.rl4sys.RL4SysAction\"[\n\x15RL4SysTrajectoryBatch\x12.\n\x0ctrajectories\x18\x01 \x03(\x0b\x32\x18.rl4sys.RL4SysActionList\x12\x12\n\nbatch_size\x18\x02 \x01(\x05\"`\n\x0bRL4SysModel\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\r\n\x05model\x18\x02 \x01(\x0c\x12\x14\n\x0cmodel_critic\x18\x03 \x01(\x0c\x12\x0f\n\x07version\x18\x04 \x01(\x03\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"3\n\x0cRequestModel\x12\x12\n\nfirst_time\x18\x01 \x01(\x05\x12\x0f\n\x07version\x18\x02 \x01(\x03\"@\n\x12\x43lientRegistration\x12\x11\n\tclient_id\x18\x01 \x01(\t\x12\x17\n\x0f\x63urrent_version\x18\x02 \x01(\x03\"/\n\x0e\x41\x63tionResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t2\x9e\x02\n\x0bRL4SysRoute\x12?\n\x0bSendActions\x12\x18.rl4sys.RL4SysActionList\x1a\x16.rl4sys.ActionResponse\x12L\n\x13SendTrajectoryBatch\x12\x1d.rl4sys.RL4SysTrajectoryBatch\x1a\x16.rl4sys.ActionResponse\x12\x37\n\nClientPoll\x12\x14.rl4sys.RequestModel\x1a\x13.rl4sys.RL4SysModel\x12G\n\x12RegisterForUpdates\x12\x1a.rl4sys.ClientRegistration\x1a\x13.rl4sys.RL4SysModel0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,14 +39,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RL4SYSACTION_DATAENTRY']._serialized_end=244
   _globals['_RL4SYSACTIONLIST']._serialized_start=246
   _globals['_RL4SYSACTIONLIST']._serialized_end=303
-  _globals['_RL4SYSMODEL']._serialized_start=305
-  _globals['_RL4SYSMODEL']._serialized_end=401
-  _globals['_REQUESTMODEL']._serialized_start=403
-  _globals['_REQUESTMODEL']._serialized_end=454
-  _globals['_CLIENTREGISTRATION']._serialized_start=456
-  _globals['_CLIENTREGISTRATION']._serialized_end=520
-  _globals['_ACTIONRESPONSE']._serialized_start=522
-  _globals['_ACTIONRESPONSE']._serialized_end=569
-  _globals['_RL4SYSROUTE']._serialized_start=572
-  _globals['_RL4SYSROUTE']._serialized_end=780
+  _globals['_RL4SYSTRAJECTORYBATCH']._serialized_start=305
+  _globals['_RL4SYSTRAJECTORYBATCH']._serialized_end=396
+  _globals['_RL4SYSMODEL']._serialized_start=398
+  _globals['_RL4SYSMODEL']._serialized_end=494
+  _globals['_REQUESTMODEL']._serialized_start=496
+  _globals['_REQUESTMODEL']._serialized_end=547
+  _globals['_CLIENTREGISTRATION']._serialized_start=549
+  _globals['_CLIENTREGISTRATION']._serialized_end=613
+  _globals['_ACTIONRESPONSE']._serialized_start=615
+  _globals['_ACTIONRESPONSE']._serialized_end=662
+  _globals['_RL4SYSROUTE']._serialized_start=665
+  _globals['_RL4SYSROUTE']._serialized_end=951
 # @@protoc_insertion_point(module_scope)

@@ -20,7 +20,9 @@ class RL4SysAgent:
     Trajectory-collecting agent that:
       - Uses models to generate actions for the environment
       - Collects trajectories and sends them to a client
-      - Periodically checks for model updates from the client
+      - Model updates are pushed directly from the client's streaming thread
+      - Trajectories are sent in batches for efficiency
+      - Can randomly sample a subset of trajectories to send when buffer is large
     """
 
     def __init__(self, 
@@ -28,7 +30,9 @@ class RL4SysAgent:
                  model: torch.nn.Module = None, 
                  input_size: int = 0,
                  act_dim: int = 0,
-                 act_limit: float = 1.0):
+                 act_limit: float = 1.0,
+                 min_trajectories_to_send: int = 5,
+                 max_trajectories_to_send: int = 10):
         """
         Args:
             algorithm_name: Name of the RL algorithm to use
@@ -36,6 +40,8 @@ class RL4SysAgent:
             input_size: Size of the observation space
             act_dim: Size of the action space
             act_limit: Limit for continuous action values
+            min_trajectories_to_send: Minimum number of trajectories to accumulate before sending
+            max_trajectories_to_send: Maximum number of trajectories to send in one batch (samples if more are available)
         """
         self.algorithm_name = algorithm_name
         self._model = model
@@ -44,45 +50,25 @@ class RL4SysAgent:
         # Initialize trajectory buffer
         self._current_traj = RL4SysTrajectory()
         
-        # Initialize client for server communication
+        # Initialize client for server communication, passing self reference
+        # for direct model updates
         self.client = RL4SysClient(
             algorithm_name=algorithm_name,
             input_size=input_size,
             act_dim=act_dim,
-            act_limit=act_limit
+            act_limit=act_limit,
+            agent_reference=self,  # Pass self reference for direct model updates
+            min_trajectories_to_send=min_trajectories_to_send,  # Configure minimum batch size
+            max_trajectories_to_send=max_trajectories_to_send   # Configure maximum batch size
         )
         
-        # Start model update thread
+        # Set running flag for cleanup
         self._running = True
-        self._update_thread = threading.Thread(target=self._check_for_model_updates, daemon=True)
-        self._update_thread.start()
 
     def _validate_model(self, model: torch.nn.Module) -> None:
         """Check that the model has proper interface for generating actions."""
         assert hasattr(model, 'step'), "Model must have a .step(...) method."
         # During actual usage, the model validity will be verified by usage patterns
-
-    def _check_for_model_updates(self):
-        """
-        Background thread that periodically checks for model updates from the client.
-        Non-blocking to the main simulation thread.
-        """
-        while self._running:
-            try:
-                # Try to get a new model (non-blocking)
-                new_model = self.client.get_latest_model(timeout=0.1)
-                if new_model is not None:
-                    # Got a new model, update our local copy
-                    with self._lock:
-                        self._model = new_model
-                        print("[RL4SysAgent] Updated model from client.")
-                
-                # Sleep briefly to avoid tight polling
-                time.sleep(0.5)
-                
-            except Exception as e:
-                print(f"[RL4SysAgent] Error checking for model updates: {e}")
-                time.sleep(1)  # Avoid tight loop on persistent errors
 
     def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> RL4SysAction:
         """
@@ -120,23 +106,24 @@ class RL4SysAgent:
     def send_actions(self) -> None:
         """
         Mark the end of the current trajectory and queue it for sending to the server.
-        Non-blocking operation.
+        Non-blocking operation. The client will collect trajectories and send them
+        in batches when appropriate.
         """
-        # Add the current trajectory to the client's sending queue
-        self.client.add_trajectory(self._current_traj)
-        print("[RL4SysAgent] Trajectory added to client's sending queue.")
-        
-        # Start a new trajectory
-        self._current_traj = RL4SysTrajectory()
+        # Only add to queue if the trajectory contains actions
+        if len(self._current_traj.actions) > 0:
+            # Add the current trajectory to the client's trajectory buffer
+            self.client.add_trajectory(self._current_traj)
+            print(f"[RL4SysAgent] Trajectory added to client's buffer (length: {len(self._current_traj.actions)} actions)")
+            
+            # Start a new trajectory
+            self._current_traj = RL4SysTrajectory()
+        else:
+            print("[RL4SysAgent] Skipping empty trajectory")
 
     def close(self):
         """Cleanly close connections and threads."""
         self._running = False
         
-        # Wait for update thread to finish (with timeout)
-        if self._update_thread.is_alive():
-            self._update_thread.join(timeout=1.0)
-            
         # Close client connection
         self.client.close()
         print("[RL4SysAgent] Agent closed successfully.")

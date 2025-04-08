@@ -106,7 +106,7 @@ class LunarLanderSim(ApplicationAbstract):
             obs_tensor, mask = self.build_observation(obs)
 
             # while not done and moves < num_moves: # Modified
-            #while not done or moves < 500:   
+            #while not done or moves < 500:   # TODO change back
             while moves < 100:
                 if self._render_game:
                     self.env.render()
@@ -124,7 +124,7 @@ class LunarLanderSim(ApplicationAbstract):
                 
 
                 # Step the environment
-                next_obs, reward, terminated, truncated, info = self.env.step(action) # TODO: change back to action
+                next_obs, reward, terminated, truncated, info = self.env.step(action) 
                 done = terminated or truncated
                 cumulative_reward += reward
 
@@ -132,7 +132,7 @@ class LunarLanderSim(ApplicationAbstract):
                 next_obs_tensor, mask = self.build_observation(next_obs)
 
                 # record trajectory
-                #rl4sys_action.update_reward(reward) # TODO: remove this
+                rl4sys_action.update_reward(reward)
                 
                 rl_runs += 1
                 moves += 1
@@ -149,11 +149,11 @@ class LunarLanderSim(ApplicationAbstract):
                     print(f'[LunarLanderSim - simulator] RL4SysAgent moves made: {moves}')
                     print(f'[LunarLanderSim - simulator] Final epoch reward: {cumulative_reward}')
 
-                    """
+                    
                     # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
                     rl4sys_action.set_done(True)
                     self.rlagent.send_actions()  # This now adds to sending queue, non-blocking
-                    """
+                    
 
                     if reward >= 200:  # Successful landing threshold
                         self.simulator_stats['success_count'] += 1

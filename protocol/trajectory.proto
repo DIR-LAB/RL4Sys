@@ -17,6 +17,12 @@ message RL4SysActionList {
     repeated RL4SysAction actions = 1; // A list of RL4SysAction objects
 }
 
+// New message for batching multiple trajectories
+message RL4SysTrajectoryBatch {
+    repeated RL4SysActionList trajectories = 1; // A batch of trajectories
+    int32 batch_size = 2; // Number of trajectories in the batch
+}
+
 message RL4SysModel {
     int32 code = 1; // notify if model is ready. 1 is ready, 0 is not ready, -1 error
     bytes model = 2; // if done = 1, model should have something, else NaN
@@ -39,6 +45,8 @@ message ClientRegistration {
 // Define the service to send the list of RL4SysAction objects
 service RL4SysRoute {
     rpc SendActions (RL4SysActionList) returns (ActionResponse);
+    // New RPC method for sending batches of trajectories
+    rpc SendTrajectoryBatch (RL4SysTrajectoryBatch) returns (ActionResponse);
     rpc ClientPoll (RequestModel) returns (RL4SysModel);
     
     // New streaming RPC for server-push model updates

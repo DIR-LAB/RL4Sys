@@ -310,6 +310,45 @@ class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
 
         return trajectory_pb2.ActionResponse(code=1, message="Actions queued for training successfully.")
 
+    def SendTrajectoryBatch(self, request, context):
+        """
+        Client uses this gRPC method to send batches of trajectories;
+        the server adds them all to the training queue.
+        
+        This optimized implementation handles sampling and processes
+        trajectory batches efficiently.
+        """
+        # Get the number of trajectories in the batch
+        num_trajectories = request.batch_size
+        print(f"[TrainingServer] Received batch of {num_trajectories} trajectories for training")
+        
+        # Track total actions processed for this batch
+        total_actions = 0
+        
+        # Process each trajectory in the batch
+        for traj_idx, trajectory in enumerate(request.trajectories):
+            # Convert proto actions to local format for this trajectory
+            actions = self._get_actions(trajectory.actions, verbose=False)
+            total_actions += len(actions)
+            
+            # Add the actions to the training queue for processing by the dedicated thread
+            self.training_queue.put(actions)
+        
+        print(f"[TrainingServer] Processed batch: {num_trajectories} trajectories with {total_actions} total actions")
+        
+        # Reset model signal after adding all trajectories
+        self.model_ready = 0
+        
+        # Log buffer stats after processing batch
+        self._log_buffer_stats()
+        
+        # Check if we should trigger training immediately for larger batches
+        if num_trajectories >= 5:  # If we received a substantial batch, we can signal immediate processing
+            print("[TrainingServer] Received substantial batch, signaling training worker")
+            # The training worker will pick up the next item from the queue on its next iteration
+        
+        return trajectory_pb2.ActionResponse(code=1, message=f"Batch of {num_trajectories} trajectories ({total_actions} actions) queued for training successfully.")
+
     def ClientPoll(self, request, context):
         """
         parameters:
