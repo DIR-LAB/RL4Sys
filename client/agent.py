@@ -32,7 +32,8 @@ class RL4SysAgent:
                  act_dim: int = 0,
                  act_limit: float = 1.0,
                  min_trajectories_to_send: int = 5,
-                 max_trajectories_to_send: int = 10):
+                 max_trajectories_to_send: int = 10,
+                 verbose: bool = True):
         """
         Args:
             algorithm_name: Name of the RL algorithm to use
@@ -42,10 +43,12 @@ class RL4SysAgent:
             act_limit: Limit for continuous action values
             min_trajectories_to_send: Minimum number of trajectories to accumulate before sending
             max_trajectories_to_send: Maximum number of trajectories to send in one batch (samples if more are available)
+            verbose: Whether to print status messages
         """
         self.algorithm_name = algorithm_name
         self._model = model
         self._lock = threading.Lock()
+        self.verbose = verbose
 
         # Initialize trajectory buffer
         self._current_traj = RL4SysTrajectory()
@@ -59,7 +62,8 @@ class RL4SysAgent:
             act_limit=act_limit,
             agent_reference=self,  # Pass self reference for direct model updates
             min_trajectories_to_send=min_trajectories_to_send,  # Configure minimum batch size
-            max_trajectories_to_send=max_trajectories_to_send   # Configure maximum batch size
+            max_trajectories_to_send=max_trajectories_to_send,  # Configure maximum batch size
+            verbose=verbose  # Pass verbose flag to client
         )
         
         # Set running flag for cleanup
@@ -77,7 +81,8 @@ class RL4SysAgent:
         with self._lock:
             if self._model is None:
                 # If no model available, initialize with random action and empty data
-                print("[RL4SysAgent] Warning: No model available, using random action.")
+                if self.verbose:
+                    print("[RL4SysAgent] Warning: No model available, using random action.")
                 if self.algorithm_name == "DQN":
                     action_nd = np.random.randint(0, mask.shape[1] if mask is not None else 1)
                 else:
@@ -113,12 +118,14 @@ class RL4SysAgent:
         if len(self._current_traj.actions) > 0:
             # Add the current trajectory to the client's trajectory buffer
             self.client.add_trajectory(self._current_traj)
-            print(f"[RL4SysAgent] Trajectory added to client's buffer (length: {len(self._current_traj.actions)} actions)")
+            if self.verbose:
+                print(f"[RL4SysAgent] Trajectory added to client's buffer (length: {len(self._current_traj.actions)} actions)")
             
             # Start a new trajectory
             self._current_traj = RL4SysTrajectory()
         else:
-            print("[RL4SysAgent] Skipping empty trajectory")
+            if self.verbose:
+                print("[RL4SysAgent] Skipping empty trajectory")
 
     def close(self):
         """Cleanly close connections and threads."""
@@ -126,4 +133,5 @@ class RL4SysAgent:
         
         # Close client connection
         self.client.close()
-        print("[RL4SysAgent] Agent closed successfully.")
+        if self.verbose:
+            print("[RL4SysAgent] Agent closed successfully.")

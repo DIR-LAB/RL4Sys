@@ -45,7 +45,8 @@ class RL4SysClient:
                  trajectory_buffer_size: int = DEFAULT_BUFFER_SIZE,
                  agent_reference = None,
                  min_trajectories_to_send: int = 1,
-                 max_trajectories_to_send: int = 10):
+                 max_trajectories_to_send: int = 10,
+                 verbose: bool = True):
         """
         Args:
             algorithm_name: Name of the RL algorithm to use
@@ -57,6 +58,7 @@ class RL4SysClient:
             agent_reference: Reference to the agent for direct model updates
             min_trajectories_to_send: Minimum number of trajectories to collect before sending
             max_trajectories_to_send: Maximum number of trajectories to send in one batch (samples if more are available)
+            verbose: Whether to print status messages
         """
         self.algorithm_name = algorithm_name
         self.server_address = server_address
@@ -66,6 +68,7 @@ class RL4SysClient:
         self.agent_reference = agent_reference
         self.min_trajectories_to_send = min_trajectories_to_send
         self.max_trajectories_to_send = max_trajectories_to_send
+        self.verbose = verbose
         
         # Generate a unique client ID
         self.client_id = f"client-{uuid.uuid4()}"
@@ -106,7 +109,8 @@ class RL4SysClient:
             if self.agent_reference:
                 with self.agent_reference._lock:
                     self.agent_reference._model = initial_model
-                    print("[RL4SysClient] Updated agent model directly from initial handshake.")
+                    if self.verbose:
+                        print("[RL4SysClient] Updated agent model directly from initial handshake.")
             else:
                 # Otherwise, use the queue as before
                 self.model_queue.put(initial_model)
@@ -120,27 +124,34 @@ class RL4SysClient:
         One-time handshake with the server to get an initial model.
         Returns the deserialized model if successful, None otherwise.
         """
-        print("[RL4SysClient] Handshake: requesting initial model from server...")
+        if self.verbose:
+            print("[RL4SysClient] Handshake: requesting initial model from server...")
         req = trajectory_pb2.RequestModel(first_time=1, version=self.local_version)
         try:
             resp = self.stub.ClientPoll(req)
         except grpc.RpcError as e:
-            print(f"[RL4SysClient] gRPC error during handshake: {e.details()}")
+            if self.verbose:
+                print(f"[RL4SysClient] gRPC error during handshake: {e.details()}")
             return None
 
         if resp.code == 1:
-            print("[RL4SysClient] Handshake successful with server.")
+            if self.verbose:
+                print("[RL4SysClient] Handshake successful with server.")
             self.local_version = resp.version
             if len(resp.model) > 0:
                 model = self._deserialize_model_response(resp)
-                print("[RL4SysClient] Received and loaded initial model from server.")
+                if self.verbose:
+                    print("[RL4SysClient] Received and loaded initial model from server.")
                 return model
             else:
-                print("[RL4SysClient] Server has no initial model yet (model bytes empty).")
+                if self.verbose:
+                    print("[RL4SysClient] Server has no initial model yet (model bytes empty).")
         elif resp.code == 0:
-            print("[RL4SysClient] Server not ready yet (code=0). No initial model.")
+            if self.verbose:
+                print("[RL4SysClient] Server not ready yet (code=0). No initial model.")
         else:  # code == -1 or other
-            print(f"[RL4SysClient] Handshake error or server error: code={resp.code}, err={resp.error}")
+            if self.verbose:
+                print(f"[RL4SysClient] Handshake error or server error: code={resp.code}, err={resp.error}")
         
         return None
         
@@ -179,7 +190,8 @@ class RL4SysClient:
         
         while self._running:
             try:
-                print(f"[RL4SysClient] Registering for model update stream (version {self.local_version})")
+                if self.verbose:
+                    print(f"[RL4SysClient] Registering for model update stream (version {self.local_version})")
                 
                 # Register for updates with our client ID and current model version
                 register_request = trajectory_pb2.ClientRegistration(
@@ -204,45 +216,56 @@ class RL4SysClient:
                                 if self.agent_reference:
                                     with self.agent_reference._lock:
                                         self.agent_reference._model = model
-                                        print(f"[RL4SysClient] Directly updated agent model to version {update.version}")
+                                        if self.verbose:
+                                            print(f"[RL4SysClient] Directly updated agent model to version {update.version}")
                                 else:
                                     # Otherwise, use the queue as before
                                     try:
                                         self.model_queue.put_nowait(model)
-                                        print(f"[RL4SysClient] Received model update (version {update.version})")
+                                        if self.verbose:
+                                            print(f"[RL4SysClient] Received model update (version {update.version})")
                                     except queue.Full:
                                         # Queue is full, get and discard an old model to make room
                                         try:
                                             self.model_queue.get_nowait()
                                             self.model_queue.put_nowait(model)
-                                            print(f"[RL4SysClient] Model queue full, discarded oldest model to add version {update.version}")
+                                            if self.verbose:
+                                                print(f"[RL4SysClient] Model queue full, discarded oldest model to add version {update.version}")
                                         except (queue.Empty, queue.Full):
-                                            print(f"[RL4SysClient] Failed to add model version {update.version} to queue")
+                                            if self.verbose:
+                                                print(f"[RL4SysClient] Failed to add model version {update.version} to queue")
                                 
                                 # After receiving a model update, send any collected trajectories
                                 # and clear the trajectory buffer
                                 if not self.trajectory_queue.empty():
-                                    print(f"[RL4SysClient] Sending trajectories after model update (version {update.version})")
+                                    if self.verbose:
+                                        print(f"[RL4SysClient] Sending trajectories after model update (version {update.version})")
                                     self.send_trajectories_batch()
                             else:
-                                print(f"[RL4SysClient] Ignoring model update with version {update.version} (already have {self.local_version})")
+                                if self.verbose:
+                                    print(f"[RL4SysClient] Ignoring model update with version {update.version} (already have {self.local_version})")
                     elif update.code == -1:
-                        print(f"[RL4SysClient] Server error: {update.error}")
+                        if self.verbose:
+                            print(f"[RL4SysClient] Server error: {update.error}")
                 
                 # If we get here, the stream ended unexpectedly
-                print("[RL4SysClient] Model update stream ended")
+                if self.verbose:
+                    print("[RL4SysClient] Model update stream ended")
                 retry_count += 1
                 
             except grpc.RpcError as e:
-                print(f"[RL4SysClient] gRPC error in model stream: {e.details()}")
+                if self.verbose:
+                    print(f"[RL4SysClient] gRPC error in model stream: {e.details()}")
                 retry_count += 1
             except Exception as e:
-                print(f"[RL4SysClient] Error in model stream: {e}")
+                if self.verbose:
+                    print(f"[RL4SysClient] Error in model stream: {e}")
                 retry_count += 1
                 
             # If we've reached max retries, give up
             if retry_count >= max_retries and max_retries > 0:
-                print(f"[RL4SysClient] Giving up on model stream after {retry_count} retries")
+                if self.verbose:
+                    print(f"[RL4SysClient] Giving up on model stream after {retry_count} retries")
                 break
                 
             # Wait before reconnecting
@@ -257,23 +280,27 @@ class RL4SysClient:
         """
         # Use a lock to ensure only one send operation happens at a time
         if not self._send_lock.acquire(blocking=False):
-            print("[RL4SysClient] Another send operation is in progress, skipping this one")
+            if self.verbose:
+                print("[RL4SysClient] Another send operation is in progress, skipping this one")
             return
         
         try:
             # Check if we have enough trajectories to send
             if self.trajectory_queue.qsize() < self.min_trajectories_to_send and self.first_send_done:
-                print(f"[RL4SysClient] Not enough trajectories to send (have {self.trajectory_queue.qsize()}, need {self.min_trajectories_to_send})")
+                if self.verbose:
+                    print(f"[RL4SysClient] Not enough trajectories to send (have {self.trajectory_queue.qsize()}, need {self.min_trajectories_to_send})")
                 return
             
             # Get all trajectories from the buffer - this clears the buffer
             trajectories = self.trajectory_queue.get_all()
             
             if not trajectories:
-                print("[RL4SysClient] No trajectories to send")
+                if self.verbose:
+                    print("[RL4SysClient] No trajectories to send")
                 return
                 
-            print(f"[RL4SysClient] Preparing to send batch of trajectories (collected {len(trajectories)})")
+            if self.verbose:
+                print(f"[RL4SysClient] Preparing to send batch of trajectories (collected {len(trajectories)})")
             
             # Create and start a dedicated thread for sending
             send_thread = threading.Thread(
@@ -299,7 +326,8 @@ class RL4SysClient:
         try:
             # Sample trajectories if we have more than the maximum to send
             if len(trajectories) > self.max_trajectories_to_send:
-                print(f"[RL4SysClient] Sampling {self.max_trajectories_to_send} trajectories from {len(trajectories)} available")
+                if self.verbose:
+                    print(f"[RL4SysClient] Sampling {self.max_trajectories_to_send} trajectories from {len(trajectories)} available")
                 sampled_trajectories = random.sample(trajectories, self.max_trajectories_to_send)
             else:
                 # Otherwise send all available trajectories
@@ -324,14 +352,18 @@ class RL4SysClient:
             try:
                 response = self.stub.SendTrajectoryBatch(batch)
                 if response.code == 1:
-                    print(f"[RL4SysClient] Successfully sent batch of {len(sampled_trajectories)} trajectories ({total_actions} actions): {response.message}")
+                    if self.verbose:
+                        print(f"[RL4SysClient] Successfully sent batch of {len(sampled_trajectories)} trajectories ({total_actions} actions): {response.message}")
                 else:
-                    print(f"[RL4SysClient] Server rejected trajectory batch: {response.message}")
+                    if self.verbose:
+                        print(f"[RL4SysClient] Server rejected trajectory batch: {response.message}")
             except grpc.RpcError as e:
-                print(f"[RL4SysClient] gRPC error sending trajectory batch: {e.details()}")
+                if self.verbose:
+                    print(f"[RL4SysClient] gRPC error sending trajectory batch: {e.details()}")
                 
         except Exception as e:
-            print(f"[RL4SysClient] Error in trajectory batch send thread: {e}")
+            if self.verbose:
+                print(f"[RL4SysClient] Error in trajectory batch send thread: {e}")
     
     def add_trajectory(self, trajectory):
         """
@@ -340,7 +372,8 @@ class RL4SysClient:
         or if we have accumulated enough trajectories, trigger a send.
         """
         self.trajectory_queue.put(trajectory)
-        print(f"[RL4SysClient] Added trajectory to buffer (size: {self.trajectory_queue.qsize()})")
+        if self.verbose:
+            print(f"[RL4SysClient] Added trajectory to buffer (size: {self.trajectory_queue.qsize()})")
         
         # Check if we should send trajectories now
         if not self.first_send_done or self.trajectory_queue.qsize() >= self.min_trajectories_to_send:
@@ -366,7 +399,8 @@ class RL4SysClient:
         
         # Send any remaining trajectories before shutting down
         if not self.trajectory_queue.empty():
-            print("[RL4SysClient] Sending remaining trajectories before shutdown")
+            if self.verbose:
+                print("[RL4SysClient] Sending remaining trajectories before shutdown")
             self.send_trajectories_batch()
         
         # Wait for stream thread to finish (with timeout)
@@ -374,4 +408,5 @@ class RL4SysClient:
             self._stream_thread.join(timeout=1.0)
             
         self.channel.close()
-        print("[RL4SysClient] Closed gRPC channel and stopped threads.")
+        if self.verbose:
+            print("[RL4SysClient] Closed gRPC channel and stopped threads.")

@@ -36,12 +36,13 @@ MOVE_SEQUENCE_SIZE = 500
 
 
 class LunarLanderSim(ApplicationAbstract):
-    def __init__(self, algorithm_name, seed, model=None, performance_metric=0, render_game=False):
+    def __init__(self, algorithm_name, seed, model=None, performance_metric=0, render_game=False, verbose=True):
         super().__init__()
         self.algorithm_name = algorithm_name
         self._seed = seed
         self._performance_metric = performance_metric
         self._render_game = render_game
+        self.verbose = verbose
 
         # Initialize the Gym environment
         self.env = gym.make('LunarLander-v3', continuous=False)
@@ -69,7 +70,8 @@ class LunarLanderSim(ApplicationAbstract):
                                   input_size=self.env.observation_space.shape[0], 
                                   act_dim=act_dim,
                                   act_limit=self.act_limit,
-                                  model=model)
+                                  model=model,
+                                  verbose=verbose)
         
        
 
@@ -92,7 +94,8 @@ class LunarLanderSim(ApplicationAbstract):
 
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
-            print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
+            if self.verbose:
+                print(f"[LunarLanderSim - simulator] Game Iteration {iteration}")
 
             # Reset the environment with the seed
             obs, info = self.env.reset(seed=self._seed + iteration)
@@ -229,6 +232,8 @@ if __name__ == '__main__':
                         help='run a local training server, using a specific algorithm')
     parser.add_argument('--render', type=bool, default=False,
                         help='render the Lunar Lander environment')
+    parser.add_argument('--verbose', type=bool, default=False,
+                        help='enable/disable printing of status messages')
     args, extras = parser.parse_known_args()
 
     # If user wants to run a local gRPC server for training:
@@ -250,9 +255,11 @@ if __name__ == '__main__':
         seed=args.seed,
         model=model_arg,
         performance_metric=args.score_type,
-        render_game=args.render
+        render_game=args.render,
+        verbose=args.verbose
     )
 
-    print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations with up to {args.number_of_moves} moves each.")
+    if args.verbose:
+        print(f"[lunar_lander.py] Running {args.number_of_iterations} iterations with up to {args.number_of_moves} moves each.")
     lunar_lander_game.run_application(num_iterations=args.number_of_iterations,
                                       num_moves=args.number_of_moves)
