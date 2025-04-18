@@ -137,6 +137,9 @@
         "load_model": "models/",
         "save_model": "models/"
     },
+    "server": {
+        "training_server": "localhost:50051"
+    },
     "tensorboard": {
         "tensorboard_writer": {
           "scalar_tags": "AverageEpRet;LossPi;LossV",

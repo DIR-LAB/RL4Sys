@@ -1,6 +1,4 @@
-import sys
 import os
-
 import time
 import threading
 import io
@@ -10,25 +8,23 @@ from pathlib import Path
 
 import torch
 from numpy import ndarray
-
-import grpc
-from protocol import trajectory_pb2, trajectory_pb2_grpc
-from protocol.trajectory import RL4SysTrajectory
-from protocol.action import RL4SysAction
-
-from utils.util import deserialize_model, serialize_action, serialize_tensor, deserialize_action  # or your own full-model or state-dict deserializer
-from utils.conf_loader import ConfigLoader
-
-from algorithms.PPO.kernel import RLActorCritic
-from algorithms.DQN.kernel import DeepQNetwork
-from algorithms.DDPG.kernel import Actor
-from algorithms.RPO.kernel import RPOActorCritic
-import random
 import numpy as np
+import random
+import grpc
+
+from ..protocol import trajectory_pb2, trajectory_pb2_grpc
+from ..protocol.trajectory import RL4SysTrajectory
+from ..protocol.action import RL4SysAction
+from ..utils.util import deserialize_model, serialize_action, serialize_tensor, deserialize_action
+from ..utils.conf_loader import ConfigLoader
+from ..algorithms.PPO.kernel import RLActorCritic
+from ..algorithms.DQN.kernel import DeepQNetwork
+from ..algorithms.DDPG.kernel import Actor
+from ..algorithms.RPO.kernel import RPOActorCritic
 
 
 config_loader = ConfigLoader()
-TRAINING_SERVER_ADDRESS = "localhost:50051"  # or from config
+TRAINING_SERVER_ADDRESS = config_loader.train_server_address  # Get from config
 load_model_path = config_loader.load_model_path  # if you want local fallback
 
 

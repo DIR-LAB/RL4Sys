@@ -8,8 +8,7 @@ class ConfigLoader:
         self.config = self.load_config()
 
         self.algorithm_params = self.get_algorithm_params(algorithm) if algorithm is not None else None
-        self.train_server = self.get_train_server()
-        self.traj_server = self.get_traj_server()
+        self.train_server_address = self.get_train_server_address()
         self.tb_params = self.get_tensorboard_params()
         self.load_model_path = self.get_load_model_path()
         self.save_model_path = self.get_save_model_path()
@@ -110,29 +109,13 @@ class ConfigLoader:
                 algorithm_params = None
         return algorithm_params
 
-    def get_train_server(self):
+    def get_train_server_address(self):
         try:
-            train_server = self.config['server']['training_server']
+            train_server_address = self.config['server']['training_server']
         except KeyError:
             print("[ConfigLoader] Failed to load training server configuration, loading defaults.")
-            train_server = {
-                'prefix': 'tcp://',
-                'host': '*',
-                'port': ":5556"
-            }
-        return train_server
-
-    def get_traj_server(self):
-        try:
-            traj_server = self.config['server']['trajectory_server']
-        except KeyError:
-            print("[ConfigLoader] Failed to load trajectory server configuration, loading defaults.")
-            traj_server = {
-                'prefix': 'tcp://',
-                'host': 'localhost',
-                'port': ":5555"
-            }
-        return traj_server
+            train_server_address = "localhost:50051"
+        return train_server_address
     
     def get_tensorboard_params(self):
         top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../RL4Sys'))

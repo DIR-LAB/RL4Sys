@@ -1,7 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
 .DS_Store
-__pycache__/*
-utils/__pycache__/*
-models/__pycache__/*
+.AppleDouble
+.LSOverride
+._*
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# TensorBoard
+runs/
+events.out.tfevents.*
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.coverage.*
+coverage.xml
+*.cover
+
 # Prerequisites
 *.d
 
@@ -57,10 +113,3 @@ dkms.conf
 
 # Logs
 **/logs/
-
-# Python cache files
-__pycache__/
-*/__pycache__/
-*/*/__pycache__/
-*.py[cod]
-*$py.class

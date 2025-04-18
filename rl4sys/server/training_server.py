@@ -1,36 +1,23 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import argparse
 import threading
 import pickle
-
+import os
+import json
+import time
+import grpc
+from concurrent import futures
 import importlib
 import inspect
 from typing import Union
 from typing import NoReturn as Never
 
-from server.training_tensorboard import TensorboardWriter
-from utils.conf_loader import ConfigLoader
-from utils.util import deserialize_action, serialize_model
+from ..server.training_tensorboard import TensorboardWriter
+from ..utils.conf_loader import ConfigLoader
+from ..utils.util import deserialize_action, serialize_model
+from ..protocol import trajectory_pb2
+from ..protocol import trajectory_pb2_grpc
 
-import time
-import grpc
-from concurrent import futures
-from protocol import trajectory_pb2
-from protocol import trajectory_pb2_grpc
-
-ALGORITHMS_PATH = 'algorithms'
-
-import os, json
-"""Import and load RL4Sys/config.json server configurations and applies them to
-the current instance.
-
-Loads defaults if config.json is unavailable or key error thrown.
-"""
-
-
+ALGORITHMS_PATH = 'rl4sys.algorithms'
 
 class TrainingServer(trajectory_pb2_grpc.RL4SysRouteServicer):
     """Train a model for a remote agent.

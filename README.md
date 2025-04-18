@@ -1,11 +1,95 @@
-# RL4Sys, a Framework for Reinforcement Learning Optimization
+# RL4Sys: A Framework for Reinforcement Learning Optimization
 
 
-![RL4Sys Agent Implementation](RL4Sys.png)
+![RL4Sys Agent Implementation](docs/RL4Sys.png)
 
+## Installation
 
-Before use, the user _must_ ensure they adhere to and implement the `ApplicationAbstract` class and its methods to create an environment capable of providing RL4Sys with observations and rewards/performance returns. The `RL4SysAgent` will be initialized into the main loop of this environment through `run_application()`.
-## RL4Sys Main loop
+### Development Installation
+```bash
+# Clone the repository
+git clone https://github.com/your-org/RL4Sys.git
+cd RL4Sys
+
+# Install in development mode
+pip install -e .
+```
+
+### Regular Installation
+```bash
+pip install rl4sys
+```
+
+## Project Structure
+```
+RL4Sys/
+├── rl4sys/                  # Main package directory
+│   ├── __init__.py         # Package initialization
+│   ├── algorithms/         # RL algorithm implementations
+│   ├── client/            # Client-side components
+│   ├── server/            # Server components
+│   ├── utils/             # Utility functions
+│   ├── protocol/          # gRPC protocol definitions
+│   ├── _common/           # Common abstract base classes
+│   └── examples/          # Example applications
+├── docs/                   # Documentation
+├── tests/                  # Test suite
+├── setup.py               # Package setup file
+├── requirements.txt       # Development requirements
+└── README.md             # This file
+```
+
+## Usage
+
+Before use, implement the `ApplicationAbstract` class and its methods to create an environment capable of providing RL4Sys with observations and rewards/performance returns. The `RL4SysAgent` will be initialized into the main loop of this environment through `run_application()`.
+
+### Main Loop
+1. Request application observation
+2. Observation & Reward
+3. Action Request
+4. Return & Perform Action
+5. Repeat
+
+## Components
+
+Users can use existing RL4Sys components or create their own by extending the abstract classes found in `_common`.
+
+### Available Components
+- Agent: `RL4SysAgent` or `RL4SysAgentAbstract`
+- Action: `RL4SysAction` or `RL4SysActionAbstract`
+- Trajectory: `RL4SysTrajectory` or `RL4SysTrajectoryAbstract`
+- Training Server: `RL4SysTrainingServer` or `RL4SysTrainingServerAbstract`
+
+### Supported Algorithms
+- PPO (Proximal Policy Optimization)
+- TRPO (Trust Region Policy Optimization)
+- DQN (Deep Q-Network)
+- SAC (Soft Actor-Critic)
+- C51 (Categorical 51-Atom)
+- DDPG (Deep Deterministic Policy Gradient)
+- TD3 (Twin Delayed DDPG)
+- RPO (Regularized Policy Optimization)
+
+## Configuration
+
+Configuration is handled through `config.json` in the root directory. This includes:
+- Algorithm hyperparameters
+- Server settings
+- Model paths
+- TensorBoard settings
+
+## Examples
+
+Check the `rl4sys/examples/` directory for implementation examples:
+- Lunar Lander
+- Maze Game
+- Job Scheduling
+
+## License
+
+MIT License - see LICENSE file for details
+
+# RL4Sys Main loop
 
 1. **Request application observation**
 2. **Observation & Reward**
@@ -121,3 +205,25 @@ By using template classes and common functions found in `_common`, the user can 
     - RL4SysTrainingServerAbstract(ABC)
   - `BaseAction.py`
     - RL4SysActionAbstract(ABC)
+
+# Execute Script (temporary)
+
+D: & cd D:\Projects\0_Udel\RL4Sys & conda activate udel
+
+python examples/maze-game/maze.py -s SAC
+
+python examples/maze-game/maze.py -s PPO
+
+python examples/maze-game/maze.py -s DQN
+
+## debuging ##
+python examples/maze-game/maze.py -s PPO --number-of-moves 5000
+
+python examples/maze-game/maze.py -s PPO --number-of-moves 5000 --number-of-iterations 100
+# 10 iteration lead to error
+
+
+## Tensorboard ## 
+tensorboard --logdir examples/maze-game/logs
+
+# tensor board have bug on epoch writing
