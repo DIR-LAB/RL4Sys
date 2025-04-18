@@ -137,18 +137,6 @@
         "load_model": "models/",
         "save_model": "models/"
     },
-    "server": {
-        "training_server": {
-            "prefix": "tcp://",
-            "host": "localhost",
-            "port": ":5557"
-        },
-        "trajectory_server": {
-            "prefix": "tcp://",
-            "host": "localhost",
-            "port": ":5556"
-        }
-    },
     "tensorboard": {
         "tensorboard_writer": {
           "scalar_tags": "AverageEpRet;LossPi;LossV",

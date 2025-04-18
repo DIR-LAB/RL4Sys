@@ -15,7 +15,6 @@ setup(
     install_requires=[
         'numpy',
         'torch',
-        'pyzmq',
         'pickle',
         # Add other dependencies required by your package
     ],
