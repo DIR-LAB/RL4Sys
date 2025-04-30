@@ -11,25 +11,34 @@ rl4sys/
 │   └── DQN/             # Deep Q-Network
 ├── client/              # Client-side components
 │   ├── agent.py         # RL agent implementation
-│   └── ...
-├── proto/               # Protocol buffer definitions
-├── server/              # Server-side components
-│   ├── server.py        # Main server implementation
+│   └── config_loader.py # the configuration loader for client only
+├── common/              # Shared utilities and components
+|   |-- action.py        # Definition of RL4SysAction
+|   |-- trajectory.py    # Definition of RL4SysTrajectory
+├── examples/            # Example applications
+│   └── lunar/          # Lunar Lander example
+│       ├── lunar_lander.py
+│       └── luna_conf.json
+├── logs/               # Logging directory
+├── proto/              # Protocol buffer definitions
+|   |-- rl4sys.proto    # gRPC proto definition
+|   |-- generate_proto.sh # script to generate the gRPC python stub code
+├── server/             # Server-side components
+│   ├── server.py       # Main server implementation
 │   └── model_diff_manager.py  # Model versioning and diff management
-├── utils/               # Utility functions
-└── examples/            # Example applications
-    └── lunar/           # Lunar Lander example
-        ├── lunar_lander.py
-        └── luna_conf.json
+├── utils/              # Utility functions
+├── start_server.py     # Server startup script
+└── __init__.py         # Package initialization
 ```
 
 ## Features
 
-- Distributed training architecture
+- Distributed training architecture with server-client model
 - Support for multiple RL algorithms (PPO, DQN)
 - Efficient model versioning and diff management
 - Client-specific training threads
 - Protocol buffer-based communication
+- Comprehensive logging system
 - Example implementations for system control tasks
 
 ## Installation
@@ -50,7 +59,7 @@ pip install -r requirements.txt
 ### Starting the Server
 
 ```bash
-python -m rl4sys.server.server --debug --port 50051
+python -m rl4sys.start_server --debug --port 50051
 ```
 
 ### Running the Lunar Lander Example
@@ -77,27 +86,28 @@ The Lunar Lander example uses a configuration file (`luna_conf.json`) to specify
 Example configuration:
 ```json
 {
-    "algorithm": "PPO",
+    "client_id": "luna-landing",
+    "algorithm_name": "PPO",
     "algorithm_parameters": {
-        "learning_rate": 0.0003,
-        "gamma": 0.99,
-        "gae_lambda": 0.95,
+        "batch_size": 512,
+        "act_dim": 4,
+        "seed": 0,
+        "traj_per_epoch": 256,
         "clip_ratio": 0.2,
-        "target_kl": 0.01,
-        "entropy_coef": 0.01
+        "gamma": 0.99,
+        "lam": 0.95,
+        "pi_lr": 3e-4,
+        "vf_lr": 1e-3,
+        "train_pi_iters": 80,
+        "train_v_iters": 80,
+        "target_kl": null,
+        "input_size": 8
     },
-    "network_architecture": {
-        "hidden_sizes": [64, 64],
-        "activation": "tanh"
-    },
-    "training": {
-        "batch_size": 64,
-        "epochs": 10
-    },
-    "communication": {
-        "server_address": "localhost:50051",
-        "timeout": 10
-    }
+    "act_limit": 1.0,
+    "max_traj_length": 1000,
+    "type": "onpolicy",
+    "train_server_address": "localhost:50051",
+    "send_frequency": 10
 }
 ```
 

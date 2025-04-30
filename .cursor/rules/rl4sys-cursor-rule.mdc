@@ -5,15 +5,30 @@ alwaysApply: false
 ---
 Follow these project structure
 
-"rl4sys/": "# Main package directory",
-"rl4sys/client/": "# RL client agent implementations",
-"rl4sys/server/": "# RL server implementations",
-"rl4sys/algorithms/": "# reinforcement learning algorithm implementation",
-"rl4sys/common/": "# common class shared by both client agent and server",
-"rl4sys/utils/": "# Utility functions and helpers",
-"rl4sys/proto/": "# grpc proto definition and compiled classes",
-
-"examples/": "# Example applications that utilize rl4sys/client agent to conduct RL operations",
+rl4sys/
+├── algorithms/           # RL algorithm implementations
+│   ├── PPO/             # Proximal Policy Optimization
+│   └── DQN/             # Deep Q-Network
+├── client/              # Client-side components
+│   ├── agent.py         # RL agent implementation
+│   └── config_loader.py # the configuration loader for client only
+├── common/              # Shared utilities and components
+|   |-- action.py        # Definition of RL4SysAction
+|   |-- trajectory.py    # Definition of RL4SysTrajectory
+├── examples/            # Example applications
+│   └── lunar/          # Lunar Lander example
+│       ├── lunar_lander.py
+│       └── luna_conf.json
+├── logs/               # Logging directory
+├── proto/              # Protocol buffer definitions
+|   |-- rl4sys.proto    # gRPC proto definition
+|   |-- generate_proto.sh # script to generate the gRPC python stub code
+├── server/             # Server-side components
+│   ├── server.py       # Main server implementation
+│   └── model_diff_manager.py  # Model versioning and diff management
+├── utils/              # Utility functions
+├── start_server.py     # Server startup script
+└── __init__.py         # Package initialization
 
 "setup.py": "# Package installation configuration",
 "requirements.txt": "# Python dependencies",
