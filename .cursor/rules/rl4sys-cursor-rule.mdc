@@ -1,0 +1,23 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Follow these project structure
+
+"rl4sys/": "# Main package directory",
+"rl4sys/client/": "# RL client agent implementations",
+"rl4sys/server/": "# RL server implementations",
+"rl4sys/algorithms/": "# reinforcement learning algorithm implementation",
+"rl4sys/common/": "# common class shared by both client agent and server",
+"rl4sys/utils/": "# Utility functions and helpers",
+"rl4sys/proto/": "# grpc proto definition and compiled classes",
+
+"examples/": "# Example applications that utilize rl4sys/client agent to conduct RL operations",
+
+"setup.py": "# Package installation configuration",
+"requirements.txt": "# Python dependencies",
+"README.md": "# Project documentation",
+"LICENSE": "# License information",
+".gitignore": "# Git ignore patterns",
+"config.json": "# Global configuration settings"

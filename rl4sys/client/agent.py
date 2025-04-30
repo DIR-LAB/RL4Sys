@@ -1,10 +1,13 @@
 import os
+import sys
 import time
 import threading
 import io
 import json
 import datetime
 from pathlib import Path
+from queue import Empty, Queue
+import zlib
 
 import torch
 from numpy import ndarray
@@ -12,241 +15,426 @@ import numpy as np
 import random
 import grpc
 
-from ..protocol import trajectory_pb2, trajectory_pb2_grpc
-from ..protocol.trajectory import RL4SysTrajectory
-from ..protocol.action import RL4SysAction
-from ..utils.util import deserialize_model, serialize_action, serialize_tensor, deserialize_action
-from ..utils.conf_loader import ConfigLoader
-from ..algorithms.PPO.kernel import RLActorCritic
-from ..algorithms.DQN.kernel import DeepQNetwork
-from ..algorithms.DDPG.kernel import Actor
-from ..algorithms.RPO.kernel import RPOActorCritic
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
+from rl4sys.algorithms.DQN.kernel import DeepQNetwork
+from rl4sys.algorithms.PPO.kernel import RLActorCritic
+from rl4sys.common.action import RL4SysAction
+from rl4sys.common.trajectory import RL4SysTrajectory
+from rl4sys.utils.util import serialize_action, StructuredLogger
+from rl4sys.proto import (
+    GetModelRequest,
+    SendTrajectoriesRequest,
+    Trajectory,
+    RLServiceStub,
+    InitRequest,
+    ParameterValue
+)
+from rl4sys.client.config_loader import AgentConfigLoader
 
-config_loader = ConfigLoader()
-TRAINING_SERVER_ADDRESS = config_loader.train_server_address  # Get from config
-load_model_path = config_loader.load_model_path  # if you want local fallback
-
+MODEL_CLASSES = {
+    'PPO': RLActorCritic,
+    'DQN': DeepQNetwork,
+}
 
 class RL4SysAgent:
-    """
-    Synchronous gRPC-based Agent that:
-      - Handshakes once at startup for an initial model
-      - Sends trajectories and polls once after each send
-      - No continuous background polling thread
-    """
-
-    def __init__(self, 
-                 algorithm_name: str,
-                 model: torch.nn.Module = None, 
-                 input_size: int = 0,
-                 act_dim: int = 0,
-                 act_limit: float = 1.0,
-                 server_address: str = TRAINING_SERVER_ADDRESS):
+    def __init__(self, conf_path: str, debug: bool = False):
         """
+        Initialize the RL4SysAgent with a configuration file.
+        
         Args:
-            model: an optional PyTorch model. Must have .step(obs, mask) -> (action_ndarray, dict_info).
-            server_address: "host:port" of the gRPC training server.
+            conf_path (str): Path to the JSON configuration file
+            debug (bool): Whether to enable debug logging
         """
-        config_loader = ConfigLoader(algorithm=algorithm_name)
-        self.hyperparams = config_loader.algorithm_params
+        self.agent_config_loader = AgentConfigLoader(conf_path)
+        self.client_id = self.agent_config_loader.get_client_id()
+        self.algorithm_name = self.agent_config_loader.get_algorithm_name()
+        self.algorithm_parameters = self.agent_config_loader.get_algorithm_parameters()
+        self.algorithm_type = self.agent_config_loader.get_algorithm_type()
 
-        self.algorithm_name = algorithm_name
-        self.server_address = server_address
+        self.debug = debug
+        self.logger = StructuredLogger("RL4SysAgent", debug)
+        
+        # get server address
+        self.server_address = self.agent_config_loader.get_train_server_address()
+
         self.channel = grpc.insecure_channel(self.server_address)
-        self.stub = trajectory_pb2_grpc.RL4SysRouteStub(self.channel)
+        self.stub = RLServiceStub(self.channel)
 
-        self._lock = threading.Lock()
-        self._model = model
-        self._current_traj = RL4SysTrajectory()
-
-        self.input_size = input_size
-        self.act_dim = act_dim
-        self.act_limit = act_limit
-
-        # If a model was provided, validate it
-        if self._model is not None:
-            self._validate_model(self._model)
-
-        # 1) Single handshake at init: we attempt to get an initial model
+        # Initialize model and version tracking
+        self._model = None
         self.local_version = 0
-        self._handshake_for_initial_model()
+        self._lock = threading.Lock()
+        self._trajectory_lock = threading.Lock()
+
+        # initialize the trajectory buffer, it should store multiple trajectories
+        self._trajectory_buffer = []
+        self._trajectory_buffer_size = 0
+        self._trajectory_send_threshold = self.agent_config_loader.get_send_frequency()
+
+        # Initialize thread for sending trajectories
+        self._send_thread = None
+        self._stop_event = threading.Event()
+        self._send_queue = Queue()
+
+        # init server algorithm
+        self._init_server_algorithm(self.client_id, 
+                                    self.algorithm_name, 
+                                    self.algorithm_parameters)
+        
+
+        # Get initial model from server
+        self.logger.info("Getting initial model from server")
+        self._model, self.local_version = self._get_model(expected_version=-1)
+        assert self._model is not None, "Model should be loaded from server at this point"
+
+        self.logger.info(
+            "Successfully loaded model",
+            model_name=self._model.get_model_name(),
+            version=self.local_version
+        )
 
         # Create debug directory if it doesn't exist
         self.debug_dir = Path('debug')
         self.debug_dir.mkdir(exist_ok=True)
 
+        # Start the sending thread
+        self._start_send_thread()
+
+    def _init_server_algorithm(self, 
+                               client_id: str, 
+                               algorithm_name: str, 
+                               algorithm_parameters: dict):
+        """Initialize the server-side algorithm."""
+
+        self.logger.info("Initializing server-side algorithm", 
+                         client_id=client_id, 
+                         algorithm_name=algorithm_name)
         
+        # Convert Python types to ParameterValue
+        param_values = {}
+        for key, value in algorithm_parameters.items():
+            param_value = ParameterValue()
+            if isinstance(value, int):
+                param_value.int_value = value
+            elif isinstance(value, float):
+                param_value.float_value = value
+            elif isinstance(value, str):
+                param_value.string_value = value
+            elif isinstance(value, bool):
+                param_value.bool_value = value
+            # null values are handled by not setting any field
+            
+            param_values[key] = param_value
+        
+        request = InitRequest(
+            client_id=client_id, 
+            algorithm_name=algorithm_name, 
+            algorithm_parameters=param_values
+        )
 
-    def _handshake_for_initial_model(self) -> None:
-        """
-        One-time handshake with the server to see if it has an initial model.
-        If code=1 and model bytes are nonempty, we deserialize it.
-        Otherwise, we just note the version or error.
-        """
-        print("[RL4SysAgent] Handshake: requesting initial model from server...")
-        req = trajectory_pb2.RequestModel(first_time=1, version=self.local_version)
-        try:
-            resp = self.stub.ClientPoll(req)
-        except grpc.RpcError as e:
-            print(f"[RL4SysAgent] gRPC error during handshake: {e.details()}")
-            return
+        response = self.stub.InitAlgorithm(request)
+        if not response.is_success:
+            raise RuntimeError(f"Failed to initialize algorithm: {response.message}")
 
-        if resp.code == 1:
-            print("[RL4SysAgent] Handshake successful with server.")
-            self.local_version = resp.version
-            if len(resp.model) > 0:
-                with self._lock:
-                    if self.algorithm_name == "DQN":
-                        self._model = DeepQNetwork(input_size=self.input_size, act_dim=self.act_dim)
-                        self._model.q_network = deserialize_model(resp.model)
-                    elif self.algorithm_name == "PPO":
-                        self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
-                        self._model.actor = deserialize_model(resp.model)
-                        self._model.critic = deserialize_model(resp.model_critic)
-                    elif self.algorithm_name == "DDPG":
-                        self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit, noise_scale=self.hyperparams['noise_scale'])
-                        self._model = deserialize_model(resp.model)
+    def _start_send_thread(self):
+        """Start the thread for sending trajectories."""
+        self._send_thread = threading.Thread(target=self._send_thread_worker)
+        self._send_thread.daemon = True
+        self._send_thread.start()
+        self.logger.debug("Started trajectory sending thread")
 
-                    elif self.algorithm_name == "RPO":
-                        self._model = RPOActorCritic(input_size=self.input_size, act_dim=self.act_dim, rpo_alpha=self.hyperparams['rpo_alpha'])
-                        self._model.actor = deserialize_model(resp.model)
-                        self._model.critic = deserialize_model(resp.model_critic)
+    def _send_thread_worker(self):
+        """Worker function for the sending thread."""
+        while not self._stop_event.is_set():
+            try:
+                # Block with timeout until there are trajectories to send or shutdown is requested
+                try:
+                    trajectories = self._send_queue.get(timeout=1.0)  # 1 second timeout
+                    if trajectories:
+                        self._send_trajectories(trajectories)
+                        # Clear trajectories after sending to free memory
+                        for traj in trajectories:
+                            traj.clear()
+                        trajectories.clear()
+                    self._send_queue.task_done()
+                except Empty:
+                    # Timeout occurred, check stop_event and continue
+                    continue
+            except Exception as e:
+                self.logger.error(
+                    "Error in send thread",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True
+                )
+                # If there's an error, wait a bit before retrying
+                time.sleep(1)
 
+    def _check_and_send_trajectories(self):
+        """Check if we need to send trajectories and queue them if needed."""
+        with self._trajectory_lock:
+            # Count only completed trajectories
+            completed_trajectories = [t for t in self._trajectory_buffer if t.completed]
+            completed_count = len(completed_trajectories)
+            
+            # Only send if we have enough completed trajectories
+            if completed_count >= self._trajectory_send_threshold:
+                self.logger.info(
+                    "Sending completed trajectories",
+                    count=completed_count,
+                    threshold=self._trajectory_send_threshold
+                )
+                # Remove completed trajectories from buffer
+                self._trajectory_buffer = [t for t in self._trajectory_buffer if not t.completed]
+                self._trajectory_buffer_size = len(self._trajectory_buffer)
+                # Queue completed trajectories for sending
+                self._send_queue.put(completed_trajectories)
 
-                print("[RL4SysAgent] Received and loaded initial model from server.")
-            else:
-                print("[RL4SysAgent] Server has no initial model yet (model bytes empty).")
-        elif resp.code == 0:
-            print("[RL4SysAgent] Server not ready yet (code=0). No initial model.")
-        else:  # code == -1 or other
-            print(f"[RL4SysAgent] Handshake error or server error: code={resp.code}, err={resp.error}")
-
-    def _validate_model(self, model: torch.nn.Module) -> None:
-        """Check that the model has .step(...) returning (ndarray, dict)."""
-        assert hasattr(model, 'step'), "Model must have a .step(...) method."
-        result = model.step(None, None)
-        assert isinstance(result, tuple), "Model.step(...) must return a tuple."
-        assert isinstance(result[0], ndarray), "First element of tuple must be numpy ndarray."
-        assert isinstance(result[1], dict), "Second element of tuple must be a dict."
-
-    def request_for_action(self, obs: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> RL4SysAction:
+    def request_for_action(self, 
+                          traj: RL4SysTrajectory = None, 
+                          obs: torch.Tensor = None, 
+                          *args, **kwargs):
         """
         Produce an action from the current model. Stores the action in our local trajectory buffer.
         """
+        if traj is None or traj.is_completed():
+            traj = RL4SysTrajectory(version=self.local_version)
+            with self._trajectory_lock:
+                self._trajectory_buffer.append(traj)
+                self._trajectory_buffer_size += 1
+                self.logger.debug(
+                    "Created new trajectory",
+                    version=traj.version,
+                    buffer_size=self._trajectory_buffer_size
+                )
+
+        if obs is None:
+            raise ValueError("Observation is required")
+
         with self._lock:
             if self._model is None:
                 raise RuntimeError("No model available yet!")
+
+            action_nd, data_dict = self._model.step(obs)
+            self.logger.debug(
+                "Generated action",
+                action_shape=action_nd.shape,
+                data_keys=list(data_dict.keys())
+            )
+
+        action = RL4SysAction(obs, action_nd, reward=-1, done=False, data=data_dict, version=traj.version)
+        
+        return traj, action
+
+    def add_to_trajectory(self, traj: RL4SysTrajectory, action: RL4SysAction):
+        """
+        Add an action to the current trajectory
+        """
+        traj.add_action(action)
+        self.logger.debug(
+            "Added action to trajectory",
+            trajectory_version=traj.version,
+            action_count=len(traj.actions)
+        )
+
+    def mark_end_of_trajectory(self, traj: RL4SysTrajectory, action: RL4SysAction):
+        """
+        Mark the end of the current trajectory
+        """
+        action.done = True
+        traj.mark_completed()
+        self.logger.debug(
+            "Marked trajectory as completed",
+            version=traj.version,
+            action_count=len(traj.actions)
+        )
+        # Check if we need to send trajectories after marking completion
+        self._check_and_send_trajectories()
+
+    def update_action_reward(self, action: RL4SysAction, reward: float):
+        """
+        Update the reward of the current action
+        """
+        action.reward = reward
+        self.logger.debug(
+            "Updated action reward",
+            reward=reward,
+            version=action.version
+        )
+
+    def _send_trajectories(self, trajectories) -> int:
+        """
+        Send given trajectories to the server. 
+        This function is called by the sending thread, so it will not block the main thread.
+        Returns:
+            int: 0 if model was not updated, otherwise the version of the model
+        """
+        if not trajectories:
+            self.logger.debug("No trajectories to send")
+            return 0
+
+        try:
+            # Get algorithm type from config
+            is_onpolicy = self.algorithm_type == 'onpolicy'
             
+            # Filter trajectories based on algorithm type and validity
+            if is_onpolicy:
+                # For on-policy algorithms, only send valid trajectories with matching version
+                filtered_trajectories = [t for t in trajectories if t.version == self.local_version and t.is_valid()]
+                ignored_count = len(trajectories) - len(filtered_trajectories)
+                if ignored_count > 0:
+                    self.logger.debug(
+                        "Ignored trajectories with version mismatch",
+                        count=ignored_count,
+                        current_version=self.local_version
+                    )
+                trajectories = filtered_trajectories
+            else:
+                # For off-policy algorithms, only send valid trajectories
+                filtered_trajectories = [t for t in trajectories if t.is_valid()]
+                ignored_count = len(trajectories) - len(filtered_trajectories)
+                if ignored_count > 0:
+                    self.logger.debug(
+                        "Ignored invalid trajectories",
+                        count=ignored_count
+                    )
+                trajectories = filtered_trajectories
 
-            if self.algorithm_name == "DQN":
-                action_nd, data_dict = self._model.step(obs, mask=mask)
-            elif self.algorithm_name == "PPO":
-                action_nd, logp_a, _, value = self._model.get_action_and_value(obs, mask=mask)
-                data_dict = {}
-                data_dict['logp_a'] = logp_a
-                data_dict['v'] = value
-                action_nd = action_nd.numpy()
-            elif self.algorithm_name == "DDPG":
-                action_nd, data_dict = self._model.step(obs, mask=mask)
-            elif self.algorithm_name == "RPO":
-                action_nd, data_dict = self._model.get_action_and_value(obs, mask=mask)
+            if not trajectories:
+                self.logger.debug("No valid trajectories to send after filtering")
+                return 0
 
+            # Convert trajectories to protobuf format
+            trajectories_proto = []
+            for traj in trajectories:
+                # Convert each action in the trajectory to protobuf format
+                actions_proto = []
+                for action in traj.actions:
+                    action_proto = serialize_action(action)
+                    actions_proto.append(action_proto)
                 
-        r4sa = RL4SysAction(obs, action_nd, mask=mask, reward=-1, data=data_dict, done=False)
-        self._current_traj.add_action(r4sa)
-        return r4sa
+                # Create trajectory protobuf
+                traj_proto = Trajectory(
+                    actions=actions_proto,
+                    version=traj.version
+                )
+                trajectories_proto.append(traj_proto)
 
-    def send_actions(self) -> None:
-        """
-        Mark the end of the current trajectory, send it to the server, and poll for an updated model.
-        """
-        response = self._send_trajectory_to_server()
-        print("[RL4SysAgent - whole traj - send to Training Server]")
+            # Create request
+            request = SendTrajectoriesRequest(
+                client_id=self.client_id,
+                trajectories=trajectories_proto
+            )
 
-        if response == 0:
-            print("[RL4SysAgent] keep collect trajectory")
-            return
-        
-        # 2) Poll once for a new model (server may or may not have a fresh one yet)
-        self._poll_for_model_update()
-
-        # 3) Clear local trajectory
-        self._current_traj = RL4SysTrajectory()
-
-    def _send_trajectory_to_server(self) -> int:
-        """
-        Builds a gRPC ActionList message from self._current_traj and calls SendActions.
-        """
-        action_msgs = []
-        
-
-        for action in self._current_traj.actions:
-            action_proto = serialize_action(action)
-            action_msgs.append(action_proto)
-
-        action_list = trajectory_pb2.RL4SysActionList(actions=action_msgs)
-
-        try:
-            response = self.stub.SendActions(action_list)
-            if response.code == 1:
-                print(f"[RL4SysAgent] Successfully sent trajectory: {response.message}")
-                return 1 # callee should wait for polling
+            # Send to server
+            response = self.stub.SendTrajectories(request)
+            
+            if response.model_updated:
+                self.logger.info(
+                    "Model updated",
+                    old_version=self.local_version,
+                    new_version=response.new_version
+                )
+                self._model, _ = self._get_model(response.new_version)
+                self.local_version = response.new_version
+                return response.new_version
             else:
-                print(f"[RL4SysAgent] Server rejected trajectory: {response.message}")
-                return 0 # callee shouldn't wait for polling
-        except grpc.RpcError as e:
-            print(f"[RL4SysAgent] gRPC error sending trajectory: {e.details()}")
-            exit()
+                self.logger.debug("No model update needed")
+                return 0
 
-    def _poll_for_model_update(self) -> None:
-        """
-        Makes a single gRPC call to ClientPoll to see if the server has a new model.
-        If code=1 and we get non-empty model bytes, we load it.
-        Otherwise we do nothing further.
-        """
-        print("[RL4SysAgent - start polling for model update]")
-        poll_req = trajectory_pb2.RequestModel(first_time=0, version=self.local_version)
+        except grpc.RpcError as e:
+            self.logger.error(
+                "Failed to send trajectories",
+                error=e.details(),
+                error_type=type(e).__name__
+            )
+            return 0
+
+    def _get_model(self, expected_version: int):
+        """Get the model from the server."""
         try:
-            poll_resp = self.stub.ClientPoll(poll_req)
-        except grpc.RpcError as e:
-            print(f"[RL4SysAgent] gRPC error while polling for model: {e.details()}")
-            return
+            # Request the latest model
+            request = GetModelRequest(client_id=self.client_id, client_version=self.local_version, expected_version=expected_version)
+            response = self.stub.GetModel(request)
+            
+            # If we got an empty response, it means we already have the latest version
+            if len(response.model_state) == 0:
+                self.logger.debug(
+                    "Already have latest model version",
+                    client_version=self.local_version,
+                    expected_version=expected_version,
+                )
+                return self._model, response.version
+                
+            # Verify version if needed
+            if expected_version != -1 and response.version != expected_version:
+                self.logger.error(
+                    "Version mismatch",
+                    expected=expected_version,
+                    received=response.version
+                )
+                return None, -1
+                
+            model_class = MODEL_CLASSES.get(self.algorithm_name)
+            if model_class is None:
+                raise ValueError(f"Unsupported algorithm: {self.algorithm_name}")
+            
+            # Create new model instance if needed
+            if self._model is None:
+                model_input_size = self.algorithm_parameters['input_size']
+                model_act_dim = self.algorithm_parameters['act_dim']
+                self._model = model_class(model_input_size, model_act_dim)
 
-        if poll_resp.code == 1:
-            # Possibly a new model or the same version
-            if len(poll_resp.model) > 0:
-                with self._lock:
-                    if self.algorithm_name == "DQN":
-                        self._model = DeepQNetwork(input_size=self.input_size, act_dim=self.act_dim)
-                        self._model.q_network = deserialize_model(poll_resp.model)
-                    elif self.algorithm_name == "PPO":
-                        self._model = RLActorCritic(input_size=self.input_size, act_dim=self.act_dim)
-                        self._model.actor = deserialize_model(poll_resp.model)
-                        self._model.critic = deserialize_model(poll_resp.model_critic)
-                    elif self.algorithm_name == "DDPG":
-                        self._model = Actor(input_size=self.input_size, act_dim=self.act_dim, act_limit=self.act_limit)
-                        self._model = deserialize_model(poll_resp.model)
-                    elif self.algorithm_name == "RPO":
-                        self._model = RPOActorCritic(input_size=self.input_size, act_dim=self.act_dim, rpo_alpha=self.hyperparams['rpo_alpha'])
-                        self._model.actor = deserialize_model(poll_resp.model)
-                        self._model.critic = deserialize_model(poll_resp.model_critic)
-
-
-
-                self.local_version = poll_resp.version
-                print("[RL4SysAgent] Updated local model from server (poll).")
+            # Decompress the model state
+            try:
+                decompressed = zlib.decompress(response.model_state)
+                buffer = io.BytesIO(decompressed)
+                loaded_obj = torch.load(buffer, weights_only=False)
+            except zlib.error:
+                # If decompression fails, try loading directly (backward compatibility)
+                buffer = io.BytesIO(response.model_state)
+                loaded_obj = torch.load(buffer, weights_only=False)
+            
+            if response.is_diff:
+                # For diff updates, merge with current state
+                current_state = self._model.state_dict()
+                for key, value in loaded_obj.items():
+                    current_state[key] = value
+                self._model.load_state_dict(current_state)
+                self.logger.debug(
+                    "Applied model diff",
+                    changed_params=len(loaded_obj),
+                    version=response.version
+                )
             else:
-                # code=1 but no new model bytes => server has no newer version
-                pass
-        elif poll_resp.code == 0:
-            # Model not ready or server is still training
-            print("[RL4SysAgent] Model not ready or server is still training.")
-            pass
-        elif poll_resp.code == -1:
-            print(f"[RL4SysAgent] Server reported error: {poll_resp.error}")
+                # For full model updates, replace the entire state dict 
+                self._model.load_state_dict(loaded_obj)
+                self.logger.debug(
+                    "Loaded complete model state",
+                    version=response.version
+                )
+            
+            self.logger.info(
+                "Successfully loaded model",
+                algorithm=self.algorithm_name,
+                version=response.version
+            )
+            return self._model, response.version
+            
+        except grpc.RpcError as e:
+            self.logger.error(
+                "Failed to get model from server",
+                error=e.details(),
+                error_type=type(e).__name__
+            )
+            return None, -1
 
     def close(self):
-        """Cleanly close the gRPC channel if needed."""
+        """Cleanly close the gRPC channel and stop the sending thread."""
+        self._stop_event.set()
+        if self._send_thread:
+            self._send_thread.join()
         self.channel.close()
-        print("[RL4SysAgent] Closed gRPC channel.")
+        self.logger.info("Closed gRPC channel and stopped sending thread")

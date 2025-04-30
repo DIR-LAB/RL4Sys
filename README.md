@@ -143,7 +143,6 @@ The loop of using RL4Sys agent
 2. Second, call action() to get output of
 
 a1 = agent.action(obv)
-a1 = agent.action_with_mask(obv)
 
 `action()` returns a RL4SysAction instance and users need to interpret it.
 
@@ -182,7 +181,7 @@ By using template classes and common functions found in `_common`, the user can 
     - ForwardKernelAbstraction(nn.Module, ABC)
     - StepKernelAbstract(nn.Module, ABC)
     - StepAndForwardKernelAbstract(nn.Module, ABC)
-    - infer_next_obs(act, obs, mask=None)
+    - infer_next_obs(act, obs)
     - mlp(sizes, activation, output_activation=nn.Identity)
   - `BaseReplayBuffer.py`
     - ReplayBufferAbstract(ABC)
@@ -204,7 +203,7 @@ By using template classes and common functions found in `_common`, the user can 
   - `BaseTrainingServer.py`
     - RL4SysTrainingServerAbstract(ABC)
   - `BaseAction.py`
-    - RL4SysActionAbstract(ABC)
+    - RL4SysAction(ABC)
 
 # Execute Script (temporary)
 

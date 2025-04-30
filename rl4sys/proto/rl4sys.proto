@@ -1,0 +1,67 @@
+syntax = "proto3";
+package rl4sys;
+
+service RLService {
+  // Fetch current policy model
+  rpc GetModel(GetModelRequest) returns (ModelResponse);
+  // Send collected trajectories
+  rpc SendTrajectories(SendTrajectoriesRequest) returns (SendTrajectoriesResponse);
+  // Init a service
+  rpc InitAlgorithm(InitRequest) returns (InitResponse);
+}
+
+message InitRequest {
+  string client_id = 1;
+  string algorithm_name = 2;
+  map<string, ParameterValue> algorithm_parameters = 3;
+}
+
+message ParameterValue {
+  oneof value {
+    int32 int_value = 1;
+    double float_value = 2;
+    string string_value = 3;
+    bool bool_value = 4;
+    // null is represented by not setting any value
+  }
+}
+
+message InitResponse {
+  bool is_success = 1;
+  string message = 2;
+}
+
+message GetModelRequest {
+  string client_id = 1;
+  int32 client_version = 2;
+  int32 expected_version = 3;
+}
+
+message ModelResponse {
+  int32 version = 1;
+  bool is_diff = 2;
+  bytes model_state = 3;
+}
+
+message Action {
+  bytes obs    = 1; // Serialized observation tensor
+  bytes action = 2; // Serialized action tensor
+  bytes reward = 3; // Serialized reward tensor
+  bool done    = 4; // if this is the last action
+  map<string, bytes> extra_data = 5;  // additional data such as logp_a and v for certain algorithms.
+}
+
+message Trajectory {
+  repeated Action actions = 1;
+  int32 version           = 2;
+}
+
+message SendTrajectoriesRequest {
+  string client_id           = 1;
+  repeated Trajectory trajectories = 2;
+}
+
+message SendTrajectoriesResponse {
+  bool model_updated = 1;
+  int32 new_version  = 2;
+}

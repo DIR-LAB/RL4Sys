@@ -1,13 +1,62 @@
 """
-RL4Sys - A Framework for Reinforcement Learning Optimization
+RL4Sys - Reinforcement Learning for Systems
+
+A framework for applying reinforcement learning to system optimization problems,
+with a client-server architecture for distributed training and deployment.
 """
 
-__version__ = "0.1.0"
-__author__ = "RL4Sys Team"
+from .client import RL4SysAgent
+from .server import MyRLServiceServicer
 
-from . import algorithms
-from . import client
-from . import server
-from . import utils
-from . import protocol
-from . import _common
+from .proto import (
+    GetModelRequest,
+    ModelResponse,
+    SendTrajectoriesRequest,
+    SendTrajectoriesResponse,
+    Trajectory,
+    Action,
+    RLServiceServicer
+)
+from .algorithms.PPO.PPO import PPO
+from .algorithms.DQN.DQN import DQN
+
+from .utils import (
+    ConfigLoader,
+    serialize_tensor,
+    deserialize_tensor,
+    serialize_action,
+    deserialize_action,
+    serialize_model,
+    deserialize_model
+)
+
+__version__ = '0.1.0'
+
+__all__ = [
+    # Client components
+    'RL4SysAgent',
+    
+    # Server components
+    'MyRLServiceServicer',
+    
+    # Algorithms
+    'PPO',
+    'DQN',
+    
+    # Protocol messages
+    'GetModelRequest',
+    'ModelResponse',
+    'SendTrajectoriesRequest',
+    'SendTrajectoriesResponse',
+    'Trajectory',
+    'Action',
+    'RLServiceServicer',
+    # Utils
+    'ConfigLoader',
+    'serialize_tensor',
+    'deserialize_tensor',
+    'serialize_action',
+    'deserialize_action',
+    'serialize_model',
+    'deserialize_model'
+]

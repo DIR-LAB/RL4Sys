@@ -1,70 +1,59 @@
-from _common._algorithms.BaseAlgorithm import AlgorithmAbstract
-
-import numpy as np
-import torch
-from torch.optim import Adam
-import torch.nn as nn
-import random
-from .kernel import RLActorCritic
-from .replay_buffer import ReplayBuffer
-from torch.utils.tensorboard import SummaryWriter
+# Standard library imports
+import os
+import threading
 import time
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from utils.logger import EpochLogger, setup_logger_kwargs
-from protocol.trajectory import RL4SysTrajectory
+import random
+import numpy as np
+import copy
 
-from utils.conf_loader import ConfigLoader
-"""Import and load RL4Sys/config.json PPO algorithm configurations and applies them to
-the current instance.
+# Third-party imports
+import torch
+import torch.nn as nn
+from torch.optim import Adam
+from torch.utils.tensorboard import SummaryWriter
 
-Loads defaults if config.json is unavailable or key error thrown.
-"""
-config_loader = ConfigLoader(algorithm='PPO')
-hyperparams = config_loader.algorithm_params
-save_model_path = config_loader.save_model_path
+# Local imports
+from rl4sys.algorithms.PPO.kernel import RLActorCritic
+from rl4sys.common.trajectory import RL4SysTrajectory
+from rl4sys.utils.logger import EpochLogger, setup_logger_kwargs
 
-
-class PPO(AlgorithmAbstract):
+class PPO():
     """
     PPO implementation matching the CleanRL version.
     """
 
-    def __init__(self, env_dir: str,
-                 input_size: int,
-                 act_dim: int,
-                 buf_size: int,
-                 batch_size: int = hyperparams['batch_size'],
-                 seed: int = hyperparams['seed'],
-                 traj_per_epoch: int = hyperparams['traj_per_epoch'],
-                 clip_ratio: float = hyperparams['clip_ratio'],
-                 gamma: float = hyperparams['gamma'],
-                 lam: float = hyperparams['lam'],
-                 pi_lr: float = hyperparams['pi_lr'],
-                 vf_lr: float = hyperparams['vf_lr'],
-                 train_pi_iters: int = hyperparams['train_pi_iters'],
-                 train_v_iters: int = hyperparams['train_v_iters'],
-                 target_kl: float = hyperparams['target_kl'],
+    def __init__(self, 
+                 version: int,
+                 seed: int = 0,
+                 input_size: int = 1,
+                 act_dim: int = 1,
+                 buf_size: int = 1000000,
+                 batch_size: int = 64,
+                 traj_per_epoch: int = 128,
+                 clip_ratio: float = 0.2,
+                 gamma: float = 0.99,
+                 lam: float = 0.95,
+                 pi_lr: float = 3e-4,
+                 vf_lr: float = 1e-3,
+                 train_pi_iters: int = 10,
+                 train_v_iters: int = 10,
+                 target_kl: float = 0.015,
                  max_grad_norm: float = 0.5,
                  norm_adv: bool = True,
                  clip_vloss: bool = True,
                  ent_coef: float = 0.01,
                  vf_coef: float = 0.5,
                  ):
-
-        super().__init__()
-        # Set up random seeds
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
-
-        # Set device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        
         # Hyperparameters
+        self._buf_size = buf_size
+        self._batch_size = batch_size
         self._traj_per_epoch = traj_per_epoch
         self._clip_ratio = clip_ratio
-        self._batch_size = batch_size
+        self._gamma = gamma
+        self._lam = lam
+        self._pi_lr = pi_lr
+        self._vf_lr = vf_lr
         self._train_pi_iters = train_pi_iters
         self._train_v_iters = train_v_iters
         self._target_kl = target_kl
@@ -75,17 +64,23 @@ class PPO(AlgorithmAbstract):
         self._vf_coef = vf_coef
         self.gamma = gamma
         self.lam = lam
+        self.version = version
+        self.seed = seed
+        self.type = "onpolicy"
 
-        # Create actor-critic model
-        self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
-        self._model = self._model_train  # for usage consistency
-
-        # Single Adam optimizer for both policy and value function
+        self.models = {}  # Store model versions for serving
+        # Initialize lock for thread-safe model updates
+        self.lock = threading.RLock()
+        
+        # Create actor-critic model for training
+        self._model_train = RLActorCritic(input_size, act_dim)
+        self.models[self.version] = copy.deepcopy(self._model_train)  # Store initial model version
+        
+        # Single optimizer for training
         self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
 
         # Set up logger
-        log_data_dir = os.path.join(env_dir, './logs/rl4sys-ppo-info')
-        log_data_dir = os.path.join(log_data_dir, f"{int(time.time())}__{seed}")
+        log_data_dir = os.path.join('./logs/rl4sys-ppo-info', f"{int(time.time())}__{self.seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
 
@@ -103,15 +98,17 @@ class PPO(AlgorithmAbstract):
         self.global_step = 0
         self.start_time = None
         self.ep_rewards = 0
+
+
     def save(self, filename: str) -> None:
-        """Save model as file.
+        """Save the current training model.
 
         Uses .pth file extension.
 
         Args:
             filename: name to save file as
         """
-        new_path = os.path.join(save_model_path, filename +
+        new_path = os.path.join(self.save_model_path, filename +
                                 ('.pth' if not filename.__contains__('.pth') else ''))
         torch.save(self._model_train, new_path)
 
@@ -153,20 +150,17 @@ class PPO(AlgorithmAbstract):
                 else:
                     self.storage_next_obs.append(np.zeros_like(r4a.obs))
             
-
             self.writer.add_scalar('charts/VVals', r4a.data['v'], self.global_step)
 
             if r4a.done:
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
                 self.ep_rewards = 0
             
-            
-            
-        
         # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            self.epoch += 1
+            print(f"\n-----[PPO] Training model for epoch {self.epoch}-----\n")
             pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
+            self.epoch += 1
             self.writer.add_scalar("losses/pg_loss", pg_loss, self.global_step)
             self.writer.add_scalar("losses/v_loss", v_loss, self.global_step)
             self.writer.add_scalar("losses/entropy_loss", entropy_loss, self.global_step)
@@ -174,8 +168,23 @@ class PPO(AlgorithmAbstract):
             self.writer.add_scalar("losses/clipfracs", clipfracs, self.global_step)
             self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
             self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
+            print(f"\n-----[PPO] Training model for epoch {self.epoch} completed-----\n")
             return True  # indicates an updated model
         return False
+
+    def get_current_model(self):
+        with self.lock:
+            return self.models[self.version], self.version
+
+    def _clear_storage(self):
+        """Clear all storage arrays after training."""
+        self.storage_obs = []
+        self.storage_act = []
+        self.storage_logp = []
+        self.storage_rew = []
+        self.storage_val = []
+        self.storage_done = []
+        self.storage_next_obs = []
 
     def train_model(self) -> None:
         """
@@ -191,18 +200,18 @@ class PPO(AlgorithmAbstract):
         next_obs = np.array(self.storage_next_obs, dtype=np.float32)
         
         # Convert to tensors and move to device
-        obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
-        actions_tensor = torch.tensor(actions, dtype=torch.long).to(self.device)
-        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32).to(self.device)
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        values_tensor = torch.tensor(values, dtype=torch.float32).to(self.device)
-        dones_tensor = torch.tensor(dones, dtype=torch.bool).to(self.device)
-        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32).to(self.device)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32)
+        actions_tensor = torch.tensor(actions, dtype=torch.long)
+        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32)
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32)
+        values_tensor = torch.tensor(values, dtype=torch.float32)
+        dones_tensor = torch.tensor(dones, dtype=torch.bool)
+        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32)
         
         # Calculate advantages and returns
         with torch.no_grad():
             next_values = self._model_train.get_value(next_obs_tensor)
-            advantages = torch.zeros_like(rewards_tensor).to(self.device)
+            advantages = torch.zeros_like(rewards_tensor) 
             lastgaelam = 0
             
             # GAE calculation
@@ -300,10 +309,13 @@ class PPO(AlgorithmAbstract):
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
         
+        # finish training, update model version
+        with self.lock:
+            self.version += 1
+            self.models[self.version] = copy.deepcopy(self._model_train)  # Store new model version
+
+        # Clear storage arrays after training
+        self._clear_storage()
+
         # Store metrics for logging
         return pg_loss.item(), v_loss.item(), entropy_loss.item(), approx_kl, np.mean(clipfracs), explained_var
-        
-
-
-    def log_epoch(self) -> None:
-        pass

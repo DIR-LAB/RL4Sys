@@ -1,52 +1,84 @@
-from _common._algorithms.BaseKernel import mlp, ForwardKernelAbstract, StepKernelAbstract
-
-from typing import Optional, Type, Tuple
-
 import torch
+from torch.optim import Adam
 import torch.nn as nn
-from numpy import ndarray
 from torch.distributions.categorical import Categorical
-import numpy as np
 
 """
-Network configurations for PPO
+Network configurations
 """
+
+def mlp(sizes, activation, output_activation=nn.Identity):
+    layers = []
+    for j in range(len(sizes)-1):
+        act = activation if j < len(sizes)-2 else output_activation
+        layers += [nn.Linear(sizes[j], sizes[j+1]), act()]
+    return nn.Sequential(*layers)
+
+
+class RLActor(nn.Module):
+    def __init__(self, input_size, act_dim, hidden_sizes=(32, 16, 8), activation=nn.ReLU):
+        super().__init__()
+        self.pi = mlp([input_size] + list(hidden_sizes) + [act_dim], activation)
+
+    def _distribution(self, obs):
+        return Categorical(logits=self.pi(obs))
+
+    #def _log_prob_from_distribution(self, pi, act):
+    #    return pi.log_prob(act)
+
+    def forward(self, obs, act=None):
+        pi = self._distribution(obs)
+        logp_a = None
+        if act is not None:
+            logp_a = self._log_prob_from_distribution(pi, act)
+        return pi, logp_a
+
+
+class RLCritic(nn.Module):
+    def __init__(self, obs_dim, hidden_sizes=(64, 64), activation=nn.ReLU):
+        super().__init__()
+        hidden_sizes = (32, 16, 8)
+        self.v_net = mlp([obs_dim] + list(hidden_sizes) + [1], activation)
+
+    def forward(self, obs):
+        # Critical to ensure v has right shape.
+        return torch.squeeze(self.v_net(obs), -1)
 
 
 class RLActorCritic(nn.Module):
     def __init__(self, input_size, act_dim):
         super().__init__()
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(input_size, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
-        )
-        self.actor = nn.Sequential(
-            layer_init(nn.Linear(input_size, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, act_dim), std=0.01),
-        )
+        # build actor function
+        self.pi = RLActor(input_size, act_dim)
+        # build value function
+        self.v = RLCritic(input_size)
 
-    def get_value(self, x):
-        return self.critic(x)
+    def step(self, obs):
+        with torch.no_grad():
+            pi = self.pi._distribution(obs)
+            v = self.v(obs)
+            a = pi.sample()
+            logp_a = pi.log_prob(a)
+            #print(f"[RLActorCritic] a: {a}, v: {v}, pi: {pi}, logp_a: {logp_a}")
 
-    def get_action_and_value(self, x, action=None, mask=None):
-        logits = self.actor(x)
-        probs = Categorical(logits=logits)
+        action_nd = a.numpy()
+        data_dict = {
+            'v': v.numpy(),
+            'logp_a': logp_a.numpy()
+        }
+        return action_nd, data_dict
+
+    def act(self, obs):
+        return self.step(obs)[0]
+    
+    def get_model_name(self):
+        return "PPO RLActorCritic"
+    
+    def get_value(self, obs):
+        return self.v(obs)
+    
+    def get_action_and_value(self, obs, action):
+        pi = self.pi._distribution(obs)
         if action is None:
-            action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(x)
-
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    """
-    Initialize a linear layer using orthogonal initialization, then set bias.
-    By default, std is sqrt(2) (common in orthogonal init for ReLU/Tanh).
-    """
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
+            action = pi.sample()
+        return action, pi.log_prob(action), pi.entropy(), self.v(obs)

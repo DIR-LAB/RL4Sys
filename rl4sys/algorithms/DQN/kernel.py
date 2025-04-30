@@ -1,5 +1,3 @@
-from _common._algorithms.BaseKernel import StepAndForwardKernelAbstract
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -8,8 +6,7 @@ import numpy as np
 Network configurations for DQN
 """
 
-
-class DeepQNetwork(StepAndForwardKernelAbstract):
+class DeepQNetwork(nn.Module):
     """Neural network for DQN.
 
     Produces Q-values for actions.
@@ -46,36 +43,38 @@ class DeepQNetwork(StepAndForwardKernelAbstract):
         self._epsilon_min = epsilon_min
         self._epsilon_decay = epsilon_decay
 
-    def forward(self, obs: torch.Tensor, mask: torch.Tensor = None):
+    def forward(self, obs: torch.Tensor):
         """
             Forward pass through Q-network, outputs Q-values for actions.
         Args:
             obs: current observation
-            mask: mask for current observation (unused in DQN)
         Returns:
             Q-values for actions
         """
         return self.q_network(obs)
 
-    def step(self, obs: torch.Tensor, mask: torch.Tensor = None):
+    def step(self, obs: torch.Tensor):
         """
         If you want to rely entirely on DQN.py's linear_schedule, 
         you can pass the updated epsilon each time and
         override self._epsilon. Otherwise, this can remain as is.
         """
         with torch.no_grad():
-            q = self.forward(obs, mask)
+            q = self.forward(obs)
         # Epsilon-greedy
         if np.random.rand() <= self._epsilon:
             a = np.random.randint(self.act_dim)
         else:
             a = q.argmax().item()
 
-        data = {
+        data_dict = {
             'q_val': q.detach().numpy(),
             'epsilon': self._epsilon
         }
         # Decay (you may skip this if now done at the DQN level)
         self._epsilon = max(self._epsilon * self._epsilon_decay, self._epsilon_min)
 
-        return a, data
+        return a, data_dict
+
+    def get_model_name(self):
+        return "DQN DeepQNetwork"

@@ -1,21 +1,28 @@
 import io
 import torch
 from torch import nn
-from protocol.action import RL4SysAction
-from protocol import trajectory_pb2
+from rl4sys.common.action import RL4SysAction
+from rl4sys.proto import Action
 import numpy as np
+import json
+import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # for gRPC transfering. Torch tensors will be conver into bytes
 def serialize_tensor(tensor):
-    """Serialize a PyTorch tensor to bytes."""
+    """
+    Convert a tensor (torch.Tensor or np.ndarray) to bytes.
+    """
     if tensor is None:
         return b"None"
+    
     if isinstance(tensor, torch.Tensor):
-        return tensor.numpy().tobytes()
-    if isinstance(tensor, np.ndarray):
-        return tensor.tobytes()
-    # For scalar values
-    return np.array([tensor]).tobytes()
+        return tensor.detach().cpu().numpy().astype(np.float32).tobytes()
+    elif isinstance(tensor, np.ndarray):
+        return tensor.astype(np.float32).tobytes()
+    else:
+        # For scalar values (int or float), convert to float32 single-element array
+        return np.array([float(tensor)], dtype=np.float32).tobytes()
 
 def deserialize_tensor(tensor_bytes):
     """Deserialize bytes back to a PyTorch tensor."""
@@ -30,101 +37,68 @@ def deserialize_tensor(tensor_bytes):
         print(f"Error deserializing tensor: {e}")
         return None
 
-def serialize_action(action: RL4SysAction) -> trajectory_pb2.RL4SysAction:
+def serialize_action(action: RL4SysAction) -> Action:
     """
-    Serialize an RL4SysAction object into a protobuf message, 
-    and store reward as bytes (float->bytes).
+    Serialize an RL4SysAction object into a protobuf message according to the new proto definition.
     """
-    # 1. Serialize the action
-    action_bytes = b"None"
-    if action.act is not None:
-        if isinstance(action.act, torch.Tensor):
-            action_bytes = action.act.detach().cpu().numpy().astype(np.float32).tobytes()
-        elif isinstance(action.act, np.ndarray):
-            action_bytes = action.act.astype(np.float32).tobytes()
-        else:
-            # For scalar values (int or float), convert to float32 single-element array
-            action_bytes = np.array([float(action.act)], dtype=np.float32).tobytes()
-
-    # 2. Serialize the reward as bytes
-    if action.rew is not None:
-        reward_bytes = np.array([float(action.rew)], dtype=np.float32).tobytes()
-    else:
-        reward_bytes = b"None"
-
-    # 3. Serialize data
-    serialized_data = {}
+    # Serialize the observation, action, and reward
+    obs_bytes = serialize_tensor(action.obs)
+    action_bytes = serialize_tensor(action.act)
+    reward_bytes = serialize_tensor(action.rew)
+    
+    # Serialize extra data
+    extra_data = {}
     if action.data:
         for k, v in action.data.items():
-            if isinstance(v, torch.Tensor):
-                serialized_data[str(k)] = v.detach().cpu().numpy().astype(np.float32).tobytes()
-            elif isinstance(v, np.ndarray):
-                serialized_data[str(k)] = v.astype(np.float32).tobytes()
-            else:
-                serialized_data[str(k)] = np.array([float(v)], dtype=np.float32).tobytes()
-
-    # 4. Build the protobuf
-    action_proto = trajectory_pb2.RL4SysAction(
-        obs=serialize_tensor(action.obs) if action.obs is not None else b"None",
+            extra_data[str(k)] = serialize_tensor(v)
+    
+    # Build the protobuf message
+    action_proto = Action(
+        obs=obs_bytes,
         action=action_bytes,
-        mask=serialize_tensor(action.mask) if action.mask is not None else b"None",
-        reward=reward_bytes,  # store reward as bytes
-        data=serialized_data,
+        reward=reward_bytes,
         done=action.done if action.done is not None else False,
-        reward_update_flag=action.reward_update_flag if action.reward_update_flag is not None else False,
+        extra_data=extra_data
     )
+    
     return action_proto
 
-def deserialize_action(action):
+def deserialize_action(action_proto: Action) -> RL4SysAction:
     """
-    Deserialize a Protobuf message into an RL4SysAction object, 
-    turning bytes->float for reward.
+    Convert a protobuf Action message back to an RL4SysAction object.
+    This is typically used by the server when receiving trajectories.
     """
-    # 1. Deserialize the action
-    action_bytes = action.action
-    if action_bytes == b"None":
-        action_value = None
+    # Deserialize tensors from bytes
+    if action_proto.obs == b"None":
+        obs = None
     else:
-        try:
-            arr = np.frombuffer(action_bytes, dtype=np.float32)
-            action_value = float(arr[0]) if len(arr) == 1 else arr
-        except Exception:
-            print(f"Warning: Could not deserialize action: {action_bytes}")
-            action_value = None
-
-    # 2. Deserialize the reward (bytes->float)
-    reward_bytes = action.reward
-    if reward_bytes == b"None":
-        rew_value = None
+        obs = np.frombuffer(action_proto.obs, dtype=np.float32)
+    
+    if action_proto.action == b"None":
+        action = None
     else:
-        try:
-            arr = np.frombuffer(reward_bytes, dtype=np.float32)
-            rew_value = float(arr[0]) if len(arr) == 1 else arr
-        except Exception:
-            print(f"Warning: Could not deserialize reward bytes: {reward_bytes}")
-            rew_value = 0.0
-
-    # 3. Deserialize data into dictionary
-    deserialized_data = {}
-    for k, v in action.data.items():
-        try:
-            arr = np.frombuffer(v, dtype=np.float32)
-            deserialized_data[k] = float(arr[0]) if len(arr) == 1 else arr
-        except:
-            try:
-                deserialized_data[k] = v.decode("utf-8")
-            except:
-                print(f"Warning: Could not deserialize data for key {k}")
-                deserialized_data[k] = None
-
-    # 4. Rebuild the RL4SysAction
+        action = np.frombuffer(action_proto.action, dtype=np.float32)
+    
+    if action_proto.reward == b"None":
+        reward = None
+    else:
+        reward = np.frombuffer(action_proto.reward, dtype=np.float32)[0]  # Get scalar value
+    
+    # Deserialize extra data
+    data = {}
+    for k, v in action_proto.extra_data.items():
+        data[k] = np.frombuffer(v, dtype=np.float32)
+        # If it's a single value, convert to scalar
+        if len(data[k]) == 1:
+            data[k] = float(data[k][0])
+    
+    # Create and return the RL4SysAction
     return RL4SysAction(
-        obs=deserialize_tensor(action.obs),
-        action=action_value,
-        mask=deserialize_tensor(action.mask),
-        reward=rew_value,
-        data=deserialized_data,
-        done=action.done
+        obs=obs,
+        action=action,
+        reward=reward,
+        done=action_proto.done,
+        data=data
     )
 
 def serialize_model(model: nn.Module) -> bytes:
@@ -146,5 +120,51 @@ def deserialize_model(raw_bytes: bytes) -> nn.Module:
     buffer = io.BytesIO(raw_bytes)
     model = torch.load(buffer, map_location='cpu')
     return model
+
+class StructuredLogger:
+    def __init__(self, name, debug=False):
+        self.logger = logging.getLogger(name)
+        # Set the logger's level to DEBUG to allow all levels of messages
+        # The actual filtering will be done by the handlers
+        self.logger.setLevel(logging.DEBUG)
+        
+        # Create console handler with structured format
+        ch = logging.StreamHandler()
+        # Set handler level based on debug parameter
+        ch.setLevel(logging.DEBUG if debug else logging.INFO)
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(context)s'
+        )
+        ch.setFormatter(formatter)
+        
+        # Remove any existing handlers to avoid duplicate logging
+        self.logger.handlers = [ch]
+    
+    def _get_context(self, **kwargs):
+        """
+        Return a JSON string for the ``extra['context']`` field.
+
+        NumPy scalars (and any other non-JSON types) are converted to
+        something the stdlib encoder can handle.
+        """
+        def _default(obj):
+            # Convert NumPy scalars → native Python types
+            if isinstance(obj, np.generic):
+                return obj.item()
+            # Fallback: give up and use the string form
+            return str(obj)
+        return json.dumps(kwargs, default=_default)
+    
+    def info(self, msg, **kwargs):
+        """Log an info level message with optional context."""
+        self.logger.info(msg, extra={'context': self._get_context(**kwargs)})
+    
+    def debug(self, msg, **kwargs):
+        """Log a debug level message with optional context."""
+        self.logger.debug(msg, extra={'context': self._get_context(**kwargs)})
+    
+    def error(self, msg, **kwargs):
+        """Log an error level message with optional context."""
+        self.logger.error(msg, extra={'context': self._get_context(**kwargs)})
 
 

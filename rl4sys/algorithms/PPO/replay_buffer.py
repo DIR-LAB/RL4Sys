@@ -1,5 +1,3 @@
-from _common._algorithms.BaseReplayBuffer import combined_shape, discount_cumsum, ReplayBufferAbstract
-
 import numpy as np
 import torch
 import random
@@ -7,20 +5,68 @@ import random
 PPO Code
 """
 
+def combined_shape(length, shape=None):
+    if shape is None:
+        return (length,)
+    return (length, shape) if np.isscalar(shape) else (length, *shape)
 
-class ReplayBuffer(ReplayBufferAbstract):
+
+def discount_cumsum(x, discount):
+    """
+    magic from rllab for computing discounted cumulative sums of vectors.
+
+    input:
+        vector x,
+        [x0,
+         x1,
+         x2]
+
+    output:
+        [x0 + discount * x1 + discount^2 * x2,
+         x1 + discount * x2,
+         x2]
+    """
+    return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
+
+
+def statistics_scalar(x, with_min_and_max=False):
+    """
+    Get mean/std and optional min/max of scalar x.
+
+    Args:
+        x: An array containing samples of the scalar to produce statistics
+            for.
+
+        with_min_and_max (bool): If true, return min and max of x in
+            addition to mean and std.
+    """
+    x = np.array(x, dtype=np.float32)
+    global_sum = np.sum(x)
+    global_n = len(x)
+    mean = global_sum / global_n
+
+    global_sum_sq = (np.sum((x - mean)**2))
+    std = np.sqrt(global_sum_sq / global_n)  # compute global std
+
+    if with_min_and_max:
+        global_min = np.min(x) if len(x) > 0 else np.inf
+        global_max = np.max(x) if len(x) > 0 else -np.inf
+        return mean, std, global_min, global_max
+    return mean, std
+
+
+class ReplayBuffer():
     """
     A buffer for storing trajectories experienced by a PPO agent interacting
     with the environment, and using Generalized Advantage Estimation (GAE-Lambda)
     for calculating the advantages of state-action pairs.
     """
 
-    def __init__(self, obs_dim, mask_dim, buf_size, gamma=0.99, lam=0.95, *args, **kwargs):
+    def __init__(self, obs_dim, buf_size, gamma=0.99, lam=0.95, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
         self.next_obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros(combined_shape(buf_size), dtype=np.int32)
-        self.mask_buf = np.zeros(combined_shape(buf_size, mask_dim), dtype=np.float32)
         self.rew_buf = np.zeros(buf_size, dtype=np.float32)
         self.val_buf = np.zeros(buf_size, dtype=np.float32)
         self.logp_buf = np.zeros(buf_size, dtype=np.float32)
@@ -32,14 +78,13 @@ class ReplayBuffer(ReplayBufferAbstract):
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
-    def store(self, obs, act, mask, rew, val, logp, done):
+    def store(self, obs, act, rew, val, logp, done):
         """
         Append one timestep of agent-environment interaction to the buffer.
         """
         idx = self.ptr % self.max_size
         self.obs_buf[idx] = obs
         self.act_buf[idx] = act
-        self.mask_buf[idx] = mask
         self.rew_buf[idx] = rew
         self.val_buf[idx] = val
         self.logp_buf[idx] = logp
@@ -90,7 +135,6 @@ class ReplayBuffer(ReplayBufferAbstract):
             obs=self.obs_buf[batch],
             next_obs=self.next_obs_buf[batch],
             act=self.act_buf[batch],
-            mask=self.mask_buf[batch],
             ret=self.ret_buf[batch],
             adv=self.adv_buf[batch],
             logp=self.logp_buf[batch],
