@@ -1,228 +1,162 @@
-# RL4Sys: A Framework for Reinforcement Learning Optimization
+# RL4Sys: Reinforcement Learning for System Control
 
+RL4Sys is a distributed reinforcement learning framework designed for system control applications. It provides a server-client architecture that enables multiple clients to train and share models in a distributed manner.
 
-![RL4Sys Agent Implementation](docs/RL4Sys.png)
+## Project Structure
+
+```
+rl4sys/
+├── algorithms/           # RL algorithm implementations
+│   ├── PPO/             # Proximal Policy Optimization
+│   └── DQN/             # Deep Q-Network
+├── client/              # Client-side components
+│   ├── agent.py         # RL agent implementation
+│   └── ...
+├── proto/               # Protocol buffer definitions
+├── server/              # Server-side components
+│   ├── server.py        # Main server implementation
+│   └── model_diff_manager.py  # Model versioning and diff management
+├── utils/               # Utility functions
+└── examples/            # Example applications
+    └── lunar/           # Lunar Lander example
+        ├── lunar_lander.py
+        └── luna_conf.json
+```
+
+## Features
+
+- Distributed training architecture
+- Support for multiple RL algorithms (PPO, DQN)
+- Efficient model versioning and diff management
+- Client-specific training threads
+- Protocol buffer-based communication
+- Example implementations for system control tasks
 
 ## Installation
 
-### Development Installation
+1. Clone the repository:
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/RL4Sys.git
+git clone https://github.com/yourusername/RL4Sys.git
 cd RL4Sys
-
-# Install in development mode
-pip install -e .
 ```
 
-### Regular Installation
+2. Install dependencies:
 ```bash
-pip install rl4sys
+pip install -r requirements.txt
 ```
 
-## Project Structure
-```
-RL4Sys/
-├── rl4sys/                  # Main package directory
-│   ├── __init__.py         # Package initialization
-│   ├── algorithms/         # RL algorithm implementations
-│   ├── client/            # Client-side components
-│   ├── server/            # Server components
-│   ├── utils/             # Utility functions
-│   ├── protocol/          # gRPC protocol definitions
-│   ├── _common/           # Common abstract base classes
-│   └── examples/          # Example applications
-├── docs/                   # Documentation
-├── tests/                  # Test suite
-├── setup.py               # Package setup file
-├── requirements.txt       # Development requirements
-└── README.md             # This file
+## Quick Start
+
+### Starting the Server
+
+```bash
+python -m rl4sys.server.server --debug --port 50051
 ```
 
-## Usage
+### Running the Lunar Lander Example
 
-Before use, implement the `ApplicationAbstract` class and its methods to create an environment capable of providing RL4Sys with observations and rewards/performance returns. The `RL4SysAgent` will be initialized into the main loop of this environment through `run_application()`.
+The Lunar Lander example demonstrates how to use RL4Sys with the Gymnasium Lunar Lander environment:
 
-### Main Loop
-1. Request application observation
-2. Observation & Reward
-3. Action Request
-4. Return & Perform Action
-5. Repeat
-
-## Components
-
-Users can use existing RL4Sys components or create their own by extending the abstract classes found in `_common`.
-
-### Available Components
-- Agent: `RL4SysAgent` or `RL4SysAgentAbstract`
-- Action: `RL4SysAction` or `RL4SysActionAbstract`
-- Trajectory: `RL4SysTrajectory` or `RL4SysTrajectoryAbstract`
-- Training Server: `RL4SysTrainingServer` or `RL4SysTrainingServerAbstract`
-
-### Supported Algorithms
-- PPO (Proximal Policy Optimization)
-- TRPO (Trust Region Policy Optimization)
-- DQN (Deep Q-Network)
-- SAC (Soft Actor-Critic)
-- C51 (Categorical 51-Atom)
-- DDPG (Deep Deterministic Policy Gradient)
-- TD3 (Twin Delayed DDPG)
-- RPO (Regularized Policy Optimization)
+```bash
+python -m rl4sys.examples.lunar.lunar_lander.py \
+    --seed 1 \
+    --number-of-iterations 10000 \
+    --number-of-moves 200 \
+    --render False \
+    --client-id lunar_lander
+```
 
 ## Configuration
 
-Configuration is handled through `config.json` in the root directory. This includes:
-- Algorithm hyperparameters
-- Server settings
-- Model paths
-- TensorBoard settings
+The Lunar Lander example uses a configuration file (`luna_conf.json`) to specify:
+- Algorithm parameters
+- Network architecture
+- Training hyperparameters
+- Communication settings
 
-## Examples
+Example configuration:
+```json
+{
+    "algorithm": "PPO",
+    "algorithm_parameters": {
+        "learning_rate": 0.0003,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_ratio": 0.2,
+        "target_kl": 0.01,
+        "entropy_coef": 0.01
+    },
+    "network_architecture": {
+        "hidden_sizes": [64, 64],
+        "activation": "tanh"
+    },
+    "training": {
+        "batch_size": 64,
+        "epochs": 10
+    },
+    "communication": {
+        "server_address": "localhost:50051",
+        "timeout": 10
+    }
+}
+```
 
-Check the `rl4sys/examples/` directory for implementation examples:
-- Lunar Lander
-- Maze Game
-- Job Scheduling
+## How It Works
+
+### Server Architecture
+
+The RL4Sys server implements a client-specific training approach:
+
+1. Each client gets its own:
+   - Algorithm instance
+   - Training thread
+   - Model version manager
+   - Training queue
+
+2. A central dispatcher thread:
+   - Receives trajectories from all clients
+   - Routes them to the appropriate client's training queue
+
+3. Client-specific training threads:
+   - Process trajectories from their dedicated queue
+   - Update their algorithm's model
+   - Manage model versioning
+
+### Client Implementation
+
+The Lunar Lander example shows how to implement a client:
+
+1. Initialize the RL4Sys agent:
+```python
+self.rlagent = RL4SysAgent(conf_path='./luna_conf.json')
+```
+
+2. Run the training loop:
+```python
+def run_application(self, num_iterations, max_moves):
+    for iteration in range(num_iterations):
+        obs, _ = self.env.reset(seed=self._seed + iteration)
+        done = False
+        moves = 0
+        
+        while not done and moves < max_moves:
+            # Get action from agent
+            self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(
+                self.rl4sys_traj, obs_tensor
+            )
+            
+            # Execute action and get reward
+            next_obs, reward, terminated, truncated, _ = self.env.step(action)
+            
+            # Update trajectory
+            self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+            self.rl4sys_action.update_reward(reward)
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License - see LICENSE file for details
-
-# RL4Sys Main loop
-
-1. **Request application observation**
-2. **Observation & Reward**
-3. **Action Request**
-4. **Return & Perform Action**
-
-**Repeat**
-
-# RL4Sys Components
-
-
-User is able to use the existing RL4Sys components or create their own components by extending the abstract classes found in `_common`.
-### Agent
-- `RL4SysAgent` or
-- `RL4SysAgentAbstract` 
-
-### Action
-- `RL4SysAction` or
-- `RL4SysActionAbstract`
-    
-### Trajectory
-- `RL4SysTrajectory` or
-- `RL4SysTrajectoryAbstract`
-    
-### Training Server
-- `RL4SysTrainingServer` or
-- `RL4SysTrainingServerAbstract`
-    
-### Training Algorithm
-- `PPO`, `TRPO`, `DQN`, `SAC`, `C51` or
-- algorithm abstract components, see [Customizablility](#Customizability)
-    
-
-# Application Components
-
-
-User is able to create their own application components by extending the abstract class `BaseApplication.py` found in `_common`. The `examples` folder contains example applications that show how to implement the `BaseApplication` class.
-
-### Run Application
-- `run_application()`
-### Build Observation
-- `build_observation()`
-### Calculate Performance Return
-- `calculate_performance_return()`
-
-# Agent APIs
-
-The loop of using RL4Sys agent
-
-1. First, users implement observation.
-2. Second, call action() to get output of
-
-a1 = agent.action(obv)
-
-`action()` returns a RL4SysAction instance and users need to interpret it.
-
-* a1.action()
-* a1.prob()
-* a1.logprob()
-* a1.reward() to report the rewards.
-
-3. Third, store the interaction into Reply Buffer.
-
-
-4. Third, determine if a trajectory is done based on the systems' own logic.
-
-
-RL4SysReplayBuffer() instance
-buff.store(RLSysAction)
-
-if traj is done
-buff.finish_traj(RLSysAction)
-
-if done:
-reset()
-
-# Customizability
-
-
-RL4Sys is designed to be highly flexible to the user's needs. 
-
-Configuration of RL4Sys occurs in the root directory's `config.json`. This includes configurable parameters for RL4Sys training and algorithm hyperparameters.
-
-By using template classes and common functions found in `_common`, the user can easily implement their own applications, algorithms, and RL4Sys components.
-
-`_common` contains the following abstract classes and functions:
-- `_algorithm`
-  - `BaseKernel.py`
-    - ForwardKernelAbstraction(nn.Module, ABC)
-    - StepKernelAbstract(nn.Module, ABC)
-    - StepAndForwardKernelAbstract(nn.Module, ABC)
-    - infer_next_obs(act, obs)
-    - mlp(sizes, activation, output_activation=nn.Identity)
-  - `BaseReplayBuffer.py`
-    - ReplayBufferAbstract(ABC)
-    - combined_shape(length, shape=None)
-    - discount_cumsum(x, discount)
-    - statistics_scalar(x, with_min_and_max=False)
-  - `BaseAlgorithm.py`
-    - AlgorithmAbstract(ABC)
-- `_examples`
-  - `BaseApplication.py`
-    - ApplicationAbstract(ABC)
-- `_rl4sys`
-  - `BaseTrajectory.py`
-    - RL4SysTrajectoryAbstract(ABC)
-    - send_trajectory(trajectory)
-    - serialize_trajectory(trajectory)
-  - `BaseAgent.py`
-    - RL4SysAgentAbstract(ABC)
-  - `BaseTrainingServer.py`
-    - RL4SysTrainingServerAbstract(ABC)
-  - `BaseAction.py`
-    - RL4SysAction(ABC)
-
-# Execute Script (temporary)
-
-D: & cd D:\Projects\0_Udel\RL4Sys & conda activate udel
-
-python examples/maze-game/maze.py -s SAC
-
-python examples/maze-game/maze.py -s PPO
-
-python examples/maze-game/maze.py -s DQN
-
-## debuging ##
-python examples/maze-game/maze.py -s PPO --number-of-moves 5000
-
-python examples/maze-game/maze.py -s PPO --number-of-moves 5000 --number-of-iterations 100
-# 10 iteration lead to error
-
-
-## Tensorboard ## 
-tensorboard --logdir examples/maze-game/logs
-
-# tensor board have bug on epoch writing
+This project is licensed under the MIT License - see the LICENSE file for details.
