@@ -59,7 +59,8 @@ pip install -r requirements.txt
 ### Starting the Server
 
 ```bash
-python -m rl4sys.start_server --debug --port 50051
+cd rl4sys
+python start_server.py --debug
 ```
 
 ### Running the Lunar Lander Example
@@ -67,12 +68,16 @@ python -m rl4sys.start_server --debug --port 50051
 The Lunar Lander example demonstrates how to use RL4Sys with the Gymnasium Lunar Lander environment:
 
 ```bash
-python -m rl4sys.examples.lunar.lunar_lander.py \
-    --seed 1 \
-    --number-of-iterations 10000 \
-    --number-of-moves 200 \
-    --render False \
-    --client-id lunar_lander
+cd rl4sys/examples/lunar
+python lunar_lander.py --debug
+```
+
+### See the training progress
+
+The training logs are stored in 
+```bash
+cd rl4sys/logs
+tensorboard --logdir rl4sys-ppo-info
 ```
 
 ## Configuration
