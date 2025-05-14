@@ -1,0 +1,24 @@
+{
+    "client_id": "test_cpp",
+    "algorithm_name": "PPO",
+    "algorithm_parameters": {
+        "batch_size": 512,
+        "act_dim": 4,
+        "seed": 0,
+        "traj_per_epoch": 256,
+        "clip_ratio": 0.2,
+        "gamma": 0.99,
+        "lam": 0.95,
+        "pi_lr": 3e-4,
+        "vf_lr": 1e-3,
+        "train_pi_iters": 80,
+        "train_v_iters": 80,
+        "target_kl": null,
+        "input_size": 8
+    },
+    "act_limit": 1.0,
+    "max_traj_length": 1000,
+    "type": "onpolicy",
+    "train_server_address": "localhost:50051",
+    "send_frequency": 10
+}

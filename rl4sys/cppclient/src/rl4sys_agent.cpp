@@ -14,15 +14,69 @@ namespace rl4sys {
 namespace cppclient {
 
 // --- RL4SysAction Implementation ---
-RL4SysAction::RL4SysAction() : actionValue(0), actionReward(std::nullopt) {}
+class RL4SysAction {
+public:
+    // Default constructor
+    RL4SysAction() : actionValue(0), actionReward(std::nullopt), done(false), version(0) {}
 
-void RL4SysAction::updateReward(double reward) {
-    actionReward = reward;
-}
+    // Constructor with optional parameters
+    RL4SysAction(const std::vector<double>& obs, int64_t act, double reward, bool done, const std::map<std::string, std::string>& data, int ver)
+        : observation(obs), actionValue(act), actionReward(reward), done(done), data(data), version(ver) {}
 
-int64_t RL4SysAction::getActionValue() const {
-    return actionValue;
-}
+    void updateReward(double reward) {
+        actionReward = reward;
+    }
+
+    int64_t getActionValue() const {
+        return actionValue;
+    }
+
+    void setActionValue(int64_t value) {
+        actionValue = value;
+    }
+
+    std::optional<double> getReward() const {
+        return actionReward;
+    }
+
+    // Added: Set done flag
+    void set_done(bool is_done) {
+        done = is_done;
+    }
+
+    // Added: Check if reward is set
+    bool is_reward_set() const {
+        return actionReward.has_value();
+    }
+
+    // Added: Check if action is done
+    bool is_done() const {
+        return done;
+    }
+
+    // Added: Get observation
+    const std::vector<double>& getObservation() const {
+        return observation;
+    }
+
+    // Added: Get version
+    int getVersion() const {
+        return version;
+    }
+
+    // Added: Get data
+    const std::map<std::string, std::string>& getData() const {
+        return data;
+    }
+
+private:
+    std::vector<double> observation;
+    int64_t actionValue;
+    std::optional<double> actionReward;
+    bool done;
+    std::map<std::string, std::string> data;
+    int version;
+};
 
 // --- RL4SysTrajectory Implementation ---
 RL4SysTrajectory::RL4SysTrajectory() {}
@@ -44,6 +98,14 @@ void RL4SysTrajectory::clear() {
     actions.clear();
 }
 
+// Added: Accessors for observations and actions
+const std::vector<std::vector<double>>& RL4SysTrajectory::getObservations() const {
+    return observations;
+}
+
+const std::vector<RL4SysAction>& RL4SysTrajectory::getActions() const {
+    return actions;
+}
 
 // --- RL4SysAgent Implementation ---
 
