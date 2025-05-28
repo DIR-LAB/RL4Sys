@@ -14,15 +14,20 @@ namespace grpc {
 } // namespace grpc
 
 // Forward declarations for Protobuf message and service types
-namespace rl4sys_proto {
-    class RL4SysService; // The gRPC service
+namespace rl4sys {
+    class RLService; // The gRPC service (matches proto file)
     class Observation;
     class ActionRequest;
     class ActionResponse;
     class Trajectory;
     class SendTrajectoryRequest;
     class SendTrajectoryResponse;
-} // namespace rl4sys_proto
+    class Action;
+    class GetModelRequest;
+    class ModelResponse;
+    class SendTrajectoriesRequest;
+    class SendTrajectoriesResponse;
+} // namespace rl4sys
 
 
 namespace rl4sys {
@@ -128,26 +133,26 @@ private:
      * @param obs Internal observation data.
      * @param protoObs Pointer to the protobuf message to fill.
      */
-    void convertToProtoObservation(const std::vector<double>& obs, rl4sys_proto::Observation* protoObs);
+    void convertToProtoObservation(const std::vector<double>& obs, rl4sys::Observation* protoObs);
 
      /**
       * @brief Helper to convert internal trajectory type to protobuf Trajectory.
       * @param traj Internal trajectory data.
       * @param protoTraj Pointer to the protobuf message to fill.
       */
-     void convertToProtoTrajectory(const RL4SysTrajectory& traj, rl4sys_proto::Trajectory* protoTraj);
+     void convertToProtoTrajectory(const RL4SysTrajectory& traj, rl4sys::Trajectory* protoTraj);
 
      /**
       * @brief Helper to convert protobuf Action to internal RL4SysAction type.
       * @param protoAction The protobuf Action message.
       * @return The internal RL4SysAction object.
       */
-     RL4SysAction convertFromProtoAction(const rl4sys_proto::Action& protoAction);
+     RL4SysAction convertFromProtoAction(const rl4sys::Action& protoAction);
 
 
     AgentConfig config;
     std::shared_ptr<grpc::Channel> channel;
-    std::unique_ptr<rl4sys_proto::RL4SysService::Stub> stub; // gRPC client stub
+    std::unique_ptr<rl4sys::RLService::Stub> stub; // gRPC client stub (fixed service name)
 
     // State related to the current trajectory being built, if needed client-side
     // std::optional<RL4SysTrajectory> ongoingTrajectory;

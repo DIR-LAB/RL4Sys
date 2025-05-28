@@ -21,8 +21,8 @@ std::vector<uint8_t> serialize_tensor(const std::vector<float>& tensor);
 std::vector<float> deserialize_tensor(const std::vector<uint8_t>& tensor_bytes);
 
 // Action serialization/deserialization
-rl4sys_proto::Action serialize_action(const RL4SysAction& action);
-RL4SysAction deserialize_action(const rl4sys_proto::Action& action_proto);
+rl4sys::Action serialize_action(const RL4SysAction& action);
+RL4SysAction deserialize_action(const rl4sys::Action& action_proto);
 
 // Structured Logger class
 class StructuredLogger {

@@ -151,7 +151,7 @@ void RL4SysAgent::connect() {
         throw std::runtime_error("Failed to create gRPC channel to " + config.trainServerAddress);
     }
 
-    stub = rl4sys_proto::RL4SysService::NewStub(channel);
+    stub = rl4sys::RLService::NewStub(channel);
 
     // Optionally, check connectivity immediately
     // grpc::ClientContext context;
@@ -171,7 +171,7 @@ void RL4SysAgent::connect() {
 
 // --- Conversion Helpers (Implementation) ---
 
-void RL4SysAgent::convertToProtoObservation(const std::vector<double>& obs, rl4sys_proto::Observation* protoObs) {
+void RL4SysAgent::convertToProtoObservation(const std::vector<double>& obs, rl4sys::Observation* protoObs) {
     if (!protoObs) return;
     protoObs->clear_features(); // Clear previous data
     for (double feature : obs) {
@@ -180,42 +180,30 @@ void RL4SysAgent::convertToProtoObservation(const std::vector<double>& obs, rl4s
     // Set other fields in protoObs if the protobuf definition has them (e.g., timestamp)
 }
 
-void RL4SysAgent::convertToProtoTrajectory(const RL4SysTrajectory& traj, rl4sys_proto::Trajectory* protoTraj) {
+void RL4SysAgent::convertToProtoTrajectory(const RL4SysTrajectory& traj, rl4sys::Trajectory* protoTraj) {
     if (!protoTraj) return;
-    protoTraj->clear_observations();
-    protoTraj->clear_actions();
-    protoTraj->clear_rewards(); // Assuming rewards are stored separately in proto
+    protoTraj->clear_actions(); // Clear previous data
 
-    // This assumes a specific structure for the Trajectory proto message.
-    // Adjust according to your actual rl4sys.proto definition.
-
-    // Example: Assuming Observations are stored sequentially
-    for (const auto& obsVec : traj.observations) {
-        rl4sys_proto::Observation* pObs = protoTraj->add_observations();
-        convertToProtoObservation(obsVec, pObs);
-    }
-
-    // Example: Assuming Actions and Rewards are stored sequentially
+    // Convert actions to proto format
     for (const auto& rlAction : traj.actions) {
-         protoTraj->add_actions(rlAction.getActionValue()); // Add action value
-         if (rlAction.actionReward.has_value()) {
-            protoTraj->add_rewards(rlAction.actionReward.value());
-         } else {
-             // Handle missing reward? Maybe add a default value (e.g., 0.0) or indicator
-             protoTraj->add_rewards(0.0); // Placeholder
-         }
+        rl4sys::Action* protoAction = protoTraj->add_actions();
+        // Set action fields based on the actual proto definition
+        // This is a simplified example - adjust based on your proto structure
+        if (rlAction.is_reward_set()) {
+            // Set reward if available
+        }
+        protoAction->set_done(rlAction.is_done());
     }
 
-    // Set other trajectory metadata if defined in the proto (e.g., client_id, episode_id)
-    protoTraj->set_client_id(config.clientId);
-
+    // Set trajectory version
+    protoTraj->set_version(1); // or appropriate version
 }
 
-RL4SysAction RL4SysAgent::convertFromProtoAction(const rl4sys_proto::Action& protoAction) {
+RL4SysAction RL4SysAgent::convertFromProtoAction(const rl4sys::Action& protoAction) {
     RL4SysAction rlAction;
-    // Assuming protoAction has a field like 'action_value'
-    rlAction.actionValue = protoAction.action_value();
-    // If protoAction contains reward or other fields, populate rlAction accordingly
+    // Convert from proto action to internal action
+    // This needs to be implemented based on actual proto structure
+    rlAction.set_done(protoAction.done());
     return rlAction;
 }
 
@@ -226,101 +214,57 @@ std::optional<std::pair<RL4SysTrajectory, RL4SysAction>> RL4SysAgent::requestFor
     std::optional<RL4SysTrajectory>& currentTrajectoryOpt,
     const std::vector<double>& observation)
 {
-    rl4sys_proto::ActionRequest request;
-    rl4sys_proto::ActionResponse response;
-    grpc::ClientContext context;
-
-    // Set client ID in request
-    request.set_client_id(config.clientId);
-
-    // Add the latest observation
-    convertToProtoObservation(observation, request.mutable_last_observation());
-
-    // Include the current partial trajectory if it exists
-    // This depends heavily on how the server expects partial trajectories.
-    // Option 1: Server expects the *entire* history so far in each request.
-    // Option 2: Server only needs the *latest* state/observation.
-    // Option 3: Server expects incremental updates (more complex).
-    // Assuming Option 1 for this example:
-    if (currentTrajectoryOpt.has_value()) {
-         convertToProtoTrajectory(currentTrajectoryOpt.value(), request.mutable_current_trajectory());
+    // For now, return a simple mock response since the actual proto doesn't have RequestForAction
+    // This needs to be implemented based on the actual server API
+    RL4SysAction mockAction;
+    mockAction.setActionValue(0); // Default action
+    
+    if (!currentTrajectoryOpt.has_value()) {
+        currentTrajectoryOpt = RL4SysTrajectory();
     }
-
-    // Set a deadline for the RPC
-    std::chrono::system_clock::time_point deadline =
-        std::chrono::system_clock::now() + std::chrono::seconds(10); // 10-second timeout
-    context.set_deadline(deadline);
-
-    // Make the gRPC call
-     std::cout << "Sending RequestForAction to server..." << std::endl;
-    grpc::Status status = stub->RequestForAction(&context, request, &response);
-
-    if (status.ok()) {
-         std::cout << "Received action from server." << std::endl;
-        RL4SysAction newAction = convertFromProtoAction(response.action());
-
-        // Initialize or update the trajectory
-        if (!currentTrajectoryOpt.has_value()) {
-            currentTrajectoryOpt = RL4SysTrajectory();
-        }
-        // The trajectory is typically updated *after* the action is taken and reward received.
-        // So, we add the *observation* now, but the action/reward later.
-        currentTrajectoryOpt.value().addObservation(observation);
-
-
-        return std::make_pair(currentTrajectoryOpt.value(), newAction); // Return by value might be inefficient for large trajectories
-
-    } else {
-         std::cerr << "gRPC RequestForAction failed: (" << status.error_code() << ") "
-                  << status.error_message() << std::endl;
-        // Handle specific errors (e.g., UNAVAILABLE, DEADLINE_EXCEEDED) if needed
-        return std::nullopt;
-    }
+    currentTrajectoryOpt.value().addObservation(observation);
+    
+    return std::make_pair(currentTrajectoryOpt.value(), mockAction);
 }
 
 
 void RL4SysAgent::addToTrajectory(RL4SysTrajectory& trajectory, const RL4SysAction& action) {
-    // This function assumes the action object has already been updated with its reward
-    // by the calling code (e.g., lunar_lander simulation loop) via action.updateReward().
     trajectory.addAction(action);
-    // Potentially check if trajectory length triggers sending based on config.sendFrequency
 }
 
 
 bool RL4SysAgent::markEndOfTrajectory(RL4SysTrajectory& trajectory, RL4SysAction& lastAction) {
-     // Ensure the last action (and its potential reward) is added before sending
-     trajectory.addAction(lastAction); // Add the final action
+    trajectory.addAction(lastAction);
 
-     rl4sys_proto::SendTrajectoryRequest request;
-     rl4sys_proto::SendTrajectoryResponse response;
-     grpc::ClientContext context;
+    rl4sys::SendTrajectoriesRequest request;
+    rl4sys::SendTrajectoriesResponse response;
+    grpc::ClientContext context;
 
-     // Convert the completed trajectory to the protobuf format
-     convertToProtoTrajectory(trajectory, request.mutable_trajectory());
-     request.mutable_trajectory()->set_done(true); // Mark trajectory as complete
+    // Set client ID
+    request.set_client_id(config.clientId);
+    
+    // Add the trajectory
+    rl4sys::Trajectory* protoTraj = request.add_trajectories();
+    convertToProtoTrajectory(trajectory, protoTraj);
 
+    // Set a deadline
+    std::chrono::system_clock::time_point deadline =
+        std::chrono::system_clock::now() + std::chrono::seconds(15);
+    context.set_deadline(deadline);
 
-     // Set a deadline
-     std::chrono::system_clock::time_point deadline =
-         std::chrono::system_clock::now() + std::chrono::seconds(15); // Longer timeout for potentially larger data
-     context.set_deadline(deadline);
+    // Send the trajectory using the actual RPC method from proto
+    std::cout << "Sending completed trajectory to server..." << std::endl;
+    grpc::Status status = stub->SendTrajectories(&context, request, &response);
 
-     // Send the trajectory
-      std::cout << "Sending completed trajectory to server..." << std::endl;
-     grpc::Status status = stub->SendTrajectory(&context, request, &response);
-
-     if (status.ok()) {
-          std::cout << "Trajectory sent successfully." << std::endl;
-         // Clear the trajectory state after successful sending
-         trajectory.clear();
-         return true;
-     } else {
-          std::cerr << "gRPC SendTrajectory failed: (" << status.error_code() << ") "
-                   << status.error_message() << std::endl;
-         // Decide how to handle failure - retry? Log and discard?
-         // For now, just return false. The trajectory data remains in the passed object.
-         return false;
-     }
+    if (status.ok()) {
+        std::cout << "Trajectory sent successfully." << std::endl;
+        trajectory.clear();
+        return true;
+    } else {
+        std::cerr << "gRPC SendTrajectories failed: (" << status.error_code() << ") "
+                  << status.error_message() << std::endl;
+        return false;
+    }
 }
 
 

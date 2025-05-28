@@ -66,8 +66,8 @@ std::vector<float> deserialize_tensor(const std::vector<uint8_t>& tensor_bytes) 
 }
 
 // Serialize RL4SysAction to protobuf Action
-rl4sys_proto::Action serialize_action(const RL4SysAction& action) {
-    rl4sys_proto::Action action_proto;
+rl4sys::Action serialize_action(const RL4SysAction& action) {
+    rl4sys::Action action_proto;
     
     // Serialize observation
     if (!action.getObservation().empty()) {
@@ -99,7 +99,7 @@ rl4sys_proto::Action serialize_action(const RL4SysAction& action) {
 }
 
 // Deserialize protobuf Action to RL4SysAction
-RL4SysAction deserialize_action(const rl4sys_proto::Action& action_proto) {
+RL4SysAction deserialize_action(const rl4sys::Action& action_proto) {
     // Deserialize observation
     std::vector<float> obs;
     if (!action_proto.obs().empty()) {
