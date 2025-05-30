@@ -1,6 +1,7 @@
 // Placeholder for rl4sys/cppclient/src/rl4sys_agent.cpp
 #include "rl4sys_agent.h"
 #include "config_loader.h" // Assumes a config_loader.cpp/h exists for JSON parsing
+#include "util.h" // For serialization functions
 
 #include <grpcpp/grpcpp.h>
 // Include the generated protobuf and gRPC headers
@@ -13,98 +14,14 @@
 namespace rl4sys {
 namespace cppclient {
 
-// --- RL4SysAction Implementation ---
-class RL4SysAction {
-public:
-    // Default constructor
-    RL4SysAction() : actionValue(0), actionReward(std::nullopt), done(false), version(0) {}
-
-    // Constructor with optional parameters
-    RL4SysAction(const std::vector<double>& obs, int64_t act, double reward, bool done, const std::map<std::string, std::string>& data, int ver)
-        : observation(obs), actionValue(act), actionReward(reward), done(done), data(data), version(ver) {}
-
-    void updateReward(double reward) {
-        actionReward = reward;
-    }
-
-    int64_t getActionValue() const {
-        return actionValue;
-    }
-
-    void setActionValue(int64_t value) {
-        actionValue = value;
-    }
-
-    std::optional<double> getReward() const {
-        return actionReward;
-    }
-
-    // Added: Set done flag
-    void set_done(bool is_done) {
-        done = is_done;
-    }
-
-    // Added: Check if reward is set
-    bool is_reward_set() const {
-        return actionReward.has_value();
-    }
-
-    // Added: Check if action is done
-    bool is_done() const {
-        return done;
-    }
-
-    // Added: Get observation
-    const std::vector<double>& getObservation() const {
-        return observation;
-    }
-
-    // Added: Get version
-    int getVersion() const {
-        return version;
-    }
-
-    // Added: Get data
-    const std::map<std::string, std::string>& getData() const {
-        return data;
-    }
-
-private:
-    std::vector<double> observation;
-    int64_t actionValue;
-    std::optional<double> actionReward;
-    bool done;
-    std::map<std::string, std::string> data;
-    int version;
-};
-
-// --- RL4SysTrajectory Implementation ---
-RL4SysTrajectory::RL4SysTrajectory() {}
-
-void RL4SysTrajectory::addAction(const RL4SysAction& action) {
-    actions.push_back(action);
+// Define the StubDeleter implementation
+void RL4SysAgent::StubDeleter::operator()(void* ptr) {
+    delete static_cast<rl4sys::RLService::Stub*>(ptr);
 }
 
-void RL4SysTrajectory::addObservation(const std::vector<double>& observation) {
-    observations.push_back(observation);
-}
-
-bool RL4SysTrajectory::isEmpty() const {
-    return observations.empty() && actions.empty();
-}
-
-void RL4SysTrajectory::clear() {
-    observations.clear();
-    actions.clear();
-}
-
-// Added: Accessors for observations and actions
-const std::vector<std::vector<double>>& RL4SysTrajectory::getObservations() const {
-    return observations;
-}
-
-const std::vector<RL4SysAction>& RL4SysTrajectory::getActions() const {
-    return actions;
+// Helper function to get the gRPC stub
+rl4sys::RLService::Stub* getStub(const std::unique_ptr<void, RL4SysAgent::StubDeleter>& stub_ptr) {
+    return static_cast<rl4sys::RLService::Stub*>(stub_ptr.get());
 }
 
 // --- RL4SysAgent Implementation ---
@@ -115,7 +32,11 @@ RL4SysAgent::RL4SysAgent(const std::string& configFilePath) {
     if (!stub) {
         throw std::runtime_error("Failed to create gRPC stub.");
     }
-     std::cout << "RL4SysAgent initialized. Connected to " << config.trainServerAddress << std::endl;
+    
+    // Initialize the algorithm on the server
+    initializeAlgorithm();
+    
+    std::cout << "RL4SysAgent initialized. Connected to " << config.trainServerAddress << std::endl;
 }
 
 RL4SysAgent::~RL4SysAgent() {
@@ -151,48 +72,115 @@ void RL4SysAgent::connect() {
         throw std::runtime_error("Failed to create gRPC channel to " + config.trainServerAddress);
     }
 
-    stub = rl4sys::RLService::NewStub(channel);
+    // Create the stub and store it as void* with custom deleter
+    auto grpc_stub = rl4sys::RLService::NewStub(channel);
+    stub = std::unique_ptr<void, RL4SysAgent::StubDeleter>(grpc_stub.release(), StubDeleter());
 
-    // Optionally, check connectivity immediately
-    // grpc::ClientContext context;
-    // std::chrono::system_clock::time_point deadline =
-    //     std::chrono::system_clock::now() + std::chrono::seconds(5); // 5-second timeout
-    // context.set_deadline(deadline);
-    // channel->GetState(true); // Try connecting
-    // grpc_connectivity_state state = channel->GetState(false);
-    // if (state != GRPC_CHANNEL_READY && state != GRPC_CHANNEL_IDLE) {
-    //     std::cerr << "Warning: gRPC channel not immediately ready. State: " << state << std::endl;
-    //     // Depending on policy, might want to throw or just warn
-    // }
+    std::cout << "gRPC channel created for address: " << config.trainServerAddress << std::endl;
+}
 
-     std::cout << "gRPC channel created for address: " << config.trainServerAddress << std::endl;
+void RL4SysAgent::initializeAlgorithm() {
+    rl4sys::InitRequest request;
+    rl4sys::InitResponse response;
+    grpc::ClientContext context;
 
+    // Set client ID and algorithm name from config
+    request.set_client_id(config.clientId);
+    request.set_algorithm_name("PPO"); // Default to PPO, could be made configurable
+
+    // Add algorithm parameters from config
+    // For now, add some basic parameters - this could be expanded based on config
+    auto* params = request.mutable_algorithm_parameters();
+    
+    // Add batch_size parameter
+    rl4sys::ParameterValue batch_size;
+    batch_size.set_int_value(512);
+    (*params)["batch_size"] = batch_size;
+    
+    // Add act_dim parameter
+    rl4sys::ParameterValue act_dim;
+    act_dim.set_int_value(4);
+    (*params)["act_dim"] = act_dim;
+    
+    // Add input_size parameter
+    rl4sys::ParameterValue input_size;
+    input_size.set_int_value(8);
+    (*params)["input_size"] = input_size;
+    
+    // Add seed parameter
+    rl4sys::ParameterValue seed;
+    seed.set_int_value(0);
+    (*params)["seed"] = seed;
+
+    // Set a deadline
+    std::chrono::system_clock::time_point deadline =
+        std::chrono::system_clock::now() + std::chrono::seconds(10);
+    context.set_deadline(deadline);
+
+    // Call InitAlgorithm
+    std::cout << "Initializing algorithm on server..." << std::endl;
+    grpc::Status status = getStub(stub)->InitAlgorithm(&context, request, &response);
+
+    if (status.ok()) {
+        if (response.is_success()) {
+            std::cout << "Algorithm initialized successfully: " << response.message() << std::endl;
+        } else {
+            std::cerr << "Algorithm initialization failed: " << response.message() << std::endl;
+            throw std::runtime_error("Algorithm initialization failed: " + response.message());
+        }
+    } else {
+        std::cerr << "gRPC InitAlgorithm failed: (" << status.error_code() << ") "
+                  << status.error_message() << std::endl;
+        throw std::runtime_error("Failed to initialize algorithm: " + status.error_message());
+    }
 }
 
 // --- Conversion Helpers (Implementation) ---
 
 void RL4SysAgent::convertToProtoObservation(const std::vector<double>& obs, rl4sys::Observation* protoObs) {
+    // Note: Based on the proto file, there's no Observation message with features
+    // This method may need to be updated based on actual proto structure
     if (!protoObs) return;
-    protoObs->clear_features(); // Clear previous data
-    for (double feature : obs) {
-        protoObs->add_features(feature);
-    }
-    // Set other fields in protoObs if the protobuf definition has them (e.g., timestamp)
+    // Implementation depends on actual proto structure
 }
 
 void RL4SysAgent::convertToProtoTrajectory(const RL4SysTrajectory& traj, rl4sys::Trajectory* protoTraj) {
     if (!protoTraj) return;
     protoTraj->clear_actions(); // Clear previous data
 
-    // Convert actions to proto format
-    for (const auto& rlAction : traj.actions) {
+    // Convert actions to proto format using the public accessor
+    for (const auto& rlAction : traj.getActions()) {
         rl4sys::Action* protoAction = protoTraj->add_actions();
-        // Set action fields based on the actual proto definition
-        // This is a simplified example - adjust based on your proto structure
-        if (rlAction.is_reward_set()) {
-            // Set reward if available
+        
+        // Serialize observation as bytes
+        if (!rlAction.getObservation().empty()) {
+            std::vector<float> obs_float(rlAction.getObservation().begin(), rlAction.getObservation().end());
+            auto obs_bytes = serialize_tensor(obs_float);
+            protoAction->set_obs(obs_bytes.data(), obs_bytes.size());
         }
+        
+        // Serialize action value as bytes
+        std::vector<float> action_vec = {static_cast<float>(rlAction.getActionValue())};
+        auto action_bytes = serialize_tensor(action_vec);
+        protoAction->set_action(action_bytes.data(), action_bytes.size());
+        
+        // Serialize reward as bytes if available
+        if (rlAction.is_reward_set()) {
+            std::vector<float> reward_vec = {static_cast<float>(rlAction.getReward().value())};
+            auto reward_bytes = serialize_tensor(reward_vec);
+            protoAction->set_reward(reward_bytes.data(), reward_bytes.size());
+        }
+        
+        // Set done flag
         protoAction->set_done(rlAction.is_done());
+        
+        // Set extra data if any
+        auto data = rlAction.getData();
+        for (const auto& [key, value] : data) {
+            std::vector<float> value_vec = {static_cast<float>(std::stof(value))};
+            auto value_bytes = serialize_tensor(value_vec);
+            (*protoAction->mutable_extra_data())[key] = std::string(value_bytes.begin(), value_bytes.end());
+        }
     }
 
     // Set trajectory version
@@ -203,10 +191,9 @@ RL4SysAction RL4SysAgent::convertFromProtoAction(const rl4sys::Action& protoActi
     RL4SysAction rlAction;
     // Convert from proto action to internal action
     // This needs to be implemented based on actual proto structure
-    rlAction.set_done(protoAction.done());
+    // The proto Action uses bytes for serialized tensors, not simple fields
     return rlAction;
 }
-
 
 // --- Core Agent Logic ---
 
@@ -227,11 +214,9 @@ std::optional<std::pair<RL4SysTrajectory, RL4SysAction>> RL4SysAgent::requestFor
     return std::make_pair(currentTrajectoryOpt.value(), mockAction);
 }
 
-
 void RL4SysAgent::addToTrajectory(RL4SysTrajectory& trajectory, const RL4SysAction& action) {
     trajectory.addAction(action);
 }
-
 
 bool RL4SysAgent::markEndOfTrajectory(RL4SysTrajectory& trajectory, RL4SysAction& lastAction) {
     trajectory.addAction(lastAction);
@@ -254,7 +239,7 @@ bool RL4SysAgent::markEndOfTrajectory(RL4SysTrajectory& trajectory, RL4SysAction
 
     // Send the trajectory using the actual RPC method from proto
     std::cout << "Sending completed trajectory to server..." << std::endl;
-    grpc::Status status = stub->SendTrajectories(&context, request, &response);
+    grpc::Status status = getStub(stub)->SendTrajectories(&context, request, &response);
 
     if (status.ok()) {
         std::cout << "Trajectory sent successfully." << std::endl;
@@ -266,7 +251,6 @@ bool RL4SysAgent::markEndOfTrajectory(RL4SysTrajectory& trajectory, RL4SysAction
         return false;
     }
 }
-
 
 } // namespace cppclient
 } // namespace rl4sys

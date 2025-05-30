@@ -61,6 +61,7 @@ add_custom_command(
 add_executable(test_cpp_client 
     test.cpp
     ../../cppclient/src/rl4sys_agent.cpp
+    ../../cppclient/src/rl4sys_types.cpp
     ../../cppclient/src/config_loader.cpp
     ../../cppclient/src/util.cpp
     ${PROTO_SRCS}
@@ -74,11 +75,15 @@ target_include_directories(test_cpp_client PRIVATE
 
 target_link_libraries(test_cpp_client PRIVATE
     ${TORCH_LIBRARIES}
-    protobuf::libprotobuf
     gRPC::grpc++
     gRPC::grpc
     spdlog::spdlog
 )
+
+# Use pkg-config for protobuf to handle all dependencies
+pkg_check_modules(PROTOBUF REQUIRED protobuf)
+target_link_libraries(test_cpp_client PRIVATE ${PROTOBUF_LIBRARIES})
+target_include_directories(test_cpp_client PRIVATE ${PROTOBUF_INCLUDE_DIRS})
 
 # Link nlohmann/json
 if(nlohmann_json_FOUND)

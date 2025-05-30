@@ -7,6 +7,7 @@
 #include <random>
 #include <chrono>
 #include <string>
+#include <iomanip>
 
 // Simple stub environment mimicking observation/action/reward loop
 class SimpleEnv {
@@ -55,10 +56,12 @@ private:
 };
 
 int main(int argc, char** argv) {
+    auto script_start_time = std::chrono::steady_clock::now();
+    
     // Default parameters
     int seed = 1;
-    int num_iterations = 10;
-    int max_moves = 200;
+    int num_iterations = 100;
+    int max_moves = 500;
     std::string config_path = "./test_conf.json";
 
     // Very simple argument parsing
@@ -109,6 +112,7 @@ int main(int argc, char** argv) {
                 auto resp_opt = agent.requestForAction(traj, obs);
                 if (!resp_opt.has_value()) {
                     // Fallback to random action if server unavailable
+                    std::cout << "RequestForAction failed. Falling back to random action." << std::endl;
                     if (!traj.has_value()) traj.emplace();
                     int random_act = action_dist(rng);
                     rl4sys::cppclient::RL4SysAction fallback_action;
@@ -142,9 +146,14 @@ int main(int argc, char** argv) {
                 cumulative_reward += step_res.reward;
                 done = step_res.done;
                 ++moves;
+
+                if (done) {
+                    agent.markEndOfTrajectory(*traj, rewarded_action);
+                    break;
+                }
             }
 
-            if (traj.has_value()) {
+            if (traj.has_value() && !done) {
                 // Create a dummy last action to satisfy interface if needed
                 // (trajectory already has last action with reward, but we pass same ref)
                 rl4sys::cppclient::RL4SysAction dummy_last_action;
@@ -154,15 +163,23 @@ int main(int argc, char** argv) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - start_time).count();
 
+            std::cout << std::fixed << std::setprecision(3);
             std::cout << "Iteration completed. Moves: " << moves
                       << ", Cumulative reward: " << cumulative_reward
-                      << ", Time(ms): " << elapsed << std::endl;
+                      << ", Time(s): " << (elapsed / 1000.0) << std::endl;
         }
 
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Simulation failed: " << e.what() << std::endl;
         return 1;
     }
+
+    auto script_end_time = std::chrono::steady_clock::now();
+    auto total_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        script_end_time - script_start_time).count();
+    
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "Script completed. Time(s): " << (total_elapsed / 1000.0) << " seconds" << std::endl;
 
     return 0;
 }

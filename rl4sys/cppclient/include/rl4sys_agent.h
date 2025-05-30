@@ -45,7 +45,6 @@ struct AgentConfig {
     // e.g., algorithm details if needed by the client directly
 };
 
-
 /**
  * @brief The main client agent for interacting with the RL4Sys server.
  *
@@ -55,6 +54,11 @@ struct AgentConfig {
  */
 class RL4SysAgent {
 public:
+    // Use a custom deleter class to avoid incomplete type issues
+    struct StubDeleter {
+        void operator()(void* ptr);
+    };
+
     /**
      * @brief Constructs an RL4SysAgent.
      * @param configFilePath Path to the JSON configuration file.
@@ -129,6 +133,11 @@ private:
     void connect();
 
     /**
+     * @brief Initializes the algorithm on the server.
+     */
+    void initializeAlgorithm();
+
+    /**
      * @brief Helper to convert internal observation type to protobuf Observation.
      * @param obs Internal observation data.
      * @param protoObs Pointer to the protobuf message to fill.
@@ -152,8 +161,8 @@ private:
 
     AgentConfig config;
     std::shared_ptr<grpc::Channel> channel;
-    std::unique_ptr<rl4sys::RLService::Stub> stub; // gRPC client stub (fixed service name)
-
+    std::unique_ptr<void, StubDeleter> stub;
+    
     // State related to the current trajectory being built, if needed client-side
     // std::optional<RL4SysTrajectory> ongoingTrajectory;
 };

@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iomanip>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace rl4sys {
 namespace cppclient {
@@ -71,7 +72,9 @@ rl4sys::Action serialize_action(const RL4SysAction& action) {
     
     // Serialize observation
     if (!action.getObservation().empty()) {
-        auto obs_bytes = serialize_tensor(action.getObservation());
+        // Convert double vector to float vector
+        std::vector<float> obs_float(action.getObservation().begin(), action.getObservation().end());
+        auto obs_bytes = serialize_tensor(obs_float);
         action_proto.set_obs(obs_bytes.data(), obs_bytes.size());
     }
     
@@ -91,7 +94,8 @@ rl4sys::Action serialize_action(const RL4SysAction& action) {
     // Serialize extra data
     auto data = action.getData();
     for (const auto& [key, value] : data) {
-        auto value_bytes = serialize_tensor({static_cast<float>(std::stof(value))});
+        std::vector<float> value_vec = {static_cast<float>(std::stof(value))};
+        auto value_bytes = serialize_tensor(value_vec);
         (*action_proto.mutable_extra_data())[key] = std::string(value_bytes.begin(), value_bytes.end());
     }
     
@@ -101,10 +105,12 @@ rl4sys::Action serialize_action(const RL4SysAction& action) {
 // Deserialize protobuf Action to RL4SysAction
 RL4SysAction deserialize_action(const rl4sys::Action& action_proto) {
     // Deserialize observation
-    std::vector<float> obs;
+    std::vector<double> obs;
     if (!action_proto.obs().empty()) {
         std::vector<uint8_t> obs_bytes(action_proto.obs().begin(), action_proto.obs().end());
-        obs = deserialize_tensor(obs_bytes);
+        auto obs_float = deserialize_tensor(obs_bytes);
+        // Convert float vector to double vector
+        obs.assign(obs_float.begin(), obs_float.end());
     }
     
     // Deserialize action
@@ -144,7 +150,10 @@ RL4SysAction deserialize_action(const rl4sys::Action& action_proto) {
 StructuredLogger::StructuredLogger(const std::string& name, bool debug) 
     : logger_name_(name), debug_mode_(debug) {
     // Initialize spdlog logger
-    logger_ = spdlog::stdout_color_mt(name);
+    logger_ = spdlog::get(name);
+    if (!logger_) {
+        logger_ = spdlog::stdout_color_mt(name);
+    }
     logger_->set_level(debug ? spdlog::level::debug : spdlog::level::info);
 }
 
