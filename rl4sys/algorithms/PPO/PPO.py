@@ -130,13 +130,13 @@ class PPO():
             self.traj += 1
             self.global_step += 1
             self.ep_rewards += r4a.rew
-            
+            obs_value = self._model_train.get_value(torch.from_numpy(r4a.obs))
             # Store transition
             self.storage_obs.append(r4a.obs)
             self.storage_act.append(r4a.act)
             self.storage_logp.append(r4a.data['logp_a'])
             self.storage_rew.append(r4a.rew)
-            self.storage_val.append(r4a.data['v'])
+            self.storage_val.append(obs_value)
             self.storage_done.append(r4a.done)
             
             # Store next observation for bootstrapping
@@ -150,7 +150,7 @@ class PPO():
                 else:
                     self.storage_next_obs.append(np.zeros_like(r4a.obs))
             
-            self.writer.add_scalar('charts/VVals', r4a.data['v'], self.global_step)
+            self.writer.add_scalar('charts/VVals', obs_value, self.global_step)
 
             if r4a.done:
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
