@@ -5,6 +5,21 @@ Baseline：无 RLlib，手工采样 + 推理 + env.step() 计时
 import time, gymnasium as gym, torch, torch.nn as nn
 from torch.distributions.categorical import Categorical
 
+
+class TimedEnv(gym.Env):
+    def __init__(self, _): self.env = gym.make("LunarLander-v3")
+    def reset(self, **k):   return self.env.reset(**k)
+    def step(self, a):
+        t0 = time.perf_counter()
+        o, r, d, t, info = self.env.step(a)
+        info["step_time"] = time.perf_counter() - t0
+        return o, r, d, t, info
+    @property
+    def observation_space(self): return self.env.observation_space
+    @property
+    def action_space(self):      return self.env.action_space
+
+
 # ---------- 1. 简单策略网络（与 RLlib 默认 TorchPolicy 配置一致） ----------
 class SimplePolicy(nn.Module):
     def __init__(self, obs_dim: int, act_dim: int, hidden: int = 64):
@@ -24,7 +39,7 @@ class SimplePolicy(nn.Module):
 
 # ---------- 2. Baseline 计时循环 ----------
 def run_baseline(num_steps: int = 4000):
-    env = gym.make("LunarLander-v3")
+    env = TimedEnv(None)
     policy = SimplePolicy(env.observation_space.shape[0],
                           env.action_space.n)
 
@@ -40,9 +55,9 @@ def run_baseline(num_steps: int = 4000):
         infer_time += time.perf_counter() - t0
 
         # 2-2 环境步进
-        t0 = time.perf_counter()
-        obs, _, done, trunc, _ = env.step(action)
-        env_time += time.perf_counter() - t0
+        #t0 = time.perf_counter()
+        obs, _, done, trunc, info = env.step(action)
+        env_time += info["step_time"]
 
         if done or trunc:
             obs, _ = env.reset()

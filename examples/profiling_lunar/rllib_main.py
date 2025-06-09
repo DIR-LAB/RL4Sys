@@ -18,9 +18,11 @@ class TimedEnv(gym.Env):
     def action_space(self):      return self.env.action_space
 
 # ② 新版字段→overhead
+
 class OverheadCB(DefaultCallbacks):
     def on_train_result(self, *, result, **kw):
         data = result.get("env_runners", {})
+        #print(data)
         if not data:   # 首轮热身或字段缺失
             return
         per_step_ms = (data["sample"] / data["num_env_steps_sampled"]) * 1000
@@ -44,6 +46,7 @@ cfg = (
     .callbacks(OverheadCB)
 )
 
+
 ray.init(local_mode=False)
 algo = cfg.build()
 
@@ -54,6 +57,7 @@ for i in range(5):
     per_step_ms = (data["sample"] / data["num_env_steps_sampled"]) * 1000
     env_ms      = data["env_step_timer"]           * 1000
     infer_ms    = data["rlmodule_inference_timer"] * 1000
+
     over_ms     = r["custom_metrics"]["overhead_ms_per_step"]
     print({
         "iter": i,

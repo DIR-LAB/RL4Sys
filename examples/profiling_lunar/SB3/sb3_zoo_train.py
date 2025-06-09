@@ -12,15 +12,6 @@ import numpy as np
 from typing import Dict, Any, Optional, Callable
 import gymnasium as gym
 
-# Import RL Zoo components
-try:
-    from rl_zoo3.train import train
-    from rl_zoo3 import ALGOS
-    from rl_zoo3.utils import get_saved_hyperparams, create_test_env
-    from rl_zoo3.exp_manager import ExperimentManager
-except ImportError:
-    print("RL Baselines3 Zoo not installed. Install with: pip install rl_zoo3")
-    sys.exit(1)
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback

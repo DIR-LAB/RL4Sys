@@ -30,9 +30,9 @@ class StepTimer(gym.Wrapper):
         return obs, rew, term, trunc, info
 
     def reset(self, **kw):
-        t0 = time.perf_counter_ns()
+        #t0 = time.perf_counter_ns()
         obs, info = self.env.reset(**kw)
-        self.env_time_ns += time.perf_counter_ns() - t0
+        #self.env_time_ns += time.perf_counter_ns() - t0
         return obs, info
 
 
