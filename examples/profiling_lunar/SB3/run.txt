@@ -1,0 +1,17 @@
+# Install dependencies
+pip install -r requirements.txt
+
+# Test environment timing wrapper
+python test_env_timing.py
+
+# Run SB3 Zoo profiling (main implementation)
+python stable_baseline_main.py
+
+# Run simplified SB3 Zoo profiling (recommended - more stable)
+python sb3_zoo_simple.py
+
+# Run SB3 Zoo training with direct zoo framework (may have API issues)
+python sb3_zoo_train.py
+
+# Alternative: Use RL Zoo command line (original approach)
+python -m rl_zoo3.train --algo ppo --env LunarLander-v3 --policy MlpPolicy --hyperparams policy_kwargs:"dict(net_arch=[64, 64])" -n 4000 --seed 0
