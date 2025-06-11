@@ -219,8 +219,24 @@ class LunarLanderSim():
             avg_time_to_death=np.mean(self.simulator_stats['time_to_death']) if self.simulator_stats['time_to_death'] else 0,
             avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0
         )
+        
+        avg_step_per_second = 0
+        avg_env_ms = 0
+        avg_infer_ms = 0
+        avg_over_ms = 0
         for i in range(len(profiling)):
             print(f"iteration {i}: {profiling[i]}")
+            avg_step_per_second += profiling[i]["steps/s"]
+            avg_env_ms += profiling[i]["env_ms"]
+            avg_infer_ms += profiling[i]["infer_ms"]
+            avg_over_ms += profiling[i]["over_ms"]
+
+        print(f"avg_step_per_second: {round(avg_step_per_second/len(profiling), 1)}")
+        print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
+        print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
+        print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
+
+        
 
     def build_observation(self, obs):
         """

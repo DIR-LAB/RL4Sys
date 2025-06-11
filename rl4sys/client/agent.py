@@ -344,14 +344,14 @@ class RL4SysAgent:
                 # Need to update model and version together under lock
                 with self._lock:
                     old_version = self.local_version
-                    self.logger.info(
-                        "Model updated",
+                self.logger.info(
+                    "Model updated",
                         old_version=old_version,
-                        new_version=response.new_version
-                    )
+                    new_version=response.new_version
+                )
                     # Get new model (this also updates self._model internally)
                     self._model, _ = self._get_model_unsafe(response.new_version)
-                    self.local_version = response.new_version
+                self.local_version = response.new_version
                 return response.new_version
             else:
                 self.logger.debug("No model update needed")

@@ -76,5 +76,5 @@ def run_baseline(num_steps: int = 4000):
     })
 
 if __name__ == "__main__":
-    for i in range(5):
+    for i in range(20):
         run_baseline()
