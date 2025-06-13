@@ -1,131 +1,82 @@
-#!/usr/bin/env python
-
-# TODO (sven): Move this example script into the new API stack.
-
-"""
-Example of running an external simulator (a simple CartPole env
-in this case) against an RLlib policy server listening on one or more
-HTTP-speaking port(s). See `cartpole_server.py` in this same directory for
-how to start this server.
-
-This script will only create one single env altogether to illustrate
-that RLlib can run w/o needing an internalized environment.
-
-Setup:
-1) Start the policy server:
-    See `cartpole_server.py` on how to do this.
-2) Run this client:
-    $ python cartpole_client.py --inference-mode=local|remote --[other options]
-      Use --help for help.
-
-In "local" inference-mode, the action computations are performed
-inside the PolicyClient used in this script w/o sending an HTTP request
-to the server. This reduces network communication overhead, but requires
-the PolicyClient to create its own RolloutWorker (+Policy) based on
-the server's config. The PolicyClient will retrieve this config automatically.
-You do not need to define the RLlib config dict here!
-
-In "remote" inference mode, the PolicyClient will send action requests to the
-server and not compute its own actions locally. The server then performs the
-inference forward pass and returns the action to the client.
-
-In either case, the user of PolicyClient must:
-- Declare new episodes and finished episodes to the PolicyClient.
-- Log rewards to the PolicyClient.
-- Call `get_action` to receive an action from the PolicyClient (whether it'd be
-  computed locally or remotely).
-- Besides `get_action`, the user may let the PolicyClient know about
-  off-policy actions having been taken via `log_action`. This can be used in
-  combination with `get_action`, but will only work, if the connected server
-  runs an off-policy RL algorithm (such as DQN, SAC, or DDPG).
-"""
-
-import argparse
+import time
+from typing import Dict, Union
+from ray.rllib.env.policy_client import PolicyClient
+from ray.rllib.examples.envs.classes.multi_agent import make_multi_agent
 import gymnasium as gym
 
-from ray.rllib.env.policy_client import PolicyClient
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--no-train", action="store_true", help="Whether to disable training."
-)
-parser.add_argument(
-    "--inference-mode", type=str, default="local", choices=["local", "remote"]
-)
-parser.add_argument(
-    "--off-policy",
-    action="store_true",
-    help="Whether to compute random actions instead of on-policy "
-    "(Policy-computed) ones.",
-)
-parser.add_argument(
-    "--stop-reward",
-    type=float,
-    default=9999,
-    help="Stop once the specified reward is reached.",
-)
-parser.add_argument(
-    "--port", type=int, default=9900, help="The port to use (on localhost)."
-)
+def run_rllib_client(num_steps: int = 4000) -> None:
+    """
+    Run RLlib client with profiling to measure performance metrics.
+    
+    Args:
+        num_steps: Number of environment steps to run for profiling
+    """
+    env = gym.make("LunarLander-v3")
+    #client = PolicyClient("http://127.0.0.1:1337", inference_mode="remote")
+    client = PolicyClient("http://127.0.0.1:1337", inference_mode="local")
+    
+    # Initialize timing variables
+    env_time = 0.0
+    infer_time = 0.0
+    log_time = 0.0
+    step_count = 0
+    t0_total = time.perf_counter()
+    
+    obs, info = env.reset(seed=0)
+    eid = client.start_episode()
+    
+    terminated, truncated = False, False
+    
+    while step_count < num_steps:
+        if terminated or truncated:
+            obs, info = env.reset()
+            eid = client.start_episode()
+            terminated, truncated = False, False
+        
+        # Time inference (getting action from RLlib server)
+        t0 = time.perf_counter()
+        action = client.get_action(eid, obs)    # client poll model every 10 seconds: https://github.com/ray-project/ray/blob/master/rllib/env/policy_client.py#L276
+        infer_time += time.perf_counter() - t0  # episode_id to sync training: https://github.com/ray-project/ray/blob/master/rllib/evaluation/collectors/simple_list_collector.py?utm_source=chatgpt.com line 419
+        # weight transfer: https://ray-project.github.io/q4-2021-docs-hackathon/0.4/ray-api-references/ray-rllib/evaluation/#ray.rllib.evaluation.rollout_worker.RolloutWorker.get_weights
+        # search: list(self.policy_map.keys()) in above link
+        # weight transfer policy layer: https://github.com/ray-project/ray/blob/master/rllib/policy/torch_policy.py line 713 (V1 version, not V2)
+        # We confirm weight transfer is: {k: v.cpu().detach().numpy() for k, v in self.model.state_dict().items()}
+        
+        # Time environment step
+        t0 = time.perf_counter()
+        obs, reward, terminated, truncated, info = env.step(action)
+        env_time += time.perf_counter() - t0
+        
+        t0 = time.perf_counter()
+        client.log_returns(eid, reward, info=info)
+        log_time += time.perf_counter() - t0
+        
+        step_count += 1
+    
+    # Calculate and print performance metrics
+    total_time = time.perf_counter() - t0_total
+    per_step_ms = total_time * 1000 / num_steps
+    env_ms = env_time * 1000 / num_steps
+    infer_ms = infer_time * 1000 / num_steps
+    log_ms = log_time * 1000 / num_steps
+    over_ms = per_step_ms - env_ms - infer_ms - log_ms
+    
+    metrics = {
+        "steps/s": round(1000 / per_step_ms, 1),
+        "env_ms": round(env_ms, 3),
+        "infer_ms": round(infer_ms, 3),
+        "log_ms": round(log_time, 3),
+        "over_ms": round(over_ms, 3),
+    }
+
+    return metrics
+
 
 if __name__ == "__main__":
-    args = parser.parse_args()
+    metric_lst = []
+    for i in range(5):
+        metric_lst.append(run_rllib_client())
 
-    # The following line is the only instance, where an actual env will
-    # be created in this entire example (including the server side!).
-    # This is to demonstrate that RLlib does not require you to create
-    # unnecessary env objects within the PolicyClient/Server objects, but
-    # that only this following env and the loop below runs the entire
-    # training process.
-    env = gym.make("CartPole-v1")
-
-    # If server has n workers, all ports between 9900 and 990[n-1] should
-    # be listened on. E.g. if server has num_env_runners=2, try 9900 or 9901.
-    # Note that no config is needed in this script as it will be defined
-    # on and sent from the server.
-    client = PolicyClient(
-        f"http://localhost:{args.port}", inference_mode=args.inference_mode
-    )
-
-    # In the following, we will use our external environment (the CartPole
-    # env we created above) in connection with the PolicyClient to query
-    # actions (from the server if "remote"; if "local" we'll compute them
-    # on this client side), and send back observations and rewards.
-
-    # Start a new episode.
-    obs, info = env.reset()
-    eid = client.start_episode(training_enabled=not args.no_train)
-
-    rewards = 0.0
-    while True:
-        # Compute an action randomly (off-policy) and log it.
-        if args.off_policy:
-            action = env.action_space.sample()
-            client.log_action(eid, obs, action)
-        # Compute an action locally or remotely (on server).
-        # No need to log it here as the action
-        else:
-            action = client.get_action(eid, obs)
-
-        # Perform a step in the external simulator (env).
-        obs, reward, terminated, truncated, info = env.step(action)
-        rewards += reward
-
-        # Log next-obs, rewards, and infos.
-        client.log_returns(eid, reward, info=info)
-
-        # Reset the episode if done.
-        if terminated or truncated:
-            print("Total reward:", rewards)
-            if rewards >= args.stop_reward:
-                print("Target reward achieved, exiting")
-                exit(0)
-
-            rewards = 0.0
-
-            # End the old episode.
-            client.end_episode(eid, obs)
-
-            # Start a new episode.
-            obs, info = env.reset()
-            eid = client.start_episode(training_enabled=not args.no_train)
+    for metric in metric_lst:
+        print(metric)

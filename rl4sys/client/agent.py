@@ -349,8 +349,9 @@ class RL4SysAgent:
                         old_version=old_version,
                     new_version=response.new_version
                 )
-                    # Get new model (this also updates self._model internally)
-                    self._model, _ = self._get_model_unsafe(response.new_version)
+                # Get new model (this also updates self._model internally)
+                self._model, _ = self._get_model_unsafe(response.new_version)
+                # update local version
                 self.local_version = response.new_version
                 return response.new_version
             else:

@@ -1,278 +1,130 @@
-#!/usr/bin/env python
+"""Example of running against a TCP-connected external env performing its own inference.
 
-# TODO (sven): Move this example script into the new API stack.
+The example uses a custom EnvRunner (TcpClientInferenceEnvRunner) to allow
+connections from one or more TCP clients to RLlib's EnvRunner actors, which act as
+RL servers.
+In this example, action inference for stepping the env is performed on the client's
+side, meaning the client computes all actions itself, applies them to the env logic,
+collects episodes of experiences, and sends these (in bulk) back to RLlib for training.
+Also, from time to time, the updated model weights have to be sent from RLlib (server)
+back to the connected clients.
+Note that RLlib's new API stack does not yet support individual action requests, where
+action computations happen on the RLlib (server) side.
 
+This example:
+    - demonstrates how RLlib can be hooked up to an externally running complex simulator
+    through TCP connections.
+    - shows how a custom EnvRunner subclass can be configured allowing users to
+    implement their own logic of connecting to external processes and customize the
+    messaging protocols.
+
+
+How to run this script
+----------------------
+`python [script file name].py --enable-new-api-stack --port 5555
+
+Use the `--port` option to change the default port (5555) to some other value.
+Make sure that you do the same on the client side.
+
+For debugging, use the following additional command line options
+`--no-tune --num-env-runners=0`
+which should allow you to set breakpoints anywhere in the RLlib code and
+have the execution stop there for inspection and debugging.
+
+For logging to your WandB account, use:
+`--wandb-key=[your WandB API key] --wandb-project=[some project name]
+--wandb-run-name=[optional: WandB run name (within the defined project)]`
+
+
+Results to expect
+-----------------
+You should see something like this on your terminal. Note that the dummy CartPole
+client (which runs in a thread for the purpose of this example here) might throw
+a disconnection error at the end, b/c RLlib closes the server socket when done training.
+
++----------------------+------------+--------+------------------+
+| Trial name           | status     |   iter |   total time (s) |
+|                      |            |        |                  |
+|----------------------+------------+--------+------------------+
+| PPO_None_3358e_00000 | TERMINATED |     40 |          32.2649 |
++----------------------+------------+--------+------------------+
++------------------------+------------------------+
+|  episode_return_mean  |   num_env_steps_sample |
+|                       |             d_lifetime |
+|-----------------------+------------------------|
+|                458.68 |                 160000 |
++-----------------------+------------------------+
+
+From the dummy client (thread), you should see at the end:
+```
+ConnectionError: Error receiving message from peer on socket ...
+```
 """
-Example of running an RLlib policy server, allowing connections from
-external environment running clients. The server listens on
-(a simple CartPole env
-in this case) against an RLlib policy server listening on one or more
-HTTP-speaking ports. See `cartpole_client.py` in this same directory for how
-to start any number of clients (after this server has been started).
+from functools import partial
+import threading
 
-This script will not create any actual env to illustrate that RLlib can
-run w/o needing an internalized environment.
-
-Setup:
-1) Start this server:
-    $ python cartpole_server.py --num-workers --[other options]
-      Use --help for help.
-2) Run n policy clients:
-    See `cartpole_client.py` on how to do this.
-
-The `num-workers` setting will allow you to distribute the incoming feed over n
-listen sockets (in this example, between 9900 and 990n with n=worker_idx-1).
-You may connect more than one policy client to any open listen port.
-"""
-
-import argparse
 import gymnasium as gym
-import os
+import numpy as np
 
-import ray
-from ray import tune
-from ray.rllib.env.policy_server_input import PolicyServerInput
-from ray.rllib.utils.metrics import (
-    ENV_RUNNER_RESULTS,
-    EPISODE_RETURN_MEAN,
-    NUM_ENV_STEPS_SAMPLED_LIFETIME,
+from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
+from ray.rllib.env.tcp_client_inference_env_runner import (
+    _dummy_client,
+    TcpClientInferenceEnvRunner,
 )
-from ray.tune.logger import pretty_print
+from ray.rllib.utils.test_utils import (
+    add_rllib_example_script_args,
+    run_rllib_example_script_experiment,
+)
 from ray.tune.registry import get_trainable_cls
-from ray.tune.result import TRAINING_ITERATION
 
-SERVER_ADDRESS = "localhost"
-# In this example, the user can run the policy server with
-# n workers, opening up listen ports 9900 - 990n (n = num_env_runners - 1)
-# to each of which different clients may connect.
-SERVER_BASE_PORT = 9900  # + worker-idx - 1
-
-CHECKPOINT_FILE = "last_checkpoint_{}.out"
-
-
-def get_cli_args():
-    """Create CLI parser and return parsed arguments"""
-    parser = argparse.ArgumentParser()
-
-    # Example-specific args.
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=SERVER_BASE_PORT,
-        help="The base-port to use (on localhost). " f"Default is {SERVER_BASE_PORT}.",
-    )
-    parser.add_argument(
-        "--callbacks-verbose",
-        action="store_true",
-        help="Activates info-messages for different events on "
-        "server/client (episode steps, postprocessing, etc..).",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=2,
-        help="The number of workers to use. Each worker will create "
-        "its own listening socket for incoming experiences.",
-    )
-    parser.add_argument(
-        "--no-restore",
-        action="store_true",
-        help="Do not restore from a previously saved checkpoint (location of "
-        "which is saved in `last_checkpoint_[algo-name].out`).",
-    )
-
-    # General args.
-    parser.add_argument(
-        "--run",
-        default="PPO",
-        choices=["APEX", "DQN", "IMPALA", "PPO", "R2D2"],
-        help="The RLlib-registered algorithm to use.",
-    )
-    parser.add_argument("--num-cpus", type=int, default=3)
-    parser.add_argument(
-        "--framework",
-        choices=["tf", "tf2", "torch"],
-        default="torch",
-        help="The DL framework specifier.",
-    )
-    parser.add_argument(
-        "--use-lstm",
-        action="store_true",
-        help="Whether to auto-wrap the model with an LSTM. Only valid option for "
-        "--run=[IMPALA|PPO|R2D2]",
-    )
-    parser.add_argument(
-        "--stop-iters", type=int, default=200, help="Number of iterations to train."
-    )
-    parser.add_argument(
-        "--stop-timesteps",
-        type=int,
-        default=500000,
-        help="Number of timesteps to train.",
-    )
-    parser.add_argument(
-        "--stop-reward",
-        type=float,
-        default=80.0,
-        help="Reward at which we stop training.",
-    )
-    parser.add_argument(
-        "--as-test",
-        action="store_true",
-        help="Whether this script should be run as a test: --stop-reward must "
-        "be achieved within --stop-timesteps AND --stop-iters.",
-    )
-    parser.add_argument(
-        "--no-tune",
-        action="store_true",
-        help="Run without Tune using a manual train loop instead. Here,"
-        "there is no TensorBoard support.",
-    )
-    parser.add_argument(
-        "--local-mode",
-        action="store_true",
-        help="Init Ray in local mode for easier debugging.",
-    )
-
-    args = parser.parse_args()
-    print(f"Running with following CLI args: {args}")
-    return args
+parser = add_rllib_example_script_args(
+    default_reward=450.0, default_iters=200, default_timesteps=2000000
+)
+parser.set_defaults(
+    enable_new_api_stack=True,
+    num_env_runners=1,
+)
+parser.add_argument(
+    "--port",
+    type=int,
+    default=5555,
+    help="The port for RLlib's EnvRunner to listen to for incoming UE5 connections. "
+    "You need to specify the same port inside your UE5 `RLlibClient` plugin.",
+)
 
 
 if __name__ == "__main__":
-    args = get_cli_args()
-    ray.init()
+    args = parser.parse_args()
 
-    # `InputReader` generator (returns None if no input reader is needed on
-    # the respective worker).
-    def _input(ioctx):
-        # We are remote worker or we are local worker with num_env_runners=0:
-        # Create a PolicyServerInput.
-        if ioctx.worker_index > 0 or ioctx.worker.num_workers == 0:
-            return PolicyServerInput(
-                ioctx,
-                SERVER_ADDRESS,
-                args.port + ioctx.worker_index - (1 if ioctx.worker_index > 0 else 0),
-            )
-        # No InputReader (PolicyServerInput) needed.
-        else:
-            return None
-
-    # Algorithm config. Note that this config is sent to the client only in case
-    # the client needs to create its own policy copy for local inference.
-    config = (
-        get_trainable_cls(args.run).get_default_config()
-        # Indicate that the Algorithm we setup here doesn't need an actual env.
-        # Allow spaces to be determined by user (see below).
-        .environment(
-            env=None,
-            # TODO: (sven) make these settings unnecessary and get the information
-            #  about the env spaces from the client.
-            observation_space=gym.spaces.Box(float("-inf"), float("inf"), (4,)),
-            action_space=gym.spaces.Discrete(2),
-        )
-        # DL framework to use.
-        .framework(args.framework)
-        # Use the `PolicyServerInput` to generate experiences.
-        .offline_data(input_=_input)
-        # Use n worker processes to listen on different ports.
-        .env_runners(
-            num_env_runners=args.num_workers,
-            # Connectors are not compatible with the external env.
-            enable_connectors=False,
-        )
-        # Disable OPE, since the rollouts are coming from online clients.
-        .evaluation(off_policy_estimation_methods={})
-        # Set to INFO so we'll see the server's actual address:port.
-        .debugging(log_level="INFO")
+    # Start the dummy CartPole client in a thread (and do its thing in parallel).
+    client_thread = threading.Thread(
+        target=partial(
+            _dummy_client,
+            port=args.port
+            + (args.num_env_runners if args.num_env_runners is not None else 1),
+        ),
     )
-    # Disable RLModules because they need connectors
+    client_thread.start()
 
-    # DQN.
-    if args.run == "DQN" or args.run == "APEX" or args.run == "R2D2":
-        # Example of using DQN (supports off-policy actions).
-        config.update_from_dict(
-            {
-                "num_steps_sampled_before_learning_starts": 100,
-                "min_sample_timesteps_per_iteration": 200,
-                "n_step": 3,
-                "rollout_fragment_length": 4,
-                "train_batch_size": 8,
-            }
+    # Define the RLlib (server) config.
+    base_config = (
+        get_trainable_cls(args.algo)
+        .get_default_config()
+        .environment(
+            observation_space=gym.spaces.Box(-1.0, 1.0, (4,), np.float32),
+            action_space=gym.spaces.Discrete(2),
+            # EnvRunners listen on `port` + their worker index.
+            env_config={"port": args.port},
         )
-        config.model.update(
-            {
-                "fcnet_hiddens": [64],
-                "fcnet_activation": "linear",
-            }
+        .env_runners(
+            # Point RLlib to the custom EnvRunner to be used here.
+            env_runner_cls=TcpClientInferenceEnvRunner,
         )
-        if args.run == "R2D2":
-            config.model["use_lstm"] = args.use_lstm
-
-    elif args.run == "IMPALA":
-        config.update_from_dict(
-            {
-                "num_gpus": 0,
-                "model": {"use_lstm": args.use_lstm},
-            }
+        .training(
+            num_epochs=10,
+            vf_loss_coeff=0.01,
         )
+        .rl_module(model_config=DefaultModelConfig(vf_share_layers=True))
+    )
 
-    # PPO.
-    else:
-        # Example of using PPO (does NOT support off-policy actions).
-        config.update_from_dict(
-            {
-                "rollout_fragment_length": 1000,
-                "train_batch_size": 4000,
-                "model": {"use_lstm": args.use_lstm},
-            }
-        )
-
-    checkpoint_path = CHECKPOINT_FILE.format(args.run)
-    # Attempt to restore from checkpoint, if possible.
-    if not args.no_restore and os.path.exists(checkpoint_path):
-        checkpoint_path = open(checkpoint_path).read()
-    else:
-        checkpoint_path = None
-
-    # Manual training loop (no Ray tune).
-    if args.no_tune:
-        algo = config.build()
-
-        if checkpoint_path:
-            print("Restoring from checkpoint path", checkpoint_path)
-            algo.restore(checkpoint_path)
-
-        # Serving and training loop.
-        ts = 0
-        for _ in range(args.stop_iters):
-            results = algo.train()
-            print(pretty_print(results))
-            checkpoint = algo.save().checkpoint
-            print("Last checkpoint", checkpoint)
-            with open(checkpoint_path, "w") as f:
-                f.write(checkpoint.path)
-            if (
-                results[ENV_RUNNER_RESULTS][EPISODE_RETURN_MEAN] >= args.stop_reward
-                or ts >= args.stop_timesteps
-            ):
-                break
-            ts += results[f"{NUM_ENV_STEPS_SAMPLED_LIFETIME}"]
-
-        algo.stop()
-
-    # Run with Tune for auto env and algo creation and TensorBoard.
-    else:
-        print("Ignoring restore even if previous checkpoint is provided...")
-
-        stop = {
-            TRAINING_ITERATION: args.stop_iters,
-            NUM_ENV_STEPS_SAMPLED_LIFETIME: args.stop_timesteps,
-            f"{ENV_RUNNER_RESULTS}/{EPISODE_RETURN_MEAN}": args.stop_reward,
-        }
-
-        tune.Tuner(
-            args.run,
-            param_space=config,
-            run_config=tune.RunConfig(stop=stop, verbose=2),
-        ).fit()
+    run_rllib_example_script_experiment(base_config, args)

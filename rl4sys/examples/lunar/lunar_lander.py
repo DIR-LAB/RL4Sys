@@ -40,7 +40,7 @@ class LunarLanderSim():
         self.logger = StructuredLogger("LunarLanderSim", debug=False)
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v3', continuous=False)
+        self.env = gym.make('LunarLander-v2', continuous=False)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
