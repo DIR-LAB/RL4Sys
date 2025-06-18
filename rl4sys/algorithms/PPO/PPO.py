@@ -15,7 +15,6 @@ from torch.utils.tensorboard import SummaryWriter
 # Local imports
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
 from rl4sys.common.trajectory import RL4SysTrajectory
-from rl4sys.utils.logger import EpochLogger, setup_logger_kwargs
 
 class PPO():
     """

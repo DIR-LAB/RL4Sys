@@ -2,22 +2,14 @@
 RL4Sys Utils Package
 
 This package contains utility functions and classes for configuration management,
-logging, plotting, and data serialization/deserialization.
+structured logging, plotting, and data serialization/deserialization.
 """
 
 # Configuration management
 from .conf_loader import ConfigLoader
 
-# Logging utilities
-from .logger import (
-    Logger,
-    EpochLogger,
-    setup_logger_kwargs,
-    colorize,
-    convert_json,
-    is_json_serializable,
-    statistics_scalar
-)
+# Structured logging utilities (for operational logging)
+from .util import StructuredLogger
 
 # Plotting utilities
 from .plot import (
@@ -43,14 +35,8 @@ __all__ = [
     # Configuration
     'ConfigLoader',
     
-    # Logging
-    'Logger',
-    'EpochLogger',
-    'setup_logger_kwargs',
-    'colorize',
-    'convert_json',
-    'is_json_serializable',
-    'statistics_scalar',
+    # Structured Logging
+    'StructuredLogger',
     
     # Plotting
     'plot_data',

@@ -14,6 +14,7 @@ import argparse
 
 # Add the parent directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "proto"))
 
 from rl4sys.server.server import MyRLServiceServicer
 from rl4sys.proto.rl4sys_pb2_grpc import add_RLServiceServicer_to_server

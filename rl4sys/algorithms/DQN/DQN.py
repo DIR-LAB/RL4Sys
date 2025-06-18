@@ -7,6 +7,7 @@ import numpy as np
 
 # Third-party imports
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
@@ -14,8 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Local imports
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.DQN.replay_buffer import ReplayBuffer
-from rl4sys.utils.logger import EpochLogger, setup_logger_kwargs
-from rl4sys.proto import Trajectory
+from rl4sys.common.trajectory import RL4SysTrajectory
 
 class DQN():
     """
@@ -105,6 +105,8 @@ class DQN():
         self.ep_rewards = 0
         self.start_time = None
         self.steps = 0
+        self.epoch = 0
+        self.global_step = 0
 
         # Set up logger
         log_data_dir = os.path.join('./logs/rl4sys-dqn-info', f"{int(time.time())}__{self.seed}")
@@ -115,7 +117,7 @@ class DQN():
         new_path = os.path.join(self.save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
         torch.save(self.q_network, new_path)
 
-    def receive_trajectory(self, trajectory: Trajectory) -> bool:
+    def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
         """
         Process a trajectory from the environment (similar to PPO's approach).
 
@@ -148,7 +150,6 @@ class DQN():
                 if self.global_step > self.learning_starts:
                     self.epoch += 1
                     loss_q, q_vals = self.train_model()
-                    #self.log_epoch()
                     update = True
 
                     self.writer.add_scalar("losses/td_loss", loss_q, self.global_step)
@@ -212,16 +213,4 @@ class DQN():
                 self.tau * param.data + (1.0 - self.tau) * target_param.data
             )
 
-    def log_epoch(self) -> None:
-        """
-        Similar to PPO's log_epoch(). Log interesting stats, then dump tabular.
-        """
-        elapsed = time.time() - self.start_time if self.start_time else 0
-        sps = int(self.global_step / elapsed) if elapsed > 0 else 0
 
-        self.logger.log_tabular('Epoch', self.epoch)
-        self.logger.log_tabular('EpRet', with_min_and_max=True)
-        self.logger.log_tabular('EpLen', with_min_and_max=True)
-        #self.logger.log_tabular('LossQ', average_only=True)
-        #self.logger.log_tabular('SPS', sps)
-        self.logger.dump_tabular()

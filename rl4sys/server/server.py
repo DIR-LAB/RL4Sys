@@ -277,6 +277,10 @@ class MyRLServiceServicer(RLServiceServicer):
                 continue
 
     def InitAlgorithm(self, request, context):
+        """Initialize an algorithm for a client with RPC compression."""
+        # Enable compression for this response
+        context.set_compression(grpc.Compression.Gzip)
+        
         client_id = request.client_id
         algorithm_name = request.algorithm_name
         algorithm_parameters = {}
@@ -320,6 +324,10 @@ class MyRLServiceServicer(RLServiceServicer):
         return InitResponse(is_success=True, message="Algorithm initialized successfully")
 
     def GetModel(self, request, context):
+        """Get model updates with RPC compression for large model states."""
+        # Enable compression for this response (especially important for model data)
+        context.set_compression(grpc.Compression.Gzip)
+        
         client_id = request.client_id
         client_version = request.client_version
         expected_version = request.expected_version
@@ -365,6 +373,10 @@ class MyRLServiceServicer(RLServiceServicer):
         return ModelResponse(version=version, is_diff=True, model_state=model_state)
 
     def SendTrajectories(self, request, context):
+        """Send trajectories with RPC compression for large trajectory data."""
+        # Enable compression for this response
+        context.set_compression(grpc.Compression.Gzip)
+        
         client_id = request.client_id
         
         # Get or create algorithm for this client
@@ -431,8 +443,18 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=50051, help='Server port')
     args = parser.parse_args()
     
-    # Create server
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # Configure server options with compression
+    options = [
+        ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
+        ('grpc.compression_level', 6),  # High compression level (0-9)
+        ('grpc.so_reuseport', 1),
+    ]
+    
+    # Create server with compression options
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=options
+    )
     servicer = MyRLServiceServicer(debug=args.debug, num_workers=8)
     
     # Missing variable pb2_grpc - fix import
@@ -444,9 +466,11 @@ if __name__ == '__main__':
     server.add_insecure_port(server_address)
     server.start()
     servicer.logger.info(
-        "Server started",
+        "Server started with gRPC compression enabled",
         port=args.port,
-        debug_mode=args.debug
+        debug_mode=args.debug,
+        compression_algorithm="Gzip",
+        compression_level=6
     )
     
     # Block until the server is terminated

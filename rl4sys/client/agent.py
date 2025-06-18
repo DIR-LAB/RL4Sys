@@ -59,7 +59,13 @@ class RL4SysAgent:
         # get server address
         self.server_address = self.agent_config_loader.get_train_server_address()
 
-        self.channel = grpc.insecure_channel(self.server_address)
+        # Configure channel options with compression
+        channel_options = [
+            ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
+            ('grpc.compression_level', 6),  # High compression level (0-9)
+        ]
+        
+        self.channel = grpc.insecure_channel(self.server_address, options=channel_options)
         self.stub = RLServiceStub(self.channel)
 
         # Initialize model and version tracking
@@ -106,7 +112,7 @@ class RL4SysAgent:
                                client_id: str, 
                                algorithm_name: str, 
                                algorithm_parameters: dict):
-        """Initialize the server-side algorithm."""
+        """Initialize the server-side algorithm with compression."""
 
         self.logger.info("Initializing server-side algorithm", 
                          client_id=client_id, 
@@ -134,7 +140,8 @@ class RL4SysAgent:
             algorithm_parameters=param_values
         )
 
-        response = self.stub.InitAlgorithm(request)
+        # Send request with compression
+        response = self.stub.InitAlgorithm(request, compression=grpc.Compression.Gzip)
         if not response.is_success:
             raise RuntimeError(f"Failed to initialize algorithm: {response.message}")
 
@@ -266,7 +273,7 @@ class RL4SysAgent:
 
     def _send_trajectories(self, trajectories) -> int:
         """
-        Send given trajectories to the server. 
+        Send given trajectories to the server with compression.
         This function is called by the sending thread, so it will not block the main thread.
         Returns:
             int: 0 if model was not updated, otherwise the version of the model
@@ -328,8 +335,8 @@ class RL4SysAgent:
                 trajectories=trajectories_proto
             )
 
-            # Send to server
-            response = self.stub.SendTrajectories(request)
+            # Send to server with compression (especially important for large trajectory data)
+            response = self.stub.SendTrajectories(request, compression=grpc.Compression.Gzip)
             
             if response.model_updated:
                 self.logger.info(
@@ -353,11 +360,13 @@ class RL4SysAgent:
             return 0
 
     def _get_model(self, expected_version: int):
-        """Get the model from the server."""
+        """Get the model from the server with compression."""
         try:
             # Request the latest model
             request = GetModelRequest(client_id=self.client_id, client_version=self.local_version, expected_version=expected_version)
-            response = self.stub.GetModel(request)
+            
+            # Send request with compression (especially important for large model downloads)
+            response = self.stub.GetModel(request, compression=grpc.Compression.Gzip)
             
             # If we got an empty response, it means we already have the latest version
             if len(response.model_state) == 0:
@@ -417,9 +426,10 @@ class RL4SysAgent:
                 )
             
             self.logger.info(
-                "Successfully loaded model",
+                "Successfully loaded model with compression",
                 algorithm=self.algorithm_name,
-                version=response.version
+                version=response.version,
+                model_size=len(response.model_state)
             )
             return self._model, response.version
             
