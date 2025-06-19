@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.DQN.replay_buffer import ReplayBuffer
 from rl4sys.common.trajectory import RL4SysTrajectory
+from rl4sys.utils.util import StructuredLogger
 
 class DQN():
     """
@@ -108,7 +109,8 @@ class DQN():
         self.epoch = 0
         self.global_step = 0
 
-        # Set up logger
+        # Set up loggers
+        self.logger = StructuredLogger(f"DQN-{version}", debug=True)
         log_data_dir = os.path.join('./logs/rl4sys-dqn-info', f"{int(time.time())}__{self.seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
@@ -154,8 +156,11 @@ class DQN():
 
                     self.writer.add_scalar("losses/td_loss", loss_q, self.global_step)
                     self.writer.add_scalar("losses/q_values", q_vals, self.global_step)
-                    # print("SPS:", int(self.global_step / (time.time() - self.start_time)))
-                    self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
+                    sps = int(self.global_step / (time.time() - self.start_time))
+                    self.logger.info("DQN training epoch completed", 
+                                   epoch=self.epoch, td_loss=loss_q, q_values=q_vals, 
+                                   sps=sps, global_step=self.global_step)
+                    self.writer.add_scalar("charts/SPS", sps, self.global_step)
                     
         # Once we have enough trajectories, do an update
         

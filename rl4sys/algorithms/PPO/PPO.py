@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Local imports
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
 from rl4sys.common.trajectory import RL4SysTrajectory
+from rl4sys.utils.util import StructuredLogger
 
 class PPO():
     """
@@ -78,7 +79,8 @@ class PPO():
         # Single optimizer for training
         self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
 
-        # Set up logger
+        # Set up loggers
+        self.logger = StructuredLogger(f"PPO-{version}", debug=True)
         log_data_dir = os.path.join('./logs/rl4sys-ppo-info', f"{int(time.time())}__{self.seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
@@ -157,7 +159,8 @@ class PPO():
             
         # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
-            print(f"\n-----[PPO] Training model for epoch {self.epoch}-----\n")
+            self.logger.info("Starting PPO training epoch", 
+                           epoch=self.epoch, trajectories=self.traj, global_step=self.global_step)
             pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
             self.epoch += 1
             self.writer.add_scalar("losses/pg_loss", pg_loss, self.global_step)
@@ -167,7 +170,10 @@ class PPO():
             self.writer.add_scalar("losses/clipfracs", clipfracs, self.global_step)
             self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
             self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
-            print(f"\n-----[PPO] Training model for epoch {self.epoch} completed-----\n")
+            self.logger.info("PPO training epoch completed", 
+                           epoch=self.epoch, pg_loss=pg_loss, v_loss=v_loss, 
+                           entropy_loss=entropy_loss, approx_kl=approx_kl, 
+                           clipfracs=clipfracs, explained_var=explained_var)
             return True  # indicates an updated model
         return False
 

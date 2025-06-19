@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "proto"))
 
 from rl4sys.server.server import MyRLServiceServicer
 from rl4sys.proto.rl4sys_pb2_grpc import add_RLServiceServicer_to_server
+from rl4sys.utils.logging_config import setup_rl4sys_logging
+from rl4sys.utils.util import StructuredLogger
 
 def start_server(port=50051, max_workers=10, debug=False):
     """
@@ -28,13 +30,14 @@ def start_server(port=50051, max_workers=10, debug=False):
         max_workers (int): Maximum number of worker threads for handling RPCs
         debug (bool): Enable debug logging
     """
-    # Configure logging
-    log_level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # Configure centralized logging with structured format to show metrics
+    from rl4sys.utils.logging_config import RL4SysLogConfig
+    config = RL4SysLogConfig.get_default_config(
+        log_level="DEBUG" if debug else "INFO",
+        structured_logging=True  # Enable structured logging to show metric numbers
     )
-    logger = logging.getLogger(__name__)
+    RL4SysLogConfig.setup_logging(config_dict=config)
+    logger = StructuredLogger('RL4SysServer', debug=debug)
     
     if debug:
         logger.debug("Debug mode enabled - verbose logging is active")
@@ -52,7 +55,7 @@ def start_server(port=50051, max_workers=10, debug=False):
         
         # Start server
         server.start()
-        logger.info(f"RL4Sys server started on port {port}")
+        logger.info(f"RL4Sys server started on port {port}", port=port)
         
         # Keep server running
         server.wait_for_termination()
@@ -62,7 +65,7 @@ def start_server(port=50051, max_workers=10, debug=False):
         server.stop(0)
         logger.info("Server shut down successfully")
     except Exception as e:
-        logger.error(f"Error starting server: {e}", exc_info=debug)
+        logger.error(f"Error starting server: {e}", error=str(e))
         raise
 
 if __name__ == '__main__':

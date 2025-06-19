@@ -122,23 +122,30 @@ def deserialize_model(raw_bytes: bytes) -> nn.Module:
     return model
 
 class StructuredLogger:
-    def __init__(self, name, debug=False):
+    """
+    A structured logger that provides context-aware logging.
+    
+    This logger integrates with the centralized logging configuration
+    and adds JSON-formatted context data to log records.
+    """
+    
+    def __init__(self, name: str, debug: bool = False):
+        """
+        Initialize a structured logger.
+        
+        Args:
+            name: Logger name
+            debug: Enable debug logging
+        """
         self.logger = logging.getLogger(name)
-        # Set the logger's level to DEBUG to allow all levels of messages
-        # The actual filtering will be done by the handlers
-        self.logger.setLevel(logging.DEBUG)
+        self.debug_mode = debug
         
-        # Create console handler with structured format
-        ch = logging.StreamHandler()
-        # Set handler level based on debug parameter
-        ch.setLevel(logging.DEBUG if debug else logging.INFO)
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(context)s'
-        )
-        ch.setFormatter(formatter)
+        # Don't override centralized logging configuration
+        # Just use the existing logger with its configured handlers
         
-        # Remove any existing handlers to avoid duplicate logging
-        self.logger.handlers = [ch]
+        # Performance optimization: cache logging level checks
+        self._debug_enabled = self.logger.isEnabledFor(logging.DEBUG)
+        self._info_enabled = self.logger.isEnabledFor(logging.INFO)
     
     def _get_context(self, **kwargs):
         """
@@ -157,14 +164,29 @@ class StructuredLogger:
     
     def info(self, msg, **kwargs):
         """Log an info level message with optional context."""
-        self.logger.info(msg, extra={'context': self._get_context(**kwargs)})
+        if self._info_enabled:
+            self.logger.info(msg, extra={'context': self._get_context(**kwargs)})
     
     def debug(self, msg, **kwargs):
         """Log a debug level message with optional context."""
-        self.logger.debug(msg, extra={'context': self._get_context(**kwargs)})
+        if self._debug_enabled:
+            self.logger.debug(msg, extra={'context': self._get_context(**kwargs)})
     
     def error(self, msg, **kwargs):
         """Log an error level message with optional context."""
+        # Error messages are always logged regardless of level
         self.logger.error(msg, extra={'context': self._get_context(**kwargs)})
+    
+    def warning(self, msg, **kwargs):
+        """Log a warning level message with optional context."""
+        self.logger.warning(msg, extra={'context': self._get_context(**kwargs)})
+    
+    def is_debug_enabled(self):
+        """Check if debug logging is enabled to avoid expensive operations."""
+        return self._debug_enabled
+    
+    def is_info_enabled(self):
+        """Check if info logging is enabled to avoid expensive operations."""
+        return self._info_enabled
 
 

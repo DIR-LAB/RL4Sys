@@ -26,6 +26,7 @@ from rl4sys.algorithms.PPO.PPO import PPO
 from rl4sys.algorithms.DQN.DQN import DQN
 from rl4sys.utils.util import deserialize_action, StructuredLogger
 from rl4sys.server.model_diff_manager import ModelDiffManager
+from rl4sys.utils.system_monitor import SystemMonitor, log_memory_usage
 
 # Algorithm class mapping
 ALGORITHM_CLASSES = {
@@ -124,7 +125,7 @@ class ClientAlgorithmManager:
     def _client_training_loop(self, client_id: str, training_queue: Queue, stop_event: threading.Event):
         """Training loop for a specific client's algorithm."""
         thread_name = threading.current_thread().name
-        self.logger.info(f"Training thread {thread_name} started for client {client_id}")
+        self.logger.info(f"Training thread {thread_name} started for client {client_id}", thread_name=thread_name, client_id=client_id)
         
         while not stop_event.is_set():
             try:
@@ -217,10 +218,17 @@ class MyRLServiceServicer(RLServiceServicer):
         self.debug = debug
         self.logger = StructuredLogger("RL4SysServer", debug)
         
+        # Initialize system monitoring
+        self.system_monitor = SystemMonitor("RL4SysServer", debug=debug)
+        self.system_monitor.start_monitoring()
+        
         self.logger.info(
             "Initializing multi-client server",
             num_workers=num_workers
         )
+        
+        # Log initial memory usage
+        log_memory_usage(self.logger, "at server startup")
         
         # Initialize client algorithm manager
         self.client_manager = ClientAlgorithmManager()
@@ -245,7 +253,7 @@ class MyRLServiceServicer(RLServiceServicer):
     def _dispatch_trajectories(self):
         """Central dispatcher thread that distributes trajectories to client-specific training threads."""
         thread_name = threading.current_thread().name
-        self.logger.info(f"Trajectory dispatcher thread {thread_name} started")
+        self.logger.info(f"Trajectory dispatcher thread {thread_name} started", thread_name=thread_name)
         
         while not self._stop_event.is_set():
             try:
@@ -384,7 +392,7 @@ class MyRLServiceServicer(RLServiceServicer):
         
         traj_count = len(request.trajectories)
         
-        self.logger.info(
+        self.logger.debug(
             "SendTrajectories request",
             client_id=client_id,
             trajectory_count=traj_count

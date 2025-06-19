@@ -23,8 +23,8 @@ class RLActor(nn.Module):
     def _distribution(self, obs):
         return Categorical(logits=self.pi(obs))
 
-    #def _log_prob_from_distribution(self, pi, act):
-    #    return pi.log_prob(act)
+    def _log_prob_from_distribution(self, pi, act):
+        return pi.log_prob(act)
 
     def forward(self, obs, act=None):
         pi = self._distribution(obs)
@@ -59,7 +59,7 @@ class RLActorCritic(nn.Module):
             v = self.v(obs)
             a = pi.sample()
             logp_a = pi.log_prob(a)
-            #print(f"[RLActorCritic] a: {a}, v: {v}, pi: {pi}, logp_a: {logp_a}")
+            # Debug logging removed to avoid performance impact
 
         action_nd = a.numpy()
         data_dict = {

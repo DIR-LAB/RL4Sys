@@ -15,6 +15,7 @@ import gymnasium.spaces
 import threading
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
+from rl4sys.utils.logging_config import setup_rl4sys_logging
 
 """
 Environment script: Lunar Lander Simulator
@@ -30,12 +31,12 @@ ACT_DIM = 4
 MOVE_SEQUENCE_SIZE = 500
 
 class LunarLanderSim():
-    def __init__(self, seed, client_id, performance_metric=0, render_game=False):
+    def __init__(self, seed, client_id, performance_metric=0, render_game=False, debug=False):
         self._seed = seed
         self._client_id = client_id
         self._performance_metric = performance_metric
         self._render_game = render_game
-        self.logger = StructuredLogger("LunarLanderSim", debug=False)
+        self.logger = StructuredLogger("LunarLanderSim", debug=debug)
 
         # Initialize the Gym environment
         self.env = gym.make('LunarLander-v3', continuous=False)
@@ -209,9 +210,9 @@ if __name__ == '__main__':
     Runs LunarLanderSim instance(s) according to user input parameters.
 
     Example Usage:
-    python lunar_lander.py --tensorboard=True --number-of-iterations=1 --number-of-moves=1000 --render=True
+    python lunar_lander.py --number-of-iterations=1 --number-of-moves=1000 --render=True
     or
-    python lunar_lander.py --tensorboard=True --number-of-iterations=100 --number-of-moves=100000 --render=False
+    python lunar_lander.py --number-of-iterations=100 --number-of-moves=100000 --render=False
 
     """
     import argparse
@@ -231,14 +232,25 @@ if __name__ == '__main__':
                         help='render the Lunar Lander environment')
     parser.add_argument('--client-id', type=str, default="lunar_lander",
                         help='uniqueclient id for the Lunar Lander simulation')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     
     args, extras = parser.parse_known_args()
+
+    # Initialize logging system with structured format to show actual log content
+    from rl4sys.utils.logging_config import RL4SysLogConfig
+    debug = args.debug
+    config = RL4SysLogConfig.get_default_config(
+        log_level="DEBUG" if debug else "INFO",
+        structured_logging=True  # Enable structured logging to show actual log entry content
+    )
+    RL4SysLogConfig.setup_logging(config_dict=config)
 
     # Create the simulation environment with the agent
     lunar_lander_game = LunarLanderSim(
         seed=args.seed,
         client_id=args.client_id,
-        render_game=args.render
+        render_game=args.render,
+        debug=debug
     )
 
     lunar_lander_game.logger.info(
