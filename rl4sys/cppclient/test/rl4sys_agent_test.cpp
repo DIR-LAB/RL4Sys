@@ -7,7 +7,7 @@
 
 // Define the path to the test configuration relative to where the test runs
 // This might need adjustment based on your build system's working directory for tests
-const std::string TEST_CONFIG_PATH = "rl4sys/cppclient/test/test_conf.json";
+const std::string TEST_CONFIG_PATH = "./test_conf.json";
 
 namespace rl4sys {
 namespace cppclient {
