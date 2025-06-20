@@ -40,8 +40,8 @@ sudo apt install -y libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
 # Build tools and dependencies
 brew install cmake pkg-config grpc protobuf nlohmann-json googletest zlib
 
-# For PyTorch support (optional but recommended)
-brew install pytorch
+# For PyTorch support
+brew install libtorch
 ```
 </details>
 
