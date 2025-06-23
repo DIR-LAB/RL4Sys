@@ -15,9 +15,9 @@ from rl4sys.utils.util import StructuredLogger
 
 # Import HPCSim components
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'HPCSim')))
-from job import Job, Workloads
-from cluster import Cluster
-from HPCSimPickJobs import HPCEnv
+from HPCSim.job import Job, Workloads
+from HPCSim.cluster import Cluster
+from HPCSim.HPCSimPickJobs import HPCEnv
 
 """
 Job Scheduling Environment Script using HPCSim
