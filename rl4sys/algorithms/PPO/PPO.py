@@ -127,16 +127,17 @@ class PPO():
             
         # Process each step in the trajectory
         for i, r4a in enumerate(trajectory):
+            # print(f"r4a: {r4a.obs} {r4a.act} {r4a.rew}")
             self.traj += 1
             self.global_step += 1
             self.ep_rewards += r4a.rew
             obs_value = self._model_train.get_value(torch.from_numpy(r4a.obs))
             # Store transition
-            self.storage_obs.append(r4a.obs)
-            self.storage_act.append(r4a.act)
-            self.storage_logp.append(r4a.data['logp_a'])
-            self.storage_rew.append(r4a.rew)
-            self.storage_val.append(obs_value)
+            self.storage_obs.append(np.copy(r4a.obs))
+            self.storage_act.append(np.copy(r4a.act))
+            self.storage_logp.append(np.copy(r4a.data['logp_a']))
+            self.storage_rew.append(np.copy(r4a.rew))
+            self.storage_val.append(np.copy(obs_value.detach().numpy()))
             self.storage_done.append(r4a.done)
             
             # Store next observation for bootstrapping
@@ -157,7 +158,7 @@ class PPO():
                 self.ep_rewards = 0
             
         # Once we have enough trajectories, do an update
-        if self.traj > 0 and self.traj % self._traj_per_epoch == 0:
+        if self.traj > 0 and self.traj > self._traj_per_epoch:
             print(f"\n-----[PPO] Training model for epoch {self.epoch}-----\n")
             pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
             self.epoch += 1
@@ -304,8 +305,8 @@ class PPO():
                 break
         
         # Calculate explained variance for logging
-        y_pred = b_values.cpu().numpy()
-        y_true = b_returns.cpu().numpy()
+        y_pred = b_values.detach().cpu().numpy()
+        y_true = b_returns.detach().cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
         

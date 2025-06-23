@@ -440,6 +440,10 @@ class RL4SysAgent:
                 algorithm=self.algorithm_name,
                 version=response.version
             )
+
+            # TODO debug only
+            # print(f"model weights: {self._model.state_dict()}")
+
             return self._model, response.version
             
         except grpc.RpcError as e:

@@ -54,6 +54,7 @@ class JobSchedulingSim():
             batch_job_slice=0,
             build_sjf=False
         )
+
         
         # Load workload if provided
         if self._workload_file:
@@ -63,7 +64,6 @@ class JobSchedulingSim():
             default_workload = os.path.join(os.path.dirname(__file__), 'HPCSim', 'lublin_256.swf')
             if os.path.exists(default_workload):
                 self.env.my_init(workload_file=default_workload)
-
 
         # Initialize RL4Sys agent
         self.rlagent = RL4SysAgent(conf_path='/Users/girigiri_yomi/Udel_Proj/RL4Sys/rl4sys/examples/job_schedual_old/job_conf.json')
@@ -79,7 +79,10 @@ class JobSchedulingSim():
             'failed_schedules': 0,
             'time_to_completion': [],
             'resource_utilization': [],
-            'total_iterations': 0
+            'total_iterations': 0,
+            'episode_returns': [],
+            'sjf_scores': [],
+            'f1_scores': []
         }
 
         self.logger.info(
@@ -114,10 +117,12 @@ class JobSchedulingSim():
             done = False
             scheduling_steps = 0
             cumulative_reward = 0
+            episode_return = 0
+            sjf_score = 0
+            f1_score = 0
             start_time = time.time()
 
             # Build initial observation
-            print(f"obs: {obs}")
             obs_tensor = self.build_observation(obs)
 
             t0_start_time = time.perf_counter_ns()
@@ -142,20 +147,33 @@ class JobSchedulingSim():
                     action = action[0]
                 action = int(action)
 
-                # Ensure action is within valid range
+                # Ensure action is within valid range for HPCSim
                 if action >= MAX_QUEUE_SIZE:
                     action = 0  # Default to no action if out of range
 
-                # Step the environment
+                # Step the environment - returns [obs, reward, done, reward2, sjf, f1]
                 t0 = time.perf_counter_ns()
-                next_obs, reward, terminated, truncated, info = self.env.step(action)
+                step_result = self.env.step(action)
                 env_ns += time.perf_counter_ns() - t0
 
-                done = terminated or truncated
+                # Parse step results
+                if len(step_result) == 6:
+                    next_obs, reward, done, reward2, sjf_t, f1_t = step_result
+                elif len(step_result) == 4:
+                    next_obs, reward, done, reward2 = step_result
+                    sjf_t, f1_t = 0, 0
+
                 cumulative_reward += reward
+                episode_return += reward
+                sjf_score += sjf_t
+                f1_score += f1_t
 
                 # Build next observation
-                next_obs_tensor = self.build_observation(next_obs)
+                if next_obs is not None:
+                    next_obs_tensor = self.build_observation(next_obs)
+                else:
+                    # Episode ended, no next observation
+                    next_obs_tensor = None
 
                 # Record reward
                 self.rl4sys_action.update_reward(reward)
@@ -173,6 +191,9 @@ class JobSchedulingSim():
                         iteration=iteration,
                         scheduling_steps=scheduling_steps,
                         cumulative_reward=cumulative_reward,
+                        episode_return=episode_return,
+                        sjf_score=sjf_score,
+                        f1_score=f1_score,
                         done=done
                     )
 
@@ -182,8 +203,11 @@ class JobSchedulingSim():
                     # Record performance metrics
                     completion_time = time.time() - start_time
                     self.simulator_stats['time_to_completion'].append(completion_time)
+                    self.simulator_stats['episode_returns'].append(episode_return)
+                    self.simulator_stats['sjf_scores'].append(sjf_score)
+                    self.simulator_stats['f1_scores'].append(f1_score)
                     
-                    if cumulative_reward > 0:  # Successful scheduling
+                    if episode_return > 0:  # Successful scheduling
                         self.simulator_stats['successful_schedules'] += 1
                         self.logger.info(
                             "Successful scheduling iteration",
@@ -222,9 +246,13 @@ class JobSchedulingSim():
             successful_schedules=self.simulator_stats['successful_schedules'],
             failed_schedules=self.simulator_stats['failed_schedules'],
             avg_time_to_completion=np.mean(self.simulator_stats['time_to_completion']) if self.simulator_stats['time_to_completion'] else 0,
-            avg_job_score=np.mean(self.simulator_stats['job_scores']) if self.simulator_stats['job_scores'] else 0
+            avg_job_score=np.mean(self.simulator_stats['job_scores']) if self.simulator_stats['job_scores'] else 0,
+            avg_episode_return=np.mean(self.simulator_stats['episode_returns']) if self.simulator_stats['episode_returns'] else 0,
+            avg_sjf_score=np.mean(self.simulator_stats['sjf_scores']) if self.simulator_stats['sjf_scores'] else 0,
+            avg_f1_score=np.mean(self.simulator_stats['f1_scores']) if self.simulator_stats['f1_scores'] else 0
         )
         
+        """
         avg_step_per_second = 0
         avg_env_ms = 0
         avg_infer_ms = 0
@@ -241,6 +269,8 @@ class JobSchedulingSim():
             print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
             print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
             print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
+        """
+        
 
     def build_observation(self, obs):
         """
@@ -268,9 +298,9 @@ if __name__ == '__main__':
     Runs JobSchedulingSim instance(s) according to user input parameters.
 
     Example Usage:
-    python job_sche.py --seed=1 --number-of-iterations=20 --number-of-steps=100 --workload-file=HPCSim/lublin_256.swf
+    python job_main.py --seed=1 --number-of-iterations=20 --number-of-steps=100 --workload-file=HPCSim/lublin_256.swf
     or
-    python job_sche.py --seed=1 --number-of-iterations=100 --number-of-steps=1000 --workload-file=HPCSim/lublin_256.swf
+    python job_main.py --seed=1 --number-of-iterations=100 --number-of-steps=1000 --workload-file=HPCSim/lublin_256.swf
     """
     import argparse
 
@@ -281,7 +311,7 @@ if __name__ == '__main__':
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=20,
+    parser.add_argument('--number-of-iterations', type=int, default=10000,
                         help='number of iterations to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=100,
                         help='maximum number of scheduling steps allowed per iteration')

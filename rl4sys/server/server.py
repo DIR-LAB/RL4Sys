@@ -361,7 +361,7 @@ class MyRLServiceServicer(RLServiceServicer):
             expected_version=expected_version,
             model_size=len(model_state)
         )
-        
+        # print(f"model_state: {model.state_dict()}")
         return ModelResponse(version=version, is_diff=True, model_state=model_state)
 
     def SendTrajectories(self, request, context):

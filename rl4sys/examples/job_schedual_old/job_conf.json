@@ -3,7 +3,7 @@
     "algorithm_name": "PPO",
     "algorithm_parameters": {
         "batch_size": 512,
-        "act_dim": 4,
+        "act_dim": 128,
         "seed": 0,
         "traj_per_epoch": 256,
         "clip_ratio": 0.2,
@@ -14,7 +14,7 @@
         "train_pi_iters": 80,
         "train_v_iters": 80,
         "target_kl": null,
-        "input_size": 8
+        "input_size": 1024
     },
     "act_limit": 1.0,
     "max_traj_length": 1000,

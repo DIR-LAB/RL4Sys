@@ -61,10 +61,10 @@ class RLActorCritic(nn.Module):
             logp_a = pi.log_prob(a)
             #print(f"[RLActorCritic] a: {a}, v: {v}, pi: {pi}, logp_a: {logp_a}")
 
-        action_nd = a.numpy()
+        action_nd = a.detach().numpy()
         data_dict = {
             #'v': v.numpy(),
-            'logp_a': logp_a.numpy()
+            'logp_a': logp_a.detach().numpy()
         }
         return action_nd, data_dict
 

@@ -40,7 +40,7 @@ class LunarLanderSim():
         self.logger = StructuredLogger("LunarLanderSim", debug=False)
 
         # Initialize the Gym environment
-        self.env = gym.make('LunarLander-v2', continuous=False)
+        self.env = gym.make('LunarLander-v3', continuous=False)
 
         # Set the seeds for reproducibility
         self.env.reset(seed=self._seed)
@@ -192,6 +192,8 @@ class LunarLanderSim():
                         )
                     break
 
+            # self.rl4sys_traj.print_actions() # TODO debug only
+
             total_ns = time.perf_counter_ns() - t0_start_time
 
             total_ms = total_ns/1e6/moves
@@ -219,7 +221,8 @@ class LunarLanderSim():
             avg_time_to_death=np.mean(self.simulator_stats['time_to_death']) if self.simulator_stats['time_to_death'] else 0,
             avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0
         )
-        
+
+        """
         avg_step_per_second = 0
         avg_env_ms = 0
         avg_infer_ms = 0
@@ -235,7 +238,7 @@ class LunarLanderSim():
         print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
         print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
         print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
-
+        """
         
 
     def build_observation(self, obs):
@@ -271,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=20,
+    parser.add_argument('--number-of-iterations', type=int, default=10000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=200,
                         help='maximum number of moves allowed per iteration')

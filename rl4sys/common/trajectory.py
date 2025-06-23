@@ -56,3 +56,7 @@ class RL4SysTrajectory():
 
     def is_completed(self) -> bool:
         return self.completed
+
+    def print_actions(self):
+        for i, action in enumerate(self.actions):
+            print(f"action {i}: {action.obs} {action.act} {action.rew}")

@@ -5,7 +5,7 @@
         "batch_size": 512,
         "act_dim": 4,
         "seed": 0,
-        "traj_per_epoch": 256,
+        "traj_per_epoch": 32,
         "clip_ratio": 0.2,
         "gamma": 0.99,
         "lam": 0.95,
