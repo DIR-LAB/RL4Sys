@@ -17,6 +17,9 @@ from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
 
+
+
+
 """
 Environment script: Lunar Lander Simulator
 
@@ -58,7 +61,7 @@ class LunarLanderSim():
             act_dim = self.env.action_space.n
             self.act_limit = 1.0
 
-        self.rlagent = RL4SysAgent(conf_path='./luna_conf.json')
+        self.rlagent = RL4SysAgent(conf_path='./rl4sys/examples/lunar/luna_conf.json')
         self.rl4sys_traj = None
         self.rl4sys_action = None
 
@@ -91,6 +94,8 @@ class LunarLanderSim():
             max_moves=max_moves
         )
 
+        profiling = []
+
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             self.logger.info(
@@ -109,13 +114,23 @@ class LunarLanderSim():
             # Build initial observation
             obs_tensor = self.build_observation(obs)
 
+            t0_start_time = time.perf_counter_ns()
+
+            env_ns = 0
+            infer_ns = 0
+
             while not done or moves < max_moves:
                 if self._render_game:
                     self.env.render()
 
                 # Get action from agent
+                t0 = time.perf_counter_ns()
                 self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_tensor)
+                infer_ns += time.perf_counter_ns() - t0
+
+
                 self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+                
 
                 action = self.rl4sys_action.act
 
@@ -127,7 +142,10 @@ class LunarLanderSim():
                 action = int(action)
 
                 # Step the environment
+                t0 = time.perf_counter_ns()
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
+                env_ns += time.perf_counter_ns() - t0
+
                 done = terminated or truncated
                 cumulative_reward += reward
 
@@ -176,6 +194,21 @@ class LunarLanderSim():
                         )
                     break
 
+            # self.rl4sys_traj.print_actions() # TODO debug only
+
+            total_ns = time.perf_counter_ns() - t0_start_time
+
+            total_ms = total_ns/1e6/moves
+            env_ms   = env_ns/1e6/moves
+            infer_ms = infer_ns/1e6/moves
+            over_ms  = total_ms - env_ms - infer_ms
+            profiling.append({"steps/s": round(1000/total_ms,1),
+                "env_ms": round(env_ms,3),
+                "infer_ms": round(infer_ms,3),
+                "over_ms": round(over_ms,3)})
+            
+            
+
             if self._render_game:
                 self.env.close()
         
@@ -190,6 +223,25 @@ class LunarLanderSim():
             avg_time_to_death=np.mean(self.simulator_stats['time_to_death']) if self.simulator_stats['time_to_death'] else 0,
             avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0
         )
+
+        """
+        avg_step_per_second = 0
+        avg_env_ms = 0
+        avg_infer_ms = 0
+        avg_over_ms = 0
+        for i in range(len(profiling)):
+            print(f"iteration {i}: {profiling[i]}")
+            avg_step_per_second += profiling[i]["steps/s"]
+            avg_env_ms += profiling[i]["env_ms"]
+            avg_infer_ms += profiling[i]["infer_ms"]
+            avg_over_ms += profiling[i]["over_ms"]
+
+        print(f"avg_step_per_second: {round(avg_step_per_second/len(profiling), 1)}")
+        print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
+        print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
+        print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
+        """
+        
 
     def build_observation(self, obs):
         """

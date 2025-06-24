@@ -64,6 +64,11 @@ class ModelManager;
  */
 class RL4SysAgent {
 public:
+    // Use a custom deleter class to avoid incomplete type issues
+    struct StubDeleter {
+        void operator()(void* ptr);
+    };
+
     /**
      * @brief Constructs an RL4SysAgent with configuration file.
      * @param configFilePath Path to the JSON configuration file.

@@ -92,7 +92,8 @@ class RL4SysAgent:
 
         # Get initial model from server
         self.logger.info("Getting initial model from server")
-        self._model, self.local_version = self._get_model(expected_version=-1)
+        with self._lock:
+            self._model, self.local_version = self._get_model_unsafe(expected_version=-1)
         assert self._model is not None, "Model should be loaded from server at this point"
 
         self.logger.info(
@@ -206,8 +207,12 @@ class RL4SysAgent:
         """
         Produce an action from the current model. Stores the action in our local trajectory buffer.
         """
+        # Get current version safely before creating trajectory
+        with self._lock:
+            current_version = self.local_version
+            
         if traj is None or traj.is_completed():
-            traj = RL4SysTrajectory(version=self.local_version)
+            traj = RL4SysTrajectory(version=current_version)
             with self._trajectory_lock:
                 self._trajectory_buffer.append(traj)
                 self._trajectory_buffer_size += 1
@@ -287,15 +292,19 @@ class RL4SysAgent:
             is_onpolicy = self.algorithm_type == 'onpolicy'
             
             # Filter trajectories based on algorithm type and validity
+            # Need to acquire lock to safely read local_version
+            with self._lock:
+                current_version = self.local_version
+            
             if is_onpolicy:
                 # For on-policy algorithms, only send valid trajectories with matching version
-                filtered_trajectories = [t for t in trajectories if t.version == self.local_version and t.is_valid()]
+                filtered_trajectories = [t for t in trajectories if t.version == current_version and t.is_valid()]
                 ignored_count = len(trajectories) - len(filtered_trajectories)
                 if ignored_count > 0:
                     self.logger.debug(
                         "Ignored trajectories with version mismatch",
                         count=ignored_count,
-                        current_version=self.local_version
+                        current_version=current_version
                     )
                 trajectories = filtered_trajectories
             else:
@@ -339,12 +348,17 @@ class RL4SysAgent:
             response = self.stub.SendTrajectories(request, compression=grpc.Compression.Gzip)
             
             if response.model_updated:
+                # Need to update model and version together under lock
+                with self._lock:
+                    old_version = self.local_version
                 self.logger.info(
                     "Model updated",
-                    old_version=self.local_version,
+                        old_version=old_version,
                     new_version=response.new_version
                 )
-                self._model, _ = self._get_model(response.new_version)
+                # Get new model (this also updates self._model internally)
+                self._model, _ = self._get_model_unsafe(response.new_version)
+                # update local version
                 self.local_version = response.new_version
                 return response.new_version
             else:
@@ -360,7 +374,12 @@ class RL4SysAgent:
             return 0
 
     def _get_model(self, expected_version: int):
-        """Get the model from the server with compression."""
+        """Get the model from the server with proper thread synchronization."""
+        with self._lock:
+            return self._get_model_unsafe(expected_version)
+    
+    def _get_model_unsafe(self, expected_version: int):
+        """Get the model from the server. Must be called with _lock held."""
         try:
             # Request the latest model
             request = GetModelRequest(client_id=self.client_id, client_version=self.local_version, expected_version=expected_version)
@@ -407,7 +426,7 @@ class RL4SysAgent:
                 loaded_obj = torch.load(buffer, weights_only=False)
             
             if response.is_diff:
-                # For diff updates, merge with current state
+                # For diff updates, merge with current state (all under lock)
                 current_state = self._model.state_dict()
                 for key, value in loaded_obj.items():
                     current_state[key] = value
@@ -431,6 +450,10 @@ class RL4SysAgent:
                 version=response.version,
                 model_size=len(response.model_state)
             )
+
+            # TODO debug only
+            # print(f"model weights: {self._model.state_dict()}")
+
             return self._model, response.version
             
         except grpc.RpcError as e:

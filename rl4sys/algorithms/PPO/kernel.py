@@ -56,15 +56,15 @@ class RLActorCritic(nn.Module):
     def step(self, obs):
         with torch.no_grad():
             pi = self.pi._distribution(obs)
-            v = self.v(obs)
+            #v = self.v(obs)
             a = pi.sample()
             logp_a = pi.log_prob(a)
             # Debug logging removed to avoid performance impact
 
-        action_nd = a.numpy()
+        action_nd = a.detach().numpy()
         data_dict = {
-            'v': v.numpy(),
-            'logp_a': logp_a.numpy()
+            #'v': v.numpy(),
+            'logp_a': logp_a.detach().numpy()
         }
         return action_nd, data_dict
 

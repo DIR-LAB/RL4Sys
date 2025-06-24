@@ -20,6 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
+#protocl
+rl4sys/proto/rl4sys_pb2.py
+rl4sys/proto/rl4sys_pb2_grpc.py
+
 # Virtual Environment
 venv/
 env/

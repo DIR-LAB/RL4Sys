@@ -160,7 +160,6 @@ add_library(rl4sys_client STATIC
     
     # Generated protobuf files
     ${PROTO_SRCS}
-    ${GRPC_SRCS}
 )
 
 # Make sure protobuf files are generated before building the library
