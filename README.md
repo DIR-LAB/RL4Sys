@@ -5,30 +5,73 @@ RL4Sys is a distributed reinforcement learning framework designed for system con
 ## Project Structure
 
 ```
-rl4sys/
-├── algorithms/           # RL algorithm implementations
-│   ├── PPO/             # Proximal Policy Optimization
-│   └── DQN/             # Deep Q-Network
-├── client/              # Client-side components
-│   ├── agent.py         # RL agent implementation
-│   └── config_loader.py # the configuration loader for client only
-├── common/              # Shared utilities and components
-|   |-- action.py        # Definition of RL4SysAction
-|   |-- trajectory.py    # Definition of RL4SysTrajectory
-├── examples/            # Example applications
-│   └── lunar/          # Lunar Lander example
-│       ├── lunar_lander.py
-│       └── luna_conf.json
-├── logs/               # Logging directory
-├── proto/              # Protocol buffer definitions
-|   |-- rl4sys.proto    # gRPC proto definition
-|   |-- generate_proto.sh # script to generate the gRPC python stub code
-├── server/             # Server-side components
-│   ├── server.py       # Main server implementation
-│   └── model_diff_manager.py  # Model versioning and diff management
-├── utils/              # Utility functions
-├── start_server.py     # Server startup script
-└── __init__.py         # Package initialization
+RL4Sys-Dev/
+├── rl4sys/                    # Main Python package
+│   ├── algorithms/            # RL algorithm implementations
+│   │   ├── PPO/              # Proximal Policy Optimization
+│   │   │   ├── PPO.py        # PPO algorithm implementation
+│   │   │   ├── kernel.py     # PPO training kernel
+│   │   │   └── replay_buffer.py
+│   │   └── DQN/              # Deep Q-Network
+│   │       ├── DQN.py        # DQN algorithm implementation
+│   │       ├── kernel.py     # DQN training kernel
+│   │       └── replay_buffer.py
+│   ├── client/               # Python client-side components
+│   │   ├── agent.py          # RL agent implementation
+│   │   ├── config_loader.py  # Configuration loader for client
+│   │   └── readme.md         # Client documentation
+│   ├── cppclient/            # High-performance C++ client
+│   │   ├── include/          # C++ header files
+│   │   ├── src/              # C++ source files
+│   │   ├── examples/         # C++ examples (Lunar Lander)
+│   │   ├── test/             # C++ unit tests
+│   │   ├── generated_proto/  # Generated gRPC stubs
+│   │   ├── CMakeLists.txt    # CMake build configuration
+│   │   └── README.md         # C++ client documentation
+│   ├── common/               # Shared utilities and components
+│   │   ├── action.py         # Definition of RL4SysAction
+│   │   └── trajectory.py     # Definition of RL4SysTrajectory
+│   ├── examples/             # Example applications
+│   │   ├── lunar/            # Lunar Lander example
+│   │   │   ├── lunar_lander.py
+│   │   │   ├── lunar_lander_dqn.py
+│   │   │   └── luna_conf.json
+│   │   ├── job_schedual_old/ # Job scheduling examples
+│   │   │   └── HPCSim/       # HPC simulation environment
+│   │   ├── test_python/      # Python client tests
+│   │   └── test_cpp/         # C++ client tests
+│   ├── logs/                 # Logging directory
+│   ├── proto/                # Protocol buffer definitions
+│   │   ├── rl4sys.proto      # gRPC proto definition
+│   │   └── generate_proto.sh # Script to generate gRPC stubs
+│   ├── server/               # Server-side components
+│   │   ├── server.py         # Main server implementation
+│   │   └── model_diff_manager.py # Model versioning and diff management
+│   ├── utils/                # Utility functions
+│   │   ├── conf_loader.py    # Configuration loading utilities
+│   │   ├── logging_config.py # Logging configuration
+│   │   ├── plot.py           # Plotting utilities
+│   │   ├── system_monitor.py # System monitoring utilities
+│   │   └── util.py           # General utilities
+│   ├── start_server.py       # Server startup script
+│   └── __init__.py           # Package initialization
+├── examples/                 # Top-level examples
+│   ├── job-scheduling/       # Job scheduling examples
+│   │   └── scheduler.py
+│   └── profiling_lunar/      # Performance profiling examples
+│       ├── baseline_main.py
+│       ├── rllib/            # RLlib integration examples
+│       └── torchrl/          # TorchRL integration examples
+├── grpc_test/                # gRPC testing utilities
+│   ├── client.cpp
+│   ├── server.cpp
+│   ├── helloworld.proto
+│   └── CMakeLists.txt
+├── docs/                     # Documentation
+│   └── RL4Sys.png
+├── setup.py                  # Package setup configuration
+├── config.json               # Global configuration
+└── README.md                 # This file
 ```
 
 ## Features
@@ -240,7 +283,7 @@ Call when the environment terminates/truncates or when you enforce a fixed horiz
 | name     | type             | description                                         |
 | -------- | ---------------- | --------------------------------------------------- |
 | `traj`   | RL4SysTrajectory | The running trajectory.                             |
-| `action` | RL4SysAction     | Final step’s action object (with reward filled in). |
+| `action` | RL4SysAction     | Final step's action object (with reward filled in). |
 
 #### Returns
 None 
