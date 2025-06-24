@@ -168,6 +168,99 @@ def run_application(self, num_iterations, max_moves):
             self.rl4sys_action.update_reward(reward)
 ```
 
+### Python API Documentation
+
+The Rl4Sys Python API's are listed as following:
+
+#### `class RL4SysAgent`
+```python
+RL4SysAgent(conf_path: str, debug: bool)
+```
+Creates a lightweight client that opens (or re-uses) a gRPC/TCP connection to the RL4Sys trainer.
+All behavioural details—server address, authentication token, rollout-buffer size, policy id, etc.—are taken from the JSON/YAML file referenced by conf_path
+
+#### Parameters
+
+| name        | type  | description                                                               |
+| ----------- | ----- | ------------------------------------------------------------------------- |
+| `conf_path` | `str` | Absolute or relative path to a RL4Sys **client-side** configuration file. |
+| 'debug'     |'bool' | Whether to enable debug logging                             |
+
+#### `RL4SysAgent.request_for_action`
+
+```python
+request_for_action(
+    traj: Optional[RL4SysTrajectory],
+    obs:  torch.Tensor | np.ndarray | list[float]
+) -> tuple[RL4SysTrajectory, RL4SysAction]
+```
+Synchronously forwards the latest observation to the remote policy and returns:
+A trajectory handle – either the one you passed in (updated in-place) or a brand-new RL4SysTrjectory object if you passed None.
+An RL4SysAction object embedding the chosen action plus bookkeeping fields.
+Internally the call stores (obs, t_step) in the trajectory so the learner can later compute returns/advantages.
+
+#### Parameters
+| name   | type                  | description                                                                                                                       |                
+| ------ | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | 
+| `traj` | RL4SysTrajectory    | Existing trajectory handle or `None` to start a new episode.                                                                        |
+| `obs`  | tensor / array / list | Observation for the **current** environment state. Must match the dimensionality expected by the model configured in `conf_path`. |        
+
+#### Returns
+Tuple (traj, action) where:
+traj – same type as input, now containing the new step.
+action – instance of RL4SysAction exposing .act and other helpers.
+
+#### `RL4SysAgent.add_to_trajectory`
+```python
+add_to_trajectory(traj: RL4SysTrajectory,
+                  action: RL4SysAction) -> None
+```
+Adds the action (and any metadata you have updated on it) to RL4SysTrajectory.
+Call this once per env step, right after request_for_action and before executing the next call.
+#### Parameters
+| name     | type               | description                                        |
+| -------- | ------------------ | -------------------------------------------------- |
+| `traj`   | `RL4SysTrajectory` | The trajectory obtained from `request_for_action`. |
+| `action` | `RL4SysAction`     | The action object you just executed.               |
+
+#### Returns
+None (in-place side effects only).
+
+#### `RL4SysAgent.mark_end_of_trajectory`
+```python
+mark_end_of_trajectory(
+    traj: RL4SysTrajectory,
+    action: RL4SysAction
+) -> None
+```
+Flags the terminal step so the learner can finish computing returns and discard server-side state for this episode.
+Call when the environment terminates/truncates or when you enforce a fixed horizon.
+
+#### Parameters
+| name     | type             | description                                         |
+| -------- | ---------------- | --------------------------------------------------- |
+| `traj`   | RL4SysTrajectory | The running trajectory.                             |
+| `action` | RL4SysAction     | Final step’s action object (with reward filled in). |
+
+#### Returns
+None 
+
+#### `RL4SysAction.update_reward`
+```python
+RL4SysAction.update_reward(reward: float) -> None
+```
+Attaches the scalar reward obtained for this step to the action.
+Invoke once between env.step and the next request_for_action (or before mark_end_of_trajectory on the last step).
+
+#### Parameters
+| name     | type  | description                            |
+| -------- | ----- | -------------------------------------- |
+| `reward` | float | Immediate reward from the environment. |
+
+#### Returns
+None 
+
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
