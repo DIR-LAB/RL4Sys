@@ -2,10 +2,10 @@
     "client_id": "job_schedualing_old",
     "algorithm_name": "PPO",
     "algorithm_parameters": {
-        "batch_size": 512,
+        "batch_size": 100,
         "act_dim": 128,
         "seed": 0,
-        "traj_per_epoch": 256,
+        "traj_per_epoch": 100,
         "clip_ratio": 0.2,
         "gamma": 0.99,
         "lam": 0.95,

@@ -159,7 +159,7 @@ class PPO():
                 self.ep_rewards = 0
             
         # Once we have enough trajectories, do an update
-        if self.traj > 0 and self.traj > self._traj_per_epoch:
+        if self.traj > 0 and self.traj > self._traj_per_epoch: 
             print(f"\n-----[PPO] Training model for epoch {self.epoch}-----\n")
             pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
             self.epoch += 1

@@ -38,7 +38,7 @@ class JobSchedulingSim():
         self._client_id = client_id
         self._performance_metric = performance_metric
         self._workload_file = workload_file
-        self.logger = StructuredLogger("JobSchedulingSim", debug=False)
+        self.logger = StructuredLogger("JobSchedulingSim", debug=True) # TODO debug only
 
         # Set the seeds for reproducibility
         np.random.seed(self._seed)
@@ -185,6 +185,7 @@ class JobSchedulingSim():
                 obs_tensor = next_obs_tensor  # Update current observation
                 
                 if scheduling_steps >= max_scheduling_steps or done:
+                #if done:
                     # Flag last action
                     self.logger.info(
                         "Iteration completed",
