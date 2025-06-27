@@ -59,14 +59,24 @@ class RL4SysAgent:
         # get server address
         self.server_address = self.agent_config_loader.get_train_server_address()
 
-        # Configure channel options with compression
+        # Configure channel options with compression and 32MB message size
         channel_options = [
             ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
             ('grpc.compression_level', 6),  # High compression level (0-9)
+            ('grpc.max_send_message_length', 200 * 1024 * 1024),  # 200MB
+            ('grpc.max_receive_message_length', 200 * 1024 * 1024),  # 200MB
         ]
         
         self.channel = grpc.insecure_channel(self.server_address, options=channel_options)
         self.stub = RLServiceStub(self.channel)
+
+        self.logger.info(
+            "gRPC channel configured",
+            server_address=self.server_address,
+            max_send_message_length="32MB",
+            max_receive_message_length="32MB",
+            compression="Gzip"
+        )
 
         # Initialize model and version tracking
         self._model = None
@@ -371,6 +381,7 @@ class RL4SysAgent:
                 error=e.details(),
                 error_type=type(e).__name__
             )
+            print(f"Error: {e.details()}")
             return 0
 
     def _get_model(self, expected_version: int):

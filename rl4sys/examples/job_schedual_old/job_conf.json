@@ -17,8 +17,8 @@
         "input_size": 1024
     },
     "act_limit": 1.0,
-    "max_traj_length": 1000,
+    "max_traj_length": 128000,
     "type": "onpolicy",
     "train_server_address": "localhost:50051",
-    "send_frequency": 10
+    "send_frequency": 1
 }

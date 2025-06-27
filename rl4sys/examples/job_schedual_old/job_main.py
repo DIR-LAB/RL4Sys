@@ -12,6 +12,10 @@ import torch
 import threading
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
+from rl4sys.utils.logging_config import setup_rl4sys_logging
+
+# Set up logging with debug enabled if requested
+# setup_rl4sys_logging(debug=True)
 
 # Import HPCSim components
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'HPCSim')))
@@ -129,8 +133,9 @@ class JobSchedulingSim():
 
             env_ns = 0
             infer_ns = 0
+            step = 0
 
-            while not done and scheduling_steps < max_scheduling_steps:
+            while True:
                 # Get action from agent
                 t0 = time.perf_counter_ns()
                 self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_tensor)
@@ -183,9 +188,12 @@ class JobSchedulingSim():
                 self.simulator_stats['job_scores'].append(reward)
 
                 obs_tensor = next_obs_tensor  # Update current observation
+
+                step += 1
                 
-                if scheduling_steps >= max_scheduling_steps or done:
-                #if done:
+                #if scheduling_steps >= max_scheduling_steps or done:
+                if done:
+                    print(f"step: {step}, done: {done}, reward: {reward}, reward2: {reward2}, sjf_t: {sjf_t}, f1_t: {f1_t}")
                     # Flag last action
                     self.logger.info(
                         "Iteration completed",

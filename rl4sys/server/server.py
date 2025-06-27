@@ -451,11 +451,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=50051, help='Server port')
     args = parser.parse_args()
     
-    # Configure server options with compression
+    # Configure server options with compression and 32MB message size
     options = [
         ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
         ('grpc.compression_level', 6),  # High compression level (0-9)
         ('grpc.so_reuseport', 1),
+        ('grpc.max_send_message_length', 32 * 1024 * 1024),  # 32MB
+        ('grpc.max_receive_message_length', 32 * 1024 * 1024),  # 32MB
     ]
     
     # Create server with compression options
