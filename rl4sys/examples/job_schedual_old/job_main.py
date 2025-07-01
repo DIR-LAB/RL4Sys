@@ -30,14 +30,52 @@ Training server parameters:
     kernel_size | MAX_SIZE = 1
     kernel_dim  | JOB_FEATURES = 8
     buf_size    | JOB_SEQUENCE_SIZE * 100 = 25600
+
+Structure:
+    - Each iteration is an "epoch" containing multiple episodes
+    - Each episode processes jobs until environment sends 'done' flag
+    - Episodes terminate naturally when all jobs in sequence are scheduled
+    - Each epoch collects 100 episodes (traj_per_epoch)
+    - This matches the structure of ppo-pick-jobs.py
 """
 
 JOB_FEATURES = 8
 MAX_QUEUE_SIZE = 128
 JOB_SEQUENCE_SIZE = 256
 
-class JobSchedulingSim():
-    def __init__(self, seed, client_id, performance_metric=0, workload_file=''):
+class JobSchedulingSim:
+    """
+    Job Scheduling Simulation using HPCSim environment with RL4Sys agent.
+    
+    This class integrates the HPCSim job scheduling environment with an RL4Sys
+    reinforcement learning agent to train and evaluate job scheduling policies.
+    
+    Attributes:
+        _seed (int): Random seed for reproducibility
+        _client_id (str): Unique client identifier
+        _performance_metric (int): Performance metric type (0-4)
+        _workload_file (str): Path to workload file
+        logger (StructuredLogger): Logger instance for structured logging
+        env (HPCEnv): HPCSim environment instance
+        rlagent (RL4SysAgent): RL4Sys reinforcement learning agent
+        simulator_stats (dict): Statistics tracking simulation performance
+    """
+    
+    def __init__(self, seed: int, client_id: str, performance_metric: int = 0, workload_file: str = '') -> None:
+        """
+        Initialize the JobSchedulingSim with environment and agent.
+        
+        Args:
+            seed: Random seed for reproducibility
+            client_id: Unique client identifier
+            performance_metric: Performance metric type (0-4)
+                0: Average bounded slowdown
+                1: Average waiting time  
+                2: Average turnaround time
+                3: Resource utilization
+                4: Average slowdown
+            workload_file: Path to workload file (SWF format)
+        """
         self._seed = seed
         self._client_id = client_id
         self._performance_metric = performance_metric
@@ -99,153 +137,166 @@ class JobSchedulingSim():
             job_sequence_size=JOB_SEQUENCE_SIZE
         )
 
-    def run_application(self, num_iterations, max_scheduling_steps):
+    def run_application(self, num_iterations: int, max_scheduling_steps: int) -> None:
+        """
+        Run the job scheduling simulation for specified number of iterations.
+        
+        This method executes the main simulation loop, collecting experience
+        from the environment and training the RL agent through the RL4Sys framework.
+        
+        Each iteration is structured as an epoch containing multiple episodes,
+        where each episode continues until the environment sends a 'done' flag
+        (when all jobs in the sequence are scheduled).
+        
+        Args:
+            num_iterations: Number of training iterations (epochs) to run
+            max_scheduling_steps: Maximum scheduling steps per episode (unused, kept for compatibility)
+        """
         self.logger.info(
             "Starting job scheduling simulation",
             num_iterations=num_iterations,
-            max_scheduling_steps=max_scheduling_steps
+            max_scheduling_steps=max_scheduling_steps,
+            job_sequence_size=JOB_SEQUENCE_SIZE
         )
 
         profiling = []
+        traj_per_epoch = 100  # Number of episodes per epoch (matching ppo-pick-jobs.py default)
 
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             self.logger.info(
-                "Starting iteration",
+                "Starting epoch",
                 iteration=iteration,
                 total_iterations=self.simulator_stats['total_iterations']
             )
 
-            # Reset the environment
-            obs,_ = self.env.reset()
-            done = False
-            scheduling_steps = 0
-            cumulative_reward = 0
-            episode_return = 0
-            sjf_score = 0
-            f1_score = 0
-            start_time = time.time()
+            # Collect multiple episodes for this epoch
+            episode_count = 0
+            epoch_stats = {
+                'episode_returns': [],
+                'episode_lengths': [],
+                'sjf_scores': [],
+                'f1_scores': []
+            }
 
-            # Build initial observation
-            obs_tensor = self.build_observation(obs)
+            while episode_count < traj_per_epoch:
+                # Reset the environment for new episode
+                obs, _ = self.env.reset()
+                done = False
+                episode_steps = 0
+                episode_return = 0
+                sjf_score = 0
+                f1_score = 0
+                start_time = time.time()
 
-            t0_start_time = time.perf_counter_ns()
+                # Build initial observation
+                obs_tensor = self.build_observation(obs)
 
-            env_ns = 0
-            infer_ns = 0
-            step = 0
+                # Episode loop - let environment determine when episode ends
+                while not done:
+                    # Get action from agent
+                    self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_tensor)
+                    self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
-            while True:
-                # Get action from agent
-                t0 = time.perf_counter_ns()
-                self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_tensor)
-                infer_ns += time.perf_counter_ns() - t0
+                    action = self.rl4sys_action.act
 
-                self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+                    # Ensure action is compatible and within valid range
+                    if isinstance(action, torch.Tensor):
+                        action = action.item()
+                    elif isinstance(action, np.ndarray):
+                        action = action[0]
+                    action = int(action)
 
-                action = self.rl4sys_action.act
+                    # Validate action is within valid range for HPCSim
+                    if action < 0 or action >= MAX_QUEUE_SIZE:
+                        action = 0  # Default to no action if out of range
 
-                # Ensure action is compatible
-                if isinstance(action, torch.Tensor):
-                    action = action.item()
-                elif isinstance(action, np.ndarray):
-                    action = action[0]
-                action = int(action)
+                    # Step the environment - returns [obs, reward, done, reward2, sjf, f1]
+                    step_result = self.env.step(action)
 
-                # Ensure action is within valid range for HPCSim
-                if action >= MAX_QUEUE_SIZE:
-                    action = 0  # Default to no action if out of range
+                    # Parse step results
+                    if len(step_result) == 6:
+                        next_obs, reward, done, reward2, sjf_t, f1_t = step_result
+                    elif len(step_result) == 4:
+                        next_obs, reward, done, reward2 = step_result
+                        sjf_t, f1_t = 0, 0
 
-                # Step the environment - returns [obs, reward, done, reward2, sjf, f1]
-                t0 = time.perf_counter_ns()
-                step_result = self.env.step(action)
-                env_ns += time.perf_counter_ns() - t0
+                    episode_return += reward
+                    sjf_score += sjf_t
+                    f1_score += f1_t
 
-                # Parse step results
-                if len(step_result) == 6:
-                    next_obs, reward, done, reward2, sjf_t, f1_t = step_result
-                elif len(step_result) == 4:
-                    next_obs, reward, done, reward2 = step_result
-                    sjf_t, f1_t = 0, 0
-
-                cumulative_reward += reward
-                episode_return += reward
-                sjf_score += sjf_t
-                f1_score += f1_t
-
-                # Build next observation
-                if next_obs is not None:
-                    next_obs_tensor = self.build_observation(next_obs)
-                else:
-                    # Episode ended, no next observation
-                    next_obs_tensor = None
-
-                # Record reward
-                self.rl4sys_action.update_reward(reward)
-                
-                scheduling_steps += 1
-                self.simulator_stats['scheduling_decisions'] += 1
-                self.simulator_stats['job_scores'].append(reward)
-
-                obs_tensor = next_obs_tensor  # Update current observation
-
-                step += 1
-                
-                #if scheduling_steps >= max_scheduling_steps or done:
-                if done:
-                    print(f"step: {step}, done: {done}, reward: {reward}, reward2: {reward2}, sjf_t: {sjf_t}, f1_t: {f1_t}")
-                    # Flag last action
-                    self.logger.info(
-                        "Iteration completed",
-                        iteration=iteration,
-                        scheduling_steps=scheduling_steps,
-                        cumulative_reward=cumulative_reward,
-                        episode_return=episode_return,
-                        sjf_score=sjf_score,
-                        f1_score=f1_score,
-                        done=done
-                    )
-
-                    # Mark end of trajectory
-                    self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, self.rl4sys_action)
-
-                    # Record performance metrics
-                    completion_time = time.time() - start_time
-                    self.simulator_stats['time_to_completion'].append(completion_time)
-                    self.simulator_stats['episode_returns'].append(episode_return)
-                    self.simulator_stats['sjf_scores'].append(sjf_score)
-                    self.simulator_stats['f1_scores'].append(f1_score)
-                    
-                    if episode_return > 0:  # Successful scheduling
-                        self.simulator_stats['successful_schedules'] += 1
-                        self.logger.info(
-                            "Successful scheduling iteration",
-                            iteration=iteration,
-                            completion_time=completion_time,
-                            successful_schedules=self.simulator_stats['successful_schedules']
-                        )
+                    # Build next observation
+                    if next_obs is not None:
+                        next_obs_tensor = self.build_observation(next_obs)
                     else:
-                        self.simulator_stats['failed_schedules'] += 1
-                        self.logger.info(
-                            "Failed scheduling iteration",
-                            iteration=iteration,
-                            completion_time=completion_time,
-                            failed_schedules=self.simulator_stats['failed_schedules']
-                        )
-                    break
+                        # Episode ended, no next observation
+                        next_obs_tensor = None
 
-            total_ns = time.perf_counter_ns() - t0_start_time
+                    # Record reward
+                    self.rl4sys_action.update_reward(reward)
+                    
+                    episode_steps += 1
+                    self.simulator_stats['scheduling_decisions'] += 1
+                    self.simulator_stats['job_scores'].append(reward)
 
-            total_ms = total_ns/1e6/scheduling_steps if scheduling_steps > 0 else 0
-            env_ms   = env_ns/1e6/scheduling_steps if scheduling_steps > 0 else 0
-            infer_ms = infer_ns/1e6/scheduling_steps if scheduling_steps > 0 else 0
-            over_ms  = total_ms - env_ms - infer_ms
-            profiling.append({
-                "steps/s": round(1000/total_ms,1) if total_ms > 0 else 0,
-                "env_ms": round(env_ms,3),
-                "infer_ms": round(infer_ms,3),
-                "over_ms": round(over_ms,3)
-            })
+                    obs_tensor = next_obs_tensor  # Update current observation
+
+                    if done:
+                        print(f"step: {episode_steps}, Reward: {reward}, done: {done}, sjf_score: {sjf_score}, f1_score: {f1_score}")
+
+                
+                # Episode completed
+                self.logger.info(
+                    "Episode completed",
+                    iteration=iteration,
+                    episode=episode_count,
+                    episode_steps=episode_steps,
+                    episode_return=episode_return,
+                    sjf_score=sjf_score,
+                    f1_score=f1_score,
+                    done=done,
+                    expected_steps=JOB_SEQUENCE_SIZE,
+                    step_difference=episode_steps - JOB_SEQUENCE_SIZE
+                )
+
+                # Mark end of trajectory
+                self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, self.rl4sys_action)
+
+                # Record episode statistics
+                completion_time = time.time() - start_time
+                self.simulator_stats['time_to_completion'].append(completion_time)
+                epoch_stats['episode_returns'].append(episode_return)
+                epoch_stats['episode_lengths'].append(episode_steps)
+                epoch_stats['sjf_scores'].append(sjf_score)
+                epoch_stats['f1_scores'].append(f1_score)
+                
+                # Update global statistics
+                self.simulator_stats['episode_returns'].append(episode_return)
+                self.simulator_stats['sjf_scores'].append(sjf_score)
+                self.simulator_stats['f1_scores'].append(f1_score)
+                
+                if episode_return > 0:  # Successful scheduling
+                    self.simulator_stats['successful_schedules'] += 1
+                else:
+                    self.simulator_stats['failed_schedules'] += 1
+
+                episode_count += 1
+
+            # Epoch completed - log epoch statistics
+            avg_episode_return = np.mean(epoch_stats['episode_returns']) if epoch_stats['episode_returns'] else 0
+            avg_episode_length = np.mean(epoch_stats['episode_lengths']) if epoch_stats['episode_lengths'] else 0
+            avg_sjf_score = np.mean(epoch_stats['sjf_scores']) if epoch_stats['sjf_scores'] else 0
+            avg_f1_score = np.mean(epoch_stats['f1_scores']) if epoch_stats['f1_scores'] else 0
+
+            self.logger.info(
+                "Epoch completed",
+                iteration=iteration,
+                episodes_collected=episode_count,
+                avg_episode_return=avg_episode_return,
+                avg_episode_length=avg_episode_length,
+                avg_sjf_score=avg_sjf_score,
+                avg_f1_score=avg_f1_score
+            )
 
         # Log final statistics
         self.logger.info(
@@ -260,28 +311,8 @@ class JobSchedulingSim():
             avg_sjf_score=np.mean(self.simulator_stats['sjf_scores']) if self.simulator_stats['sjf_scores'] else 0,
             avg_f1_score=np.mean(self.simulator_stats['f1_scores']) if self.simulator_stats['f1_scores'] else 0
         )
-        
-        """
-        avg_step_per_second = 0
-        avg_env_ms = 0
-        avg_infer_ms = 0
-        avg_over_ms = 0
-        for i in range(len(profiling)):
-            print(f"iteration {i}: {profiling[i]}")
-            avg_step_per_second += profiling[i]["steps/s"]
-            avg_env_ms += profiling[i]["env_ms"]
-            avg_infer_ms += profiling[i]["infer_ms"]
-            avg_over_ms += profiling[i]["over_ms"]
 
-        if len(profiling) > 0:
-            print(f"avg_step_per_second: {round(avg_step_per_second/len(profiling), 1)}")
-            print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
-            print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
-            print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
-        """
-        
-
-    def build_observation(self, obs):
+    def build_observation(self, obs) -> torch.Tensor:
         """
         Build the observation for the RL4Sys agent.
         Convert the HPCSim observation to tensor format.
@@ -294,12 +325,6 @@ class JobSchedulingSim():
             obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
         return obs_tensor
 
-    def calculate_performance_return(self, elements) -> float:
-        """
-        Calculate performance return based on job scheduling metrics.
-        This can be customized based on specific performance objectives.
-        """
-        pass
 
 
 if __name__ == '__main__':
@@ -321,9 +346,9 @@ if __name__ == '__main__':
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
     parser.add_argument('--number-of-iterations', type=int, default=10000,
-                        help='number of iterations to run the job scheduling simulation')
-    parser.add_argument('--number-of-steps', type=int, default=100,
-                        help='maximum number of scheduling steps allowed per iteration')
+                        help='number of epochs to run the job scheduling simulation')
+    parser.add_argument('--number-of-steps', type=int, default=256,
+                        help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
     parser.add_argument('--workload-file', type=str, default='/Users/girigiri_yomi/Udel_Proj/RL4Sys/rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf',
                         help='path to the workload file (SWF format)')
     parser.add_argument('--client-id', type=str, default="job_schedualing_old",
@@ -341,8 +366,9 @@ if __name__ == '__main__':
 
     job_scheduling_sim.logger.info(
         "Starting Job Scheduling simulation",
-        num_iterations=args.number_of_iterations,
-        max_steps=args.number_of_steps,
+        num_epochs=args.number_of_iterations,
+        max_steps_per_episode=args.number_of_steps,
+        episodes_per_epoch=100,
         seed=args.seed,
         workload_file=args.workload_file,
         performance_metric=args.performance_metric
