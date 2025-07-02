@@ -245,6 +245,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
     tf.set_random_seed(seed)
     np.random.seed(seed)
 
+    print("---------------------------------> shuffle: ", shuffle, "backfil: ", backfil, "skip: ", skip, "score_type: ", score_type, "batch_job_slice: ", batch_job_slice)
     env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False)
     env.seed(seed)
     env.my_init(workload_file=workload_file, sched_file=model_path)
@@ -454,8 +455,8 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2 lublin_256.swf SDSC-SP2-1998-4.2-cln.swf
-    parser.add_argument('--model', type=str, default='./data/lublin_256.schd')
+    parser.add_argument('--workload', type=str, default='rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf')  # RICC-2010-2 lublin_256.swf SDSC-SP2-1998-4.2-cln.swf
+    parser.add_argument('--model', type=str, default='rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.schd')
     parser.add_argument('--gamma', type=float, default=1)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)

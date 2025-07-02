@@ -108,7 +108,7 @@ class JobSchedulingSim:
                 self.env.my_init(workload_file=default_workload)
 
         # Initialize RL4Sys agent
-        self.rlagent = RL4SysAgent(conf_path='/Users/girigiri_yomi/Udel_Proj/RL4Sys/rl4sys/examples/job_schedual_old/job_conf.json')
+        self.rlagent = RL4SysAgent(conf_path='./rl4sys/examples/job_schedual_old/job_conf.json')
         self.rl4sys_traj = None
         self.rl4sys_action = None
 
@@ -200,6 +200,7 @@ class JobSchedulingSim:
 
                     action = self.rl4sys_action.act
 
+                    #print("---------------------------------> action: ", action)
                     # Ensure action is compatible and within valid range
                     if isinstance(action, torch.Tensor):
                         action = action.item()
@@ -209,6 +210,7 @@ class JobSchedulingSim:
 
                     # Validate action is within valid range for HPCSim
                     if action < 0 or action >= MAX_QUEUE_SIZE:
+                        print("??????????????????????????????????????????")
                         action = 0  # Default to no action if out of range
 
                     # Step the environment - returns [obs, reward, done, reward2, sjf, f1]
@@ -349,7 +351,7 @@ if __name__ == '__main__':
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
-    parser.add_argument('--workload-file', type=str, default='/Users/girigiri_yomi/Udel_Proj/RL4Sys/rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf',
+    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf',
                         help='path to the workload file (SWF format)')
     parser.add_argument('--client-id', type=str, default="job_schedualing_old",
                         help='unique client id for the job scheduling simulation')
