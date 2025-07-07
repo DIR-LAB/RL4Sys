@@ -137,6 +137,42 @@ class JobSchedulingSim:
             job_sequence_size=JOB_SEQUENCE_SIZE
         )
 
+    def build_mask(self, obs: np.ndarray) -> np.ndarray:
+        """
+        Build action mask based on observation state.
+        
+        This method implements the same masking logic as in ppo-pick-jobs.py:
+        - 0: Invalid action (empty slot or filled slot)
+        - 1: Valid action (job available for scheduling)
+        
+        The observation contains job slots, where each slot has JOB_FEATURES features.
+        The masking logic checks for specific patterns:
+        - Empty slot pattern: [0, 1, 1, 1, 1, 1, 1, 0] (mask = 0)
+        - Filled slot pattern: [1, 1, 1, 1, 1, 1, 1, 1] (mask = 0)  
+        - Valid job pattern: Any other pattern (mask = 1)
+        
+        Args:
+            obs: Observation array from environment with shape (MAX_QUEUE_SIZE * JOB_FEATURES,)
+            
+        Returns:
+            Mask array with shape (MAX_QUEUE_SIZE,) where 1 indicates valid actions and 0 indicates invalid actions
+        """
+        mask = []
+        for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
+            job_slot = obs[i:i+JOB_FEATURES]
+            
+            # Check if slot is empty (pattern: [0, 1, 1, 1, 1, 1, 1, 0])
+            if all(job_slot == [0] + [1]*(JOB_FEATURES-2) + [0]):
+                mask.append(0)
+            # Check if slot is filled (pattern: [1, 1, 1, 1, 1, 1, 1, 1])
+            elif all(job_slot == [1]*JOB_FEATURES):
+                mask.append(0)
+            # Valid job available for scheduling
+            else:
+                mask.append(1)
+        
+        return np.array(mask, dtype=np.float32)
+
     def run_application(self, num_iterations: int, max_scheduling_steps: int) -> None:
         """
         Run the job scheduling simulation for specified number of iterations.
@@ -194,13 +230,33 @@ class JobSchedulingSim:
 
                 # Episode loop - let environment determine when episode ends
                 while not done:
-                    # Get action from agent
-                    self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_tensor)
+                    # Build action mask for current observation
+                    action_mask = self.build_mask(obs)
+                    print(f"action_mask: {action_mask}")
+                    
+                    # Convert mask to torch.Tensor for the agent
+                    action_mask_tensor = torch.as_tensor(action_mask, dtype=torch.float32)
+                    
+                    # Debug logging for mask and action selection
+                    self.logger.debug(
+                        "Action selection with mask",
+                        episode_step=episode_steps,
+                        action_mask=action_mask.tolist(),
+                        valid_actions_count=np.sum(action_mask),
+                        total_actions=len(action_mask)
+                    )
+                    
+                    # Get action from agent with mask
+                    self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(
+                        self.rl4sys_traj, 
+                        obs_tensor, 
+                        mask=action_mask_tensor
+                    )
                     self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
                     action = self.rl4sys_action.act
 
-                    #print("---------------------------------> action: ", action)
+
                     # Ensure action is compatible and within valid range
                     if isinstance(action, torch.Tensor):
                         action = action.item()
@@ -210,7 +266,11 @@ class JobSchedulingSim:
 
                     # Validate action is within valid range for HPCSim
                     if action < 0 or action >= MAX_QUEUE_SIZE:
-                        print("??????????????????????????????????????????")
+                        self.logger.warning(
+                            "Action out of valid range, using default action",
+                            action=action,
+                            valid_range=(0, MAX_QUEUE_SIZE-1)
+                        )
                         action = 0  # Default to no action if out of range
 
                     # Step the environment - returns [obs, reward, done, reward2, sjf, f1]

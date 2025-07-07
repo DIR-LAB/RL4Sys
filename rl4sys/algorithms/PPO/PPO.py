@@ -147,6 +147,7 @@ class PPO():
             self.storage_done.append(r4a.done)
             
             # Store mask if available, otherwise use ones
+            print(f"r4a.mask: {r4a.mask}")
             if r4a.mask is not None:
                 self.storage_mask.append(np.copy(r4a.mask))
             else:
