@@ -41,10 +41,11 @@ def serialize_action(action: RL4SysAction) -> Action:
     """
     Serialize an RL4SysAction object into a protobuf message according to the new proto definition.
     """
-    # Serialize the observation, action, and reward
+    # Serialize the observation, action, reward, and mask
     obs_bytes = serialize_tensor(action.obs)
     action_bytes = serialize_tensor(action.act)
     reward_bytes = serialize_tensor(action.rew)
+    mask_bytes = serialize_tensor(action.mask)
     
     # Serialize extra data
     extra_data = {}
@@ -58,6 +59,7 @@ def serialize_action(action: RL4SysAction) -> Action:
         action=action_bytes,
         reward=reward_bytes,
         done=action.done if action.done is not None else False,
+        mask=mask_bytes,
         extra_data=extra_data
     )
     
@@ -84,6 +86,14 @@ def deserialize_action(action_proto: Action) -> RL4SysAction:
     else:
         reward = np.frombuffer(action_proto.reward, dtype=np.float32)[0]  # Get scalar value
     
+    # Deserialize mask
+    if action_proto.mask == b"None":
+        mask = None
+    else:
+        mask = np.frombuffer(action_proto.mask, dtype=np.float32)
+        # Convert numpy array to torch tensor to match original format
+        mask = torch.from_numpy(mask)
+    
     # Deserialize extra data
     data = {}
     for k, v in action_proto.extra_data.items():
@@ -98,6 +108,7 @@ def deserialize_action(action_proto: Action) -> RL4SysAction:
         action=action,
         reward=reward,
         done=action_proto.done,
+        mask=mask,
         data=data
     )
 

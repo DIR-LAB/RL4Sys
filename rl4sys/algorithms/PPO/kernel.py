@@ -20,14 +20,19 @@ class RLActor(nn.Module):
         super().__init__()
         self.pi = mlp([input_size] + list(hidden_sizes) + [act_dim], activation)
 
-    def _distribution(self, obs):
-        return Categorical(logits=self.pi(obs))
+    def _distribution(self, obs, mask=None):
+        logits = self.pi(obs)
+        if mask is not None:
+            # Apply mask by setting masked actions to large negative values
+            # This ensures they have near-zero probability
+            logits = logits + (mask - 1) * 1e8
+        return Categorical(logits=logits)
 
     def _log_prob_from_distribution(self, pi, act):
         return pi.log_prob(act)
 
-    def forward(self, obs, act=None):
-        pi = self._distribution(obs)
+    def forward(self, obs, act=None, mask=None):
+        pi = self._distribution(obs, mask)
         logp_a = None
         if act is not None:
             logp_a = self._log_prob_from_distribution(pi, act)
@@ -53,9 +58,9 @@ class RLActorCritic(nn.Module):
         # build value function
         self.v = RLCritic(input_size)
 
-    def step(self, obs):
+    def step(self, obs, mask=None):
         with torch.no_grad():
-            pi = self.pi._distribution(obs)
+            pi = self.pi._distribution(obs, mask)
             #v = self.v(obs)
             a = pi.sample()
             logp_a = pi.log_prob(a)
@@ -68,8 +73,8 @@ class RLActorCritic(nn.Module):
         }
         return action_nd, data_dict
 
-    def act(self, obs):
-        return self.step(obs)[0]
+    def act(self, obs, mask=None):
+        return self.step(obs, mask)[0]
     
     def get_model_name(self):
         return "PPO RLActorCritic"
@@ -77,8 +82,8 @@ class RLActorCritic(nn.Module):
     def get_value(self, obs):
         return self.v(obs)
     
-    def get_action_and_value(self, obs, action):
-        pi = self.pi._distribution(obs)
+    def get_action_and_value(self, obs, action, mask=None):
+        pi = self.pi._distribution(obs, mask)
         if action is None:
             action = pi.sample()
         return action, pi.log_prob(action), pi.entropy(), self.v(obs)

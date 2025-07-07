@@ -8,6 +8,7 @@ import datetime
 from pathlib import Path
 from queue import Empty, Queue
 import zlib
+from typing import Optional
 
 import torch
 from numpy import ndarray
@@ -213,9 +214,20 @@ class RL4SysAgent:
     def request_for_action(self, 
                           traj: RL4SysTrajectory = None, 
                           obs: torch.Tensor = None, 
+                          mask: Optional[torch.Tensor] = None,
                           *args, **kwargs):
         """
         Produce an action from the current model. Stores the action in our local trajectory buffer.
+        
+        Args:
+            traj (RL4SysTrajectory, optional): Existing trajectory or None to start new one
+            obs (torch.Tensor): Observation tensor for the current environment state
+            mask (torch.Tensor, optional): Optional mask tensor that can be the same length as obs or None
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            tuple: (traj, action) where traj is the trajectory and action is the generated RL4SysAction
         """
         # Get current version safely before creating trajectory
         with self._lock:
@@ -246,7 +258,7 @@ class RL4SysAgent:
                 data_keys=list(data_dict.keys())
             )
 
-        action = RL4SysAction(obs, action_nd, reward=-1, done=False, data=data_dict, version=traj.version)
+        action = RL4SysAction(obs, action_nd, reward=-1, done=False, mask=mask, data=data_dict, version=traj.version)
         
         return traj, action
 

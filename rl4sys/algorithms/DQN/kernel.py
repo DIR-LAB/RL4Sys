@@ -43,27 +43,43 @@ class DeepQNetwork(nn.Module):
         self._epsilon_min = epsilon_min
         self._epsilon_decay = epsilon_decay
 
-    def forward(self, obs: torch.Tensor):
+    def forward(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
             Forward pass through Q-network, outputs Q-values for actions.
         Args:
             obs: current observation
+            mask: optional mask tensor to mask certain actions
         Returns:
             Q-values for actions
         """
-        return self.q_network(obs)
+        q_values = self.q_network(obs)
+        if mask is not None:
+            # Apply mask by setting masked actions to large negative values
+            # This ensures they have the lowest Q-values
+            q_values = q_values + (mask - 1) * 1e8
+        return q_values
 
-    def step(self, obs: torch.Tensor):
+    def step(self, obs: torch.Tensor, mask: torch.Tensor = None):
         """
         If you want to rely entirely on DQN.py's linear_schedule, 
         you can pass the updated epsilon each time and
         override self._epsilon. Otherwise, this can remain as is.
         """
         with torch.no_grad():
-            q = self.forward(obs)
+            q = self.forward(obs, mask)
         # Epsilon-greedy
         if np.random.rand() <= self._epsilon:
-            a = np.random.randint(self.act_dim)
+            # For random action, respect the mask
+            if mask is not None:
+                # Get available actions (where mask == 1)
+                available_actions = torch.where(mask == 1)[0]
+                if len(available_actions) > 0:
+                    a = available_actions[np.random.randint(len(available_actions))].item()
+                else:
+                    # If no actions available, pick any action
+                    a = np.random.randint(self.act_dim)
+            else:
+                a = np.random.randint(self.act_dim)
         else:
             a = q.argmax().item()
 

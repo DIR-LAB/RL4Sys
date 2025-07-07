@@ -64,6 +64,7 @@ class DQN():
         self.version = version
         self.seed = seed
         self.type = "offpolicy"
+        self.act_dim = act_dim  # Store action dimension for mask creation
         
         # Set device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,7 +88,8 @@ class DQN():
             obs_dim=input_size,
             buf_size=buffer_size,
             gamma=gamma,
-            epsilon=start_e
+            epsilon=start_e,
+            act_dim=act_dim
         )
         
         # Save references
@@ -139,10 +141,14 @@ class DQN():
             self.global_step += 1
 
             self.ep_rewards += r4a.rew
+            
+            # Get mask for this action
+            mask = r4a.mask if r4a.mask is not None else np.ones(self.act_dim)
+            
             # Store in replay buffer
             # Our PPO snippet simply stored transitions in a list, but for DQN,
             # we store them into replay_buffer.
-            self.replay_buffer.store(r4a.obs, r4a.act, r4a.rew, r4a.data['q_val'], r4a.done)
+            self.replay_buffer.store(r4a.obs, r4a.act, r4a.rew, r4a.data['q_val'], r4a.done, mask)
 
             if r4a.done:
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
@@ -183,13 +189,14 @@ class DQN():
             act      = data['act'].long()
             rew      = data['rew']
             done     = data['done']
+            mask     = data['mask']
 
             with torch.no_grad():
-                q_next = self.target_network.forward(next_obs)
+                q_next = self.target_network.forward(next_obs, mask)
                 q_next_max, _ = q_next.max(dim=1)
                 td_target = rew + self._gamma * q_next_max * (1 - done)
 
-            q_vals = self.q_network.forward(obs)  # shape [batch_size, act_dim]
+            q_vals = self.q_network.forward(obs, mask)  # shape [batch_size, act_dim]
             q_taken = q_vals.gather(1, act.unsqueeze(-1)).squeeze(-1)
 
             loss_q = F.mse_loss(q_taken, td_target)

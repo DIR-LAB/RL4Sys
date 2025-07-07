@@ -50,8 +50,8 @@ class PPO():
         self._batch_size = batch_size
         self._traj_per_epoch = traj_per_epoch
         self._clip_ratio = clip_ratio
-        self._gamma = gamma
-        self._lam = lam
+        self.gamma = gamma
+        self.lam = lam
         self._pi_lr = pi_lr
         self._vf_lr = vf_lr
         self._train_pi_iters = train_pi_iters
@@ -62,44 +62,49 @@ class PPO():
         self._clip_vloss = clip_vloss
         self._ent_coef = ent_coef
         self._vf_coef = vf_coef
-        self.gamma = gamma
-        self.lam = lam
         self.version = version
         self.seed = seed
         self.type = "onpolicy"
-
-        self.models = {}  # Store model versions for serving
+        self.act_dim = act_dim  # Store action dimension for mask creation
+        
+        # Set device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Create model
+        self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
+        self.models = {}
         # Initialize lock for thread-safe model updates
         self.lock = threading.RLock()
+        self.models[self.version] = self._model_train
         
-        # Create actor-critic model for training
-        self._model_train = RLActorCritic(input_size, act_dim)
-        self.models[self.version] = copy.deepcopy(self._model_train)  # Store initial model version
+        # Create optimizer - fix attribute names to match RLActorCritic
+        self.optimizer = Adam([
+            {'params': self._model_train.pi.parameters(), 'lr': self._pi_lr},
+            {'params': self._model_train.v.parameters(), 'lr': self._vf_lr}
+        ])
         
-        # Single optimizer for training
-        self.optimizer = Adam(self._model_train.parameters(), lr=pi_lr, eps=1e-5)
-
-        # Set up loggers
-        self.logger = StructuredLogger(f"PPO-{version}", debug=True)
-        log_data_dir = os.path.join('./logs/rl4sys-ppo-info', f"{int(time.time())}__{self.seed}")
-        os.makedirs(log_data_dir, exist_ok=True)
-        self.writer = SummaryWriter(log_dir=log_data_dir)
-
-        # Storage buffers
+        # Storage for trajectories
         self.storage_obs = []
         self.storage_act = []
         self.storage_logp = []
         self.storage_rew = []
         self.storage_val = []
         self.storage_done = []
-        self.storage_next_obs = []  # Added to match CleanRL's approach
-
+        self.storage_next_obs = []
+        self.storage_mask = []  # Add storage for masks
+        
+        # Metrics
+        self.ep_rewards = 0
+        self.start_time = None
         self.traj = 0
         self.epoch = 0
         self.global_step = 0
-        self.start_time = None
-        self.ep_rewards = 0
-
+        
+        # Set up loggers
+        self.logger = StructuredLogger(f"PPO-{version}", debug=True)
+        log_data_dir = os.path.join('./logs/rl4sys-ppo-info', f"{int(time.time())}__{self.seed}")
+        os.makedirs(log_data_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=log_data_dir)
 
     def save(self, filename: str) -> None:
         """Save the current training model.
@@ -140,6 +145,14 @@ class PPO():
             self.storage_rew.append(np.copy(r4a.rew))
             self.storage_val.append(np.copy(obs_value.detach().numpy()))
             self.storage_done.append(r4a.done)
+            
+            # Store mask if available, otherwise use ones
+            if r4a.mask is not None:
+                self.storage_mask.append(np.copy(r4a.mask))
+            else:
+                # Create a mask of ones with the same shape as action space
+                mask = np.ones(self.act_dim)
+                self.storage_mask.append(mask)
             
             # Store next observation for bootstrapping
             if i < len(trajectory) - 1:
@@ -190,6 +203,7 @@ class PPO():
         self.storage_val = []
         self.storage_done = []
         self.storage_next_obs = []
+        self.storage_mask = []
 
     def train_model(self) -> None:
         """
@@ -203,15 +217,17 @@ class PPO():
         values = np.array(self.storage_val, dtype=np.float32)
         dones = np.array(self.storage_done, dtype=np.bool_)
         next_obs = np.array(self.storage_next_obs, dtype=np.float32)
+        masks = np.array(self.storage_mask, dtype=np.float32)
         
         # Convert to tensors and move to device
-        obs_tensor = torch.tensor(obs, dtype=torch.float32)
-        actions_tensor = torch.tensor(actions, dtype=torch.long)
-        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32)
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32)
-        values_tensor = torch.tensor(values, dtype=torch.float32)
-        dones_tensor = torch.tensor(dones, dtype=torch.bool)
-        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        actions_tensor = torch.tensor(actions, dtype=torch.long).to(self.device)
+        logprobs_tensor = torch.tensor(logprobs, dtype=torch.float32).to(self.device)
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        values_tensor = torch.tensor(values, dtype=torch.float32).to(self.device)
+        dones_tensor = torch.tensor(dones, dtype=torch.bool).to(self.device)
+        next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32).to(self.device)
+        masks_tensor = torch.tensor(masks, dtype=torch.float32).to(self.device)
         
         # Calculate advantages and returns
         with torch.no_grad():
@@ -240,6 +256,7 @@ class PPO():
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values_tensor.reshape(-1)
+        b_masks = masks_tensor.reshape(-1, self.act_dim)  # Reshape masks to match action dimension
         
         # Optimize policy and value networks
         batch_size = len(b_obs)
@@ -254,7 +271,7 @@ class PPO():
                 mb_inds = b_inds[start:end]
                 
                 _, newlogprob, entropy, newvalue = self._model_train.get_action_and_value(
-                    b_obs[mb_inds], b_actions[mb_inds]
+                    b_obs[mb_inds], b_actions[mb_inds], b_masks[mb_inds]
                 )
                 
                 # Policy loss

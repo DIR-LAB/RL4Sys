@@ -98,11 +98,13 @@ public:
      * 
      * @param trajectory Current trajectory (nullptr to start new one)
      * @param observation Observation vector (must match model input size)
+     * @param mask Optional mask vector (can be same length as observation or empty)
      * @return Pair of (updated_trajectory, action) or nullopt on failure
      */
     std::optional<std::pair<std::shared_ptr<RL4SysTrajectory>, RL4SysAction>> 
     requestForAction(std::shared_ptr<RL4SysTrajectory> trajectory,
-                     const std::vector<float>& observation);
+                     const std::vector<float>& observation,
+                     const std::vector<float>& mask = std::vector<float>());
 
     /**
      * @brief Add an action to the trajectory.

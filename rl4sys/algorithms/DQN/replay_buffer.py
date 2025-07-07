@@ -59,7 +59,7 @@ def statistics_scalar(x, with_min_and_max=False):
 
 
 class ReplayBuffer():
-    def __init__(self, obs_dim, buf_size, gamma, epsilon, *args, **kwargs):
+    def __init__(self, obs_dim, buf_size, gamma, epsilon, act_dim=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
         self.next_obs_buf = np.zeros(combined_shape(buf_size, obs_dim), dtype=np.float32)
@@ -68,18 +68,26 @@ class ReplayBuffer():
         self.ret_buf = np.zeros(buf_size, dtype=np.float32)
         self.q_val_buf = np.zeros(buf_size, dtype=np.float32)
         self.done_buf = np.zeros(buf_size, dtype=np.bool_)  # or np.float32
+        self.mask_buf = np.zeros(combined_shape(buf_size, act_dim), dtype=np.float32)  # Use act_dim for mask buffer
         self.gamma, self.epsilon = gamma, epsilon
         self.ptr, self.path_start_idx, self.max_size = 0, 0, buf_size
         self.capacity = buf_size
 
 
-    def store(self, obs, act, rew, q_val, done):
+    def store(self, obs, act, rew, q_val, done, mask=None):
         idx = self.ptr % self.max_size
         self.obs_buf[idx] = obs
         self.act_buf[idx] = act
         self.rew_buf[idx] = rew
         self.done_buf[idx] = done
         self.q_val_buf[idx] = q_val[int(act)] if len(q_val) > act else 0.0 # TODO check if this is correct
+        
+        # Store mask if provided, otherwise use ones
+        if mask is not None:
+            self.mask_buf[idx] = mask
+        else:
+            # Create a mask of ones with the same shape as action space
+            self.mask_buf[idx] = np.ones(self.mask_buf.shape[1])
 
         if self.ptr > 0:
             self.next_obs_buf[idx - 1] = obs
@@ -112,6 +120,7 @@ class ReplayBuffer():
                 act: the action
                 rew: the reward
                 ret: the reward-to-go
+                mask: the action mask
         """
         assert self.ptr >= batch_size
         # random sample of indices
@@ -120,6 +129,6 @@ class ReplayBuffer():
 
         data = dict(obs=self.obs_buf[batch], next_obs=self.next_obs_buf[batch], act=self.act_buf[batch],
                     rew=self.rew_buf[batch], ret=self.ret_buf[batch],
-                    q_val=self.q_val_buf[batch], done=self.done_buf[batch])
+                    q_val=self.q_val_buf[batch], done=self.done_buf[batch], mask=self.mask_buf[batch])
 
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in data.items()}, batch
