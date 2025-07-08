@@ -22,13 +22,17 @@ class RLActor(nn.Module):
 
     def _distribution(self, obs, mask=None):
         logits = self.pi(obs)
-        print(f"logits: {logits}")
-        print(f"mask: {mask}")
+        #print(f"logits: {logits}")
+        #print(f"mask: {mask}")
         if mask is not None:
             # Apply mask by setting masked actions to large negative values
             # This ensures they have near-zero probability
             logits = logits + (1 - mask) * -1e8 # TODO check why this is not going to 0
-        return Categorical(logits=logits)
+        
+        result = Categorical(logits=logits)
+        #print(f"result: {result}") 
+        #exit()
+        return result
 
     def _log_prob_from_distribution(self, pi, act):
         return pi.log_prob(act)

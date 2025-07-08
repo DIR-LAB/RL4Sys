@@ -232,7 +232,6 @@ class JobSchedulingSim:
                 while not done:
                     # Build action mask for current observation
                     action_mask = self.build_mask(obs)
-                    print(f"action_mask: {action_mask}")
                     
                     # Convert mask to torch.Tensor for the agent
                     action_mask_tensor = torch.as_tensor(action_mask, dtype=torch.float32)
@@ -255,7 +254,6 @@ class JobSchedulingSim:
                     self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
                     action = self.rl4sys_action.act
-
 
                     # Ensure action is compatible and within valid range
                     if isinstance(action, torch.Tensor):

@@ -251,7 +251,7 @@ class RL4SysAgent:
             if self._model is None:
                 raise RuntimeError("No model available yet!")
 
-            action_nd, data_dict = self._model.step(obs)
+            action_nd, data_dict = self._model.step(obs, mask)
             self.logger.debug(
                 "Generated action",
                 action_shape=action_nd.shape,
