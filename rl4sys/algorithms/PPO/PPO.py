@@ -68,7 +68,7 @@ class PPO():
         self.act_dim = act_dim  # Store action dimension for mask creation
         
         # Set device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")  # Force CPU to avoid device mismatch issues
         
         # Create model
         self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
@@ -143,7 +143,7 @@ class PPO():
             self.storage_act.append(np.copy(r4a.act))
             self.storage_logp.append(np.copy(r4a.data['logp_a']))
             self.storage_rew.append(np.copy(r4a.rew))
-            self.storage_val.append(np.copy(obs_value.detach().numpy()))
+            self.storage_val.append(np.copy(obs_value.detach().cpu().numpy()))
             self.storage_done.append(r4a.done)
             
             # Store mask if available, otherwise use ones

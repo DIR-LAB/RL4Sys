@@ -67,7 +67,7 @@ class DQN():
         self.act_dim = act_dim  # Store action dimension for mask creation
         
         # Set device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")  # Force CPU to avoid device mismatch issues
         
         # Create Q-network
         self.q_network = DeepQNetwork(input_size, act_dim).to(self.device)

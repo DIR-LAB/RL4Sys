@@ -84,7 +84,7 @@ class DeepQNetwork(nn.Module):
             a = q.argmax().item()
 
         data_dict = {
-            'q_val': q.detach().numpy(),
+            'q_val': q.detach().cpu().numpy(),
             'epsilon': self._epsilon
         }
         # Decay (you may skip this if now done at the DQN level)
