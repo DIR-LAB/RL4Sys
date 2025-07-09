@@ -64,8 +64,8 @@ def start_server(port=50051, max_workers=10, debug=False):
         server.start()
         logger.info(f"RL4Sys server started on port {port}", 
                    port=port,
-                   max_send_message_length="32MB",
-                   max_receive_message_length="32MB",
+                   max_send_message_length="200MB",
+                   max_receive_message_length="200MB",
                    compression="Gzip")
         
         # Keep server running

@@ -219,7 +219,12 @@ class MyRLServiceServicer(RLServiceServicer):
         self.logger = StructuredLogger("RL4SysServer", debug)
         
         # Initialize system monitoring
-        self.system_monitor = SystemMonitor("RL4SysServer", debug=debug)
+        self.system_monitor = SystemMonitor(
+            "RL4SysServer", 
+            debug=debug,
+            save_to_file=True,
+            project_name="rl4sys_server"
+        )
         self.system_monitor.start_monitoring()
         
         self.logger.info(

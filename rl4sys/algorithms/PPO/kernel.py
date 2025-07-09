@@ -27,7 +27,7 @@ class RLActor(nn.Module):
         if mask is not None:
             # Apply mask by setting masked actions to large negative values
             # This ensures they have near-zero probability
-            logits = logits + (1 - mask) * -1e8 # TODO check why this is not going to 0
+            logits = logits + (1 - mask) * -1e8 
         
         result = Categorical(logits=logits)
         #print(f"result: {result}") 
