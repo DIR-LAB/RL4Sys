@@ -10,9 +10,12 @@ import time
 import math
 import torch
 import threading
+import csv
+import datetime
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
+from torch.utils.tensorboard import SummaryWriter
 
 # Set up logging with debug enabled if requested
 # setup_rl4sys_logging(debug=True)
@@ -81,13 +84,14 @@ class JobSchedulingSim:
         self._performance_metric = performance_metric
         self._workload_file = workload_file
         self.logger = StructuredLogger("JobSchedulingSim", debug=True) # TODO debug only
-
-        # Set the seeds for reproducibility
+        self.tensorboard_writer = SummaryWriter(log_dir='./logs/job-scheduling/{}'.format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S")))
+        
+        # Set the seeds for reproducibility (matching ppo-pick-jobs.py)
         np.random.seed(self._seed)
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
-        # Initialize the HPCSim environment
+        # Initialize the HPCSim environment (matching ppo-pick-jobs.py exactly)
         self.env = HPCEnv(
             shuffle=False, 
             backfil=False, 
@@ -96,16 +100,20 @@ class JobSchedulingSim:
             batch_job_slice=0,
             build_sjf=False
         )
-
         
-        # Load workload if provided
+        # Set environment seed (matching ppo-pick-jobs.py)
+        self.env.seed(self._seed)
+
+        # Load workload if provided (matching ppo-pick-jobs.py initialization)
         if self._workload_file:
-            self.env.my_init(workload_file=self._workload_file)
+            # Use the same initialization as ppo-pick-jobs.py
+            # Note: sched_file parameter is ignored in my_init, so we can pass empty string
+            self.env.my_init(workload_file=self._workload_file, sched_file='')
         else:
             # Use default workload path
             default_workload = os.path.join(os.path.dirname(__file__), 'HPCSim', 'lublin_256.swf')
             if os.path.exists(default_workload):
-                self.env.my_init(workload_file=default_workload)
+                self.env.my_init(workload_file=default_workload, sched_file='')
 
         # Initialize RL4Sys agent
         self.rlagent = RL4SysAgent(conf_path='./rl4sys/examples/job_schedual_old/job_conf.json')
@@ -127,6 +135,9 @@ class JobSchedulingSim:
             'f1_scores': []
         }
 
+        # Set up CSV logging
+        self._setup_csv_logging()
+
         self.logger.info(
             "Initialized JobSchedulingSim",
             client_id=self._client_id,
@@ -136,6 +147,97 @@ class JobSchedulingSim:
             max_queue_size=MAX_QUEUE_SIZE,
             job_sequence_size=JOB_SEQUENCE_SIZE
         )
+
+    def _setup_csv_logging(self) -> None:
+        """
+        Set up CSV logging for episode completion data.
+        
+        Creates directory structure: ./examples/job-scheduling/timestamp/
+        and initializes CSV file with headers.
+        """
+        # Create directory structure
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.csv_log_dir = os.path.join("examples", "job-scheduling", timestamp)
+        os.makedirs(self.csv_log_dir, exist_ok=True)
+        
+        # Create CSV file for episode data
+        self.csv_file_path = os.path.join(self.csv_log_dir, "episode_completion_data.csv")
+        
+        # Write CSV header
+        try:
+            with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = [
+                    'timestamp',
+                    'iteration',
+                    'episode',
+                    'episode_steps',
+                    'reward',
+                    'done',
+                    'sjf_score',
+                    'f1_score',
+                    'episode_return',
+                    'client_id',
+                    'seed'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+            
+            self.logger.info(
+                "CSV logging initialized",
+                csv_file_path=self.csv_file_path,
+                csv_log_dir=self.csv_log_dir
+            )
+        except Exception as e:
+            self.logger.error("Failed to initialize CSV logging", error=str(e))
+
+    def _log_episode_completion(self, iteration: int, episode: int, episode_steps: int, 
+                               reward: float, done: bool, sjf_score: float, f1_score: float, 
+                               episode_return: float) -> None:
+        """
+        Log episode completion data to CSV file.
+        
+        Args:
+            iteration: Current training iteration/epoch
+            episode: Episode number within the iteration
+            episode_steps: Number of steps in the episode
+            reward: Final reward of the episode
+            done: Whether episode is done
+            sjf_score: SJF score for the episode
+            f1_score: F1 score for the episode
+            episode_return: Total episode return
+        """
+        try:
+            with open(self.csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                fieldnames = [
+                    'timestamp',
+                    'iteration',
+                    'episode',
+                    'episode_steps',
+                    'reward',
+                    'done',
+                    'sjf_score',
+                    'f1_score',
+                    'episode_return',
+                    'client_id',
+                    'seed'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writerow({
+                    'timestamp': datetime.datetime.now().isoformat(),
+                    'iteration': iteration,
+                    'episode': episode,
+                    'episode_steps': episode_steps,
+                    'reward': reward,
+                    'done': done,
+                    'sjf_score': sjf_score,
+                    'f1_score': f1_score,
+                    'episode_return': episode_return,
+                    'client_id': self._client_id,
+                    'seed': self._seed
+                })
+        except Exception as e:
+            self.logger.error("Failed to write episode data to CSV", error=str(e))
 
     def build_mask(self, obs: np.ndarray) -> np.ndarray:
         """
@@ -215,6 +317,7 @@ class JobSchedulingSim:
                 'f1_scores': []
             }
 
+
             while episode_count < traj_per_epoch:
                 # Reset the environment for new episode
                 obs, _ = self.env.reset()
@@ -232,18 +335,11 @@ class JobSchedulingSim:
                 while not done:
                     # Build action mask for current observation
                     action_mask = self.build_mask(obs)
-                    
+                    #print("action_mask", action_mask)
+                    #print("valid actions", np.sum(action_mask))
+
                     # Convert mask to torch.Tensor for the agent
                     action_mask_tensor = torch.as_tensor(action_mask, dtype=torch.float32)
-                    
-                    # Debug logging for mask and action selection
-                    self.logger.debug(
-                        "Action selection with mask",
-                        episode_step=episode_steps,
-                        action_mask=action_mask.tolist(),
-                        valid_actions_count=np.sum(action_mask),
-                        total_actions=len(action_mask)
-                    )
                     
                     # Get action from agent with mask
                     self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(
@@ -254,6 +350,8 @@ class JobSchedulingSim:
                     self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
                     action = self.rl4sys_action.act
+                    #action = 0
+
 
                     # Ensure action is compatible and within valid range
                     if isinstance(action, torch.Tensor):
@@ -288,6 +386,13 @@ class JobSchedulingSim:
                     # Build next observation
                     if next_obs is not None:
                         next_obs_tensor = self.build_observation(next_obs)
+                        # Keep the raw numpy observation in sync so that the action
+                        # mask for the next step reflects the latest environment
+                        # state. Without this update we would keep generating the
+                        # mask from a stale observation, which is why the number
+                        # of valid actions appeared to never change when always
+                        # selecting action 0.
+                        obs = next_obs # remove causing the action mask to be wrong because the observation is not updated
                     else:
                         # Episode ended, no next observation
                         next_obs_tensor = None
@@ -302,9 +407,23 @@ class JobSchedulingSim:
                     obs_tensor = next_obs_tensor  # Update current observation
 
                     if done:
-                        print(f"step: {episode_steps}, Reward: {reward}, done: {done}, sjf_score: {sjf_score}, f1_score: {f1_score}")
+                        self.rl4sys_action.done = True
+                        print("version", self.rl4sys_action.version)
+                        print("iteration", iteration, "episode_count", episode_count, "episode_steps", episode_steps, "reward", reward, "sjf_score", sjf_score, "f1_score", f1_score, "episode_return", episode_return)
+                        # Log episode completion data to CSV file
+                        self._log_episode_completion(
+                            iteration=iteration,
+                            episode=episode_count,
+                            episode_steps=episode_steps,
+                            reward=reward,
+                            done=done,
+                            sjf_score=sjf_score,
+                            f1_score=f1_score,
+                            episode_return=episode_return
+                        )
+                        break
 
-                
+    
                 # Episode completed
                 self.logger.info(
                     "Episode completed",
@@ -319,6 +438,7 @@ class JobSchedulingSim:
                     step_difference=episode_steps - JOB_SEQUENCE_SIZE
                 )
 
+    
                 # Mark end of trajectory
                 self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
@@ -329,7 +449,7 @@ class JobSchedulingSim:
                 epoch_stats['episode_lengths'].append(episode_steps)
                 epoch_stats['sjf_scores'].append(sjf_score)
                 epoch_stats['f1_scores'].append(f1_score)
-                
+
                 # Update global statistics
                 self.simulator_stats['episode_returns'].append(episode_return)
                 self.simulator_stats['sjf_scores'].append(sjf_score)
@@ -347,6 +467,11 @@ class JobSchedulingSim:
             avg_episode_length = np.mean(epoch_stats['episode_lengths']) if epoch_stats['episode_lengths'] else 0
             avg_sjf_score = np.mean(epoch_stats['sjf_scores']) if epoch_stats['sjf_scores'] else 0
             avg_f1_score = np.mean(epoch_stats['f1_scores']) if epoch_stats['f1_scores'] else 0
+
+            self.tensorboard_writer.add_scalar('avg_episode_return', avg_episode_return, iteration)
+            self.tensorboard_writer.add_scalar('avg_episode_length', avg_episode_length, iteration)
+            self.tensorboard_writer.add_scalar('avg_sjf_score', avg_sjf_score, iteration)
+            self.tensorboard_writer.add_scalar('avg_f1_score', avg_f1_score, iteration)
 
             self.logger.info(
                 "Epoch completed",
@@ -400,7 +525,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(prog="RL4Sys Job Scheduling Simulator",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--seed', type=int, default=1,
+    parser.add_argument('--seed', type=int, default=0,
                         help='seed for random number generation in environment')
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
@@ -409,7 +534,7 @@ if __name__ == '__main__':
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
-    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf',
+    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf',
                         help='path to the workload file (SWF format)')
     parser.add_argument('--client-id', type=str, default="job_schedualing_old",
                         help='unique client id for the job scheduling simulation')

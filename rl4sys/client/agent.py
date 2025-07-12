@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
+from rl4sys.algorithms.PPO.job_kernel import JobRLActorCritic
 from rl4sys.common.action import RL4SysAction
 from rl4sys.common.trajectory import RL4SysTrajectory
 from rl4sys.utils.util import serialize_action, StructuredLogger
@@ -35,7 +36,8 @@ from rl4sys.proto import (
 from rl4sys.client.config_loader import AgentConfigLoader
 
 MODEL_CLASSES = {
-    'PPO': RLActorCritic,
+    'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
+    'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
     'DQN': DeepQNetwork,
 }
 
@@ -103,8 +105,7 @@ class RL4SysAgent:
 
         # Get initial model from server
         self.logger.info("Getting initial model from server")
-        with self._lock:
-            self._model, self.local_version = self._get_model_unsafe(expected_version=-1)
+        self._model, self.local_version = self._get_model(expected_version=-1)
         assert self._model is not None, "Model should be loaded from server at this point"
 
         self.logger.info(
@@ -277,7 +278,7 @@ class RL4SysAgent:
         """
         Mark the end of the current trajectory
         """
-        action.done = True
+        # action.done = True
         traj.mark_completed()
         self.logger.debug(
             "Marked trajectory as completed",
@@ -372,16 +373,15 @@ class RL4SysAgent:
             if response.model_updated:
                 # Need to update model and version together under lock
                 with self._lock:
-                    old_version = self.local_version
-                self.logger.info(
-                    "Model updated",
-                        old_version=old_version,
-                    new_version=response.new_version
-                )
-                # Get new model (this also updates self._model internally)
-                self._model, _ = self._get_model_unsafe(response.new_version)
-                # update local version
-                self.local_version = response.new_version
+                    self.logger.info(
+                        "Model updated",
+                            old_version=self.local_version,
+                        new_version=response.new_version
+                    )
+                    # Get new model (this also updates self._model internally)
+                    self._model, _ = self._get_model_unsafe(response.new_version)
+                    # update local version
+                    self.local_version = response.new_version
                 return response.new_version
             else:
                 self.logger.debug("No model update needed")
@@ -436,7 +436,44 @@ class RL4SysAgent:
             if self._model is None:
                 model_input_size = self.algorithm_parameters['input_size']
                 model_act_dim = self.algorithm_parameters['act_dim']
-                self._model = model_class(model_input_size, model_act_dim)
+                
+                if self.algorithm_name == 'PPO_job':
+                    # For PPO_job, use JobRLActorCritic with job-specific parameters
+                    max_queue_size = self.algorithm_parameters.get('max_queue_size', 256)
+                    job_features = self.algorithm_parameters.get('job_features', 8)
+                    use_attention = self.algorithm_parameters.get('use_attention', False)
+                    network_type = self.algorithm_parameters.get('network_type', 'rl_kernel')
+                    
+                    self._model = model_class(
+                        input_size=model_input_size,
+                        act_dim=model_act_dim,
+                        max_queue_size=max_queue_size,
+                        job_features=job_features,
+                        use_attention=use_attention,
+                        network_type=network_type
+                    )
+                    
+                    self.logger.info(
+                        "Created JobRLActorCritic model",
+                        input_size=model_input_size,
+                        act_dim=model_act_dim,
+                        max_queue_size=max_queue_size,
+                        job_features=job_features,
+                        use_attention=use_attention,
+                        network_type=network_type
+                    )
+                elif self.algorithm_name == 'PPO':
+                    # For PPO, use normal RLActorCritic with standard parameters
+                    self._model = model_class(model_input_size, model_act_dim, actor_type='kernel')
+                    
+                    self.logger.info(
+                        "Created RLActorCritic model",
+                        input_size=model_input_size,
+                        act_dim=model_act_dim
+                    )
+                else:
+                    # For other algorithms (like DQN), use standard parameters
+                    self._model = model_class(model_input_size, model_act_dim)
 
             # Decompress the model state
             try:

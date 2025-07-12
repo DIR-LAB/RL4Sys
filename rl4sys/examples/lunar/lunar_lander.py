@@ -16,6 +16,7 @@ import threading
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
+from torch.utils.tensorboard import SummaryWriter
 
 
 
@@ -40,6 +41,7 @@ class LunarLanderSim():
         self._performance_metric = performance_metric
         self._render_game = render_game
         self.logger = StructuredLogger("LunarLanderSim", debug=debug)
+        self.tensorboard_writer = SummaryWriter(log_dir='./logs/lunar_lander')
 
         # Initialize the Gym environment
         self.env = gym.make('LunarLander-v3', continuous=False)
@@ -119,6 +121,7 @@ class LunarLanderSim():
             env_ns = 0
             infer_ns = 0
 
+            
             while not done or moves < max_moves:
                 if self._render_game:
                     self.env.render()
@@ -208,6 +211,8 @@ class LunarLanderSim():
                 "over_ms": round(over_ms,3)})
             
             
+            self.tensorboard_writer.add_scalar('reward', cumulative_reward, iteration)
+
 
             if self._render_game:
                 self.env.close()
@@ -276,7 +281,7 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=10000,
+    parser.add_argument('--number-of-iterations', type=int, default=200000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=200,
                         help='maximum number of moves allowed per iteration')

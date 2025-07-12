@@ -121,7 +121,7 @@ class DQN():
         new_path = os.path.join(self.save_model_path, filename + ('.pth' if not filename.endswith('.pth') else ''))
         torch.save(self.q_network, new_path)
 
-    def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
+    def receive_trajectory(self, trajectory: RL4SysTrajectory, version: int) -> bool:
         """
         Process a trajectory from the environment (similar to PPO's approach).
 

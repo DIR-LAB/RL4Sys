@@ -69,15 +69,16 @@ class PPO():
         
         # Set device
         self.device = torch.device("cpu")  # Force CPU to avoid device mismatch issues
-        
-        # Create model
+
+        # Create normal PPO model
         self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
+        
         self.models = {}
         # Initialize lock for thread-safe model updates
         self.lock = threading.RLock()
         self.models[self.version] = self._model_train
         
-        # Create optimizer - fix attribute names to match RLActorCritic
+        # Create optimizer
         self.optimizer = Adam([
             {'params': self._model_train.pi.parameters(), 'lr': self._pi_lr},
             {'params': self._model_train.v.parameters(), 'lr': self._vf_lr}
@@ -92,9 +93,11 @@ class PPO():
         self.storage_done = []
         self.storage_next_obs = []
         self.storage_mask = []  # Add storage for masks
+        self.storage_version = [] # Add storage for versions consistency
         
         # Metrics
         self.ep_rewards = 0
+        self.train_ep_rewards = 0
         self.start_time = None
         self.traj = 0
         self.epoch = 0
@@ -105,6 +108,17 @@ class PPO():
         log_data_dir = os.path.join('./logs/rl4sys-ppo-info', f"{int(time.time())}__{self.seed}")
         os.makedirs(log_data_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=log_data_dir)
+        
+        # Set up model save path
+        self.save_model_path = os.path.join(log_data_dir, 'models')
+        os.makedirs(self.save_model_path, exist_ok=True)
+        
+        # Log model configuration
+        self.logger.info("PPO initialized with normal RLActorCritic", 
+                        model_name=self._model_train.get_model_name(),
+                        input_size=input_size,
+                        act_dim=act_dim)
+        
 
     def save(self, filename: str) -> None:
         """Save the current training model.
@@ -118,7 +132,7 @@ class PPO():
                                 ('.pth' if not filename.__contains__('.pth') else ''))
         torch.save(self._model_train, new_path)
 
-    def receive_trajectory(self, trajectory: RL4SysTrajectory) -> bool:
+    def receive_trajectory(self, trajectory: RL4SysTrajectory, version: int) -> bool:
         """
         Process a trajectory from the environment.
         
@@ -130,13 +144,16 @@ class PPO():
         """
         if self.start_time is None:
             self.start_time = time.time()
-            
+
+        self.storage_version.append(version)
         # Process each step in the trajectory
         for i, r4a in enumerate(trajectory):
             # print(f"r4a: {r4a.obs} {r4a.act} {r4a.rew}")
+            #print(r4a.version)
             self.traj += 1
             self.global_step += 1
             self.ep_rewards += r4a.rew
+            self.train_ep_rewards += r4a.rew
             obs_value = self._model_train.get_value(torch.from_numpy(r4a.obs))
             # Store transition
             self.storage_obs.append(np.copy(r4a.obs))
@@ -147,7 +164,7 @@ class PPO():
             self.storage_done.append(r4a.done)
             
             # Store mask if available, otherwise use ones
-            print(f"r4a.mask: {r4a.mask}")
+            #print(f"r4a.mask: {r4a.mask}")
             if r4a.mask is not None:
                 self.storage_mask.append(np.copy(r4a.mask))
             else:
@@ -175,6 +192,8 @@ class PPO():
         # Once we have enough trajectories, do an update
         if self.traj > 0 and self.traj > self._traj_per_epoch: 
             print(f"\n-----[PPO] Training model for epoch {self.epoch}-----\n")
+
+            print(f"storage_version: {self.storage_version}")
             pg_loss, v_loss, entropy_loss, approx_kl, clipfracs, explained_var = self.train_model()
             self.epoch += 1
             self.writer.add_scalar("losses/pg_loss", pg_loss, self.global_step)
@@ -184,6 +203,8 @@ class PPO():
             self.writer.add_scalar("losses/clipfracs", clipfracs, self.global_step)
             self.writer.add_scalar("losses/explained_var", explained_var, self.global_step)
             self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step)
+            self.writer.add_scalar("charts/avg_reward", self.train_ep_rewards/100, self.epoch) # TODO for job-scheduling only
+            self.train_ep_rewards = 0
             self.logger.info("PPO training epoch completed", 
                            epoch=self.epoch, pg_loss=pg_loss, v_loss=v_loss, 
                            entropy_loss=entropy_loss, approx_kl=approx_kl, 
@@ -205,6 +226,7 @@ class PPO():
         self.storage_done = []
         self.storage_next_obs = []
         self.storage_mask = []
+        self.storage_version = []
 
     def train_model(self) -> None:
         """
@@ -337,8 +359,11 @@ class PPO():
             self.version += 1
             self.models[self.version] = copy.deepcopy(self._model_train)  # Store new model version
 
-        # Clear storage arrays after training
-        self._clear_storage()
+            # Clear storage arrays after training
+            self._clear_storage()
+            self.traj = 0
+
+        
 
         # Store metrics for logging
         return pg_loss.item(), v_loss.item(), entropy_loss.item(), approx_kl, np.mean(clipfracs), explained_var

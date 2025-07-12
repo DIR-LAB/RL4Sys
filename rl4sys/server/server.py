@@ -151,7 +151,7 @@ class ClientAlgorithmManager:
                 # Process trajectory and update model
                 if algorithm.type == 'onpolicy':
                     if version == algorithm.version:
-                        algorithm.receive_trajectory(traj)
+                        algorithm.receive_trajectory(traj, version)
                         # Add new model version to history after update
                         model, new_version = algorithm.get_current_model()
                         diff_manager.add_model_version(new_version, model)
