@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
-from rl4sys.algorithms.PPO.job_kernel import JobRLActorCritic
+#from rl4sys.algorithms.PPO.job_kernel import JobRLActorCritic
 from rl4sys.common.action import RL4SysAction
 from rl4sys.common.trajectory import RL4SysTrajectory
 from rl4sys.utils.util import serialize_action, StructuredLogger
@@ -37,7 +37,7 @@ from rl4sys.client.config_loader import AgentConfigLoader
 
 MODEL_CLASSES = {
     'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
-    'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
+    #'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
     'DQN': DeepQNetwork,
 }
 
@@ -351,7 +351,7 @@ class RL4SysAgent:
                 # Convert each action in the trajectory to protobuf format
                 actions_proto = []
                 for action in traj.actions:
-                    action_proto = serialize_action(action)
+                    action_proto = serialize_action(action) # <---------------------------------- serialize action
                     actions_proto.append(action_proto)
                 
                 # Create trajectory protobuf
@@ -512,7 +512,7 @@ class RL4SysAgent:
             )
 
             # TODO debug only
-            # print(f"model weights: {self._model.state_dict()}")
+            #print(f"model weights: {self._model.state_dict()}")
 
             return self._model, response.version
             

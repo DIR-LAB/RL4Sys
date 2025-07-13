@@ -298,7 +298,7 @@ class JobSchedulingSim:
         )
 
         profiling = []
-        traj_per_epoch = 100  # Number of episodes per epoch (matching ppo-pick-jobs.py default)
+        traj_per_epoch = 100  # Number of episodes per epoch (aligned with reference PPO implementation)
 
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1

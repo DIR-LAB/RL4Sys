@@ -12,7 +12,8 @@ import hashlib
 import zlib
 from typing import Dict, Tuple, Optional, List, Any
 import os
-
+import numpy as np
+import random
 from rl4sys.proto import (
     ModelResponse,
     SendTrajectoriesResponse,
@@ -312,6 +313,11 @@ class MyRLServiceServicer(RLServiceServicer):
                 value = None  # null value
             
             algorithm_parameters[key] = value
+
+        # set numpy, random torch seed
+        np.random.seed(algorithm_parameters['seed'])
+        random.seed(algorithm_parameters['seed'])
+        torch.manual_seed(algorithm_parameters['seed'])
         
         # Check if client already exists
         if self.client_manager.is_client_exists(client_id):
@@ -349,6 +355,8 @@ class MyRLServiceServicer(RLServiceServicer):
         algorithm, diff_manager = self.client_manager.get_algorithm(client_id)
         
         model, current_version = algorithm.get_current_model()
+
+        #print(f"model before send: {model.state_dict()}")
         
         # Add current model to history if not already there
         diff_manager.add_model_version(current_version, model)

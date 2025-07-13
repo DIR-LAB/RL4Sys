@@ -410,6 +410,8 @@ def ppo(
             obs_torch = torch.as_tensor(o, dtype=torch.float32).unsqueeze(0)
             mask_torch = torch.as_tensor(mask_np, dtype=torch.float32).unsqueeze(0)
 
+            print("model parameters: ", ac.state_dict())
+            exit()
             with torch.no_grad():
                 action_t, logp_t, v_t, _ = ac.act(obs_torch, mask_torch)
             a = int(action_t.item())
@@ -442,10 +444,11 @@ def ppo(
 
                 o, r, d = env.reset()[0], 0.0, False
                 ep_ret, ep_len, show_ret, sjf, f1 = 0.0, 0, 0.0, 0.0, 0.0
+
+                # Count completed trajectories and break when desired number collected
+                t += 1
                 if t >= traj_per_epoch:
                     break
-            t += 1
-
         # ----------------- Update after collecting trajectories --------
         if (epoch % save_freq == 0) or (epoch == epochs - 1):
             model_save_path = os.path.join(logger.output_dir, f"ac_model_{epoch}.pt")
@@ -455,7 +458,7 @@ def ppo(
         update()
 
         # ----------------- Log at end of epoch --------------------------
-        logger.log_tabular("Epoch", epoch)
+        
         logger.log_tabular("EpRet", with_min_and_max=True)
         logger.log_tabular("EpLen", with_min_and_max=True)
         logger.log_tabular("VVals", with_min_and_max=True)
@@ -472,6 +475,7 @@ def ppo(
         logger.log_tabular("SJF", average_only=True)
         logger.log_tabular("F1", average_only=True)
         logger.log_tabular("Time", time.time() - start_time)
+        logger.log_tabular("Epoch", epoch)
         logger.dump_tabular()
 
     custom_logger.close()
