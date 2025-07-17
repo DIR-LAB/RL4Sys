@@ -466,8 +466,16 @@ class DgapSim():
             print("Gaps: {}, size: {}, start-vertex: {}, end-vertex: {}".format(gaps, size, start_vertex, end_vertex))
             # print("actual-edge: {}, total-edge: {}")
 
+        # todo: this is the place where rl-agent should be called
+        # self.rlagent.request_for_action(self.rl4sys_traj, )
+        # total_weight = 0.0
+        # rl_weight = self.rlagent.get_weight(start_vertex, end_vertex, gaps, total_degree)
+        # for i in range(start_vertex, end_vertex):
+        #     total_weight += rl_weight[i-start_vertex]
+
         index_d = np.float64(self.vertices_[start_vertex].index)
         step = np.float64(gaps) / total_degree # gaps possible per-edge
+        # step = np.float64(gaps) / total_weight
         for i in range(start_vertex, end_vertex):
             new_index[i-start_vertex] = int(index_d)
             if i > start_vertex:
@@ -475,7 +483,9 @@ class DgapSim():
                 assert new_index[i-start_vertex] >= new_index[(i-1)-start_vertex] + self.vertices_[i-1].degree, f"Edge-list can not be overlapped with the neighboring vertex! Gaps: {gaps}, total-degree: {total_degree}, step-size: {step}"
 
             # index_d += (vertices_[i].degree + (step * vertices_[i].degree))
+            # todo: more specificly, rl-agent should be called here to determine the gap for this vertex
             index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1)))
+            # index_d += (self.vertices_[i].degree + (step * rl_weight[i-start_vertex]))
 
         return new_index
 
@@ -749,3 +759,34 @@ if __name__ == '__main__':
     print("D-Graph Build Time: {} seconds.".format(end - start))
     dgap.print_pma_meta()
     dgap.print_pma_counter()
+
+
+    # base_file
+    # 0 1
+    # 1 0
+    # 2 5
+    # 5 3
+    # 5 4
+    #
+    # dynamic_file
+    # 5 10
+    # 0 2
+    # 0 3
+    # 0 4
+    # 0 5
+    # 0 6
+    # 0 7
+    # 0 8
+    # 0 9
+    # 0 10
+    # 0 11
+    #
+    #
+    #        16/30
+    #    13/18       3
+    # 12/16 1/2 3/12 0/0
+    # 11 1 1 0 0 3 0 0 -> vertex degree
+    # 0 15 16 18 18 18 29 29 -> vertex index
+    # 1 2 3 4 5 6 7 8 9 10 11 - - - - 0 | 5 - | 3 4 10 - - - - - - - - - |-> edge array
+    # 0 1 2 3 4 5 6 7 8 9 10 11 | 12 13 14 15 16 17 | 18 19 20 21 22 23 24 25 26 27 28 29 | -> edge array index
+    # gaps = 18 - 13 = 5 / 13 = 0.38
