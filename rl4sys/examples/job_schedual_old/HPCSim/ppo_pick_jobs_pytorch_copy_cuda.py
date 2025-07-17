@@ -28,6 +28,14 @@ from HPCSimPickJobs import (
 # Logging
 from torch.utils.tensorboard import SummaryWriter
 
+# Ensure project root is on PYTHONPATH for rl4sys imports
+import sys
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+
+from rl4sys.utils.mem_prof import MemoryProfiler
+
 
 # -----------------------------------------------------------------------------
 # Minimal stand-in for Spinup EpochLogger so we can drop the dependency.
@@ -403,7 +411,6 @@ def ppo(
         for _ in range(train_v_iters):
             _, value = ac.forward(obs_t)
             v_loss = torch.mean((ret_t - value) ** 2)
-            critic_optimizer.zero_grad()
             v_loss.backward()
             critic_optimizer.step()
 
@@ -506,11 +513,14 @@ def ppo(
             torch.save(ac.state_dict(), model_save_path)
             logger.save_state({"env": env}, None)
 
+        """
         # check model
         model_param_count += 1
         print(f"model parameters: {ac.state_dict()}")
         if model_param_count >=2:
             exit()
+        """
+
         update()
 
         # ----------------- End of epoch summary --------------------------
@@ -529,7 +539,7 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--seed", "-s", type=int, default=0)
     parser.add_argument("--trajs", type=int, default=100)
-    parser.add_argument("--epochs", type=int, default=4000)
+    parser.add_argument("--epochs", type=int, default=4) # used to be 4000
     parser.add_argument("--exp_name", type=str, default="ppo_pt")
     parser.add_argument("--attn", type=int, default=0)
     parser.add_argument("--shuffle", type=int, default=0)
@@ -541,6 +551,15 @@ if __name__ == "__main__":
 
     current_dir = os.getcwd()
     #workload_file = os.path.join(current_dir, args.workload)
+
+
+    # Memory profiling
+    memory_profiler = MemoryProfiler(
+        proj_name=f"ppo_training_seed_{args.seed}",
+        log_interval=3.0
+    )
+    memory_profiler.start_background_profiling()
+
 
     ppo(
         DATA_FILE,
@@ -556,3 +575,7 @@ if __name__ == "__main__":
         score_type=args.score_type,
         batch_job_slice=args.batch_job_slice,
     ) 
+
+    memory_profiler.stop_background_profiling()
+    print(f"Memory profiling stopped. Results saved")
+    

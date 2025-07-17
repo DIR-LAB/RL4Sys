@@ -71,7 +71,7 @@ class PPO():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Create normal PPO model
-        self._model_train = RLActorCritic(input_size, act_dim).to(self.device)
+        self._model_train = RLActorCritic(input_size, act_dim, actor_type='kernel').to(self.device) # TODO manually control actor type
 
         self.models = {}
         # Initialize lock for thread-safe model updates
@@ -283,8 +283,9 @@ class PPO():
                     nextnonterminal = 1.0 - dones_tensor[t].float()
                     nextvalues = next_values[t]
                 else:
-                    nextnonterminal = 1.0 - dones_tensor[t].float()
-                    nextvalues = values_tensor[t + 1]
+                    nextnonterminal = 1.0 - dones_tensor[t].float() # must be [t], [t+1] won't work.
+                    #nextvalues = values_tensor[t + 1]
+                    nextvalues = next_values[t]
                 
                 delta = rewards_tensor[t] + self.gamma * nextvalues * nextnonterminal - values_tensor[t]
                 advantages[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam

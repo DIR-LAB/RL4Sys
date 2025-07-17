@@ -34,7 +34,7 @@ from rl4sys.proto import (
     ParameterValue
 )
 from rl4sys.client.config_loader import AgentConfigLoader
-
+from rl4sys.utils.traj_buffer_log import TrajectoryBufferLogger
 MODEL_CLASSES = {
     'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
     #'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
@@ -80,6 +80,8 @@ class RL4SysAgent:
             max_receive_message_length="32MB",
             compression="Gzip"
         )
+
+        self.traj_logger = TrajectoryBufferLogger("traj_buffer_log", base_dir="memtrajtest")
 
         # Initialize model and version tracking
         self._model = None
@@ -172,6 +174,7 @@ class RL4SysAgent:
                 # Block with timeout until there are trajectories to send or shutdown is requested
                 try:
                     trajectories = self._send_queue.get(timeout=1.0)  # 1 second timeout
+
                     if trajectories:
                         self._send_trajectories(trajectories)
                         # Clear trajectories after sending to free memory
@@ -244,6 +247,8 @@ class RL4SysAgent:
                     version=traj.version,
                     buffer_size=self._trajectory_buffer_size
                 )
+                #TODO use traj loger to log traj size and it's actual size
+                #self.traj_logger.log(self._trajectory_buffer)
 
         if obs is None:
             raise ValueError("Observation is required")
@@ -280,6 +285,10 @@ class RL4SysAgent:
         """
         # action.done = True
         traj.mark_completed()
+
+        # TODO log traj size and it's actual size
+        self.traj_logger.log(self._trajectory_buffer)
+
         self.logger.debug(
             "Marked trajectory as completed",
             version=traj.version,
@@ -323,6 +332,8 @@ class RL4SysAgent:
                 # For on-policy algorithms, only send valid trajectories with matching version
                 filtered_trajectories = [t for t in trajectories if t.version == current_version and t.is_valid()]
                 ignored_count = len(trajectories) - len(filtered_trajectories)
+
+                
                 if ignored_count > 0:
                     self.logger.debug(
                         "Ignored trajectories with version mismatch",
@@ -344,6 +355,14 @@ class RL4SysAgent:
             if not trajectories:
                 self.logger.debug("No valid trajectories to send after filtering")
                 return 0
+
+            """
+            print(f"trajectories: {trajectories[-1].actions[-1].obs.tolist()}")
+            print(f"trajectories: {trajectories[-1].actions[-1].mask.tolist()}")
+            print(f"trajectories: {trajectories[-1].actions[-1].act}")
+            print(f"trajectories: {trajectories[-1].actions[-1].rew}")
+            print(f"trajectories: {trajectories[-1].actions[-1].done}")
+            """
 
             # Convert trajectories to protobuf format
             trajectories_proto = []
@@ -464,7 +483,7 @@ class RL4SysAgent:
                     )
                 elif self.algorithm_name == 'PPO':
                     # For PPO, use normal RLActorCritic with standard parameters
-                    self._model = model_class(model_input_size, model_act_dim, actor_type='kernel')
+                    self._model = model_class(model_input_size, model_act_dim, actor_type='kernel') # manually control actor type
                     
                     self.logger.info(
                         "Created RLActorCritic model",

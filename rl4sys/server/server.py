@@ -136,6 +136,15 @@ class ClientAlgorithmManager:
                     continue
                 
                 traj, version = traj_data
+
+                """
+                print(f"traj: {traj[-1].obs.tolist()}")
+                print(f"traj: {traj[-1].mask.tolist()}")
+                print(f"traj: {traj[-1].act}")
+                print(f"traj: {traj[-1].rew}")
+                print(f"traj: {traj[-1].done}")
+                """
+
                 
                 # Get the algorithm instance for this client
                 algorithm, diff_manager = self.get_algorithm(client_id)

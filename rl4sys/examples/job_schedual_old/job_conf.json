@@ -22,5 +22,5 @@
     "max_traj_length": 25600,
     "type": "onpolicy",
     "train_server_address": "localhost:50051",
-    "send_frequency": 10
+    "send_frequency": 1
 }

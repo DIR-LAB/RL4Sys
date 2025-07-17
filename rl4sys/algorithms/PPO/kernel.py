@@ -18,7 +18,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
 
 
 class RLActor(nn.Module):
-    def __init__(self, input_size, act_dim, mlp_hidden_sizes=(32, 32, 32, 32, 32), activation=nn.ReLU, actor_type="mlp", job_features=8):
+    def __init__(self, input_size, act_dim, mlp_hidden_sizes=(32,32,32,32,32), activation=nn.ReLU, actor_type="mlp", job_features=8):
         super().__init__()
         self.input_size = input_size
         self.act_dim = act_dim

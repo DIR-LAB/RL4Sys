@@ -4,7 +4,7 @@ Baseline：无 RLlib，手工采样 + 推理 + env.step() 计时
 """
 import time, gymnasium as gym, torch, torch.nn as nn
 from torch.distributions.categorical import Categorical
-
+from rl4sys.utils.mem_prof import MemoryProfiler
 
 class TimedEnv(gym.Env):
     def __init__(self, _): self.env = gym.make("LunarLander-v3")
@@ -38,8 +38,7 @@ class SimplePolicy(nn.Module):
         return Categorical(logits=logits).sample().item()
 
 # ---------- 2. Baseline 计时循环 ----------
-def run_baseline(num_steps: int = 4000):
-    env = TimedEnv(None)
+def run_baseline(env = None, num_steps: int = 4000):
     policy = SimplePolicy(env.observation_space.shape[0],
                           env.action_space.n)
 
@@ -76,5 +75,9 @@ def run_baseline(num_steps: int = 4000):
     })
 
 if __name__ == "__main__":
+    profiler = MemoryProfiler(output_dir="memtest")
+    profiler.start_background_profiling()
+    env = TimedEnv(None)
     for i in range(20):
-        run_baseline()
+        run_baseline(env)
+    profiler.stop_background_profiling()

@@ -298,8 +298,17 @@ class JobSchedulingSim:
         )
 
         profiling = []
-        traj_per_epoch = 100  # Number of episodes per epoch (aligned with reference PPO implementation)
+        traj_per_epoch = 1  # Number of episodes per epoch (aligned with reference PPO implementation)
 
+        # -----------------------------------------------------------------
+        # Performance profiling accumulators (match baseline scripts)
+        # -----------------------------------------------------------------
+        env_time_acc: float = 0.0
+        infer_time_acc: float = 0.0
+        total_step_count: int = 0
+        t0_total: float = time.perf_counter()
+
+        complete_summary = []
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             self.logger.info(
@@ -341,14 +350,18 @@ class JobSchedulingSim:
                     # Convert mask to torch.Tensor for the agent
                     action_mask_tensor = torch.as_tensor(action_mask, dtype=torch.float32)
                     
-                    # Get action from agent with mask
+                    # --------------------------------------------------
+                    # Measure inference latency (RL4Sys agent call)
+                    # --------------------------------------------------
+                    t_inf0 = time.perf_counter()
                     self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(
-                        self.rl4sys_traj, 
-                        obs_tensor, 
-                        mask=action_mask_tensor
+                        self.rl4sys_traj,
+                        obs_tensor,
+                        mask=action_mask_tensor,
                     )
-                    self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+                    infer_time_acc += time.perf_counter() - t_inf0
 
+                    self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
                     action = self.rl4sys_action.act
                     #action = 0
 
@@ -369,8 +382,14 @@ class JobSchedulingSim:
                         )
                         action = 0  # Default to no action if out of range
 
-                    # Step the environment - returns [obs, reward, done, reward2, sjf, f1]
+                    # --------------------------------------------------
+                    # Measure environment step latency
+                    # --------------------------------------------------
+                    t_env0 = time.perf_counter()
                     step_result = self.env.step(action)
+                    env_time_acc += time.perf_counter() - t_env0
+
+                    total_step_count += 1
 
                     # Parse step results
                     if len(step_result) == 6:
@@ -483,6 +502,33 @@ class JobSchedulingSim:
                 avg_f1_score=avg_f1_score
             )
 
+            # --------------------------------------------------------------
+            # Final aggregated performance metrics (steps/s, ms breakdown)
+            # --------------------------------------------------------------
+            total_elapsed = time.perf_counter() - t0_total
+            if total_step_count > 0:
+                per_step_ms = (total_elapsed * 1000.0) / total_step_count
+                env_ms = (env_time_acc * 1000.0) / total_step_count
+                infer_ms = (infer_time_acc * 1000.0) / total_step_count
+                over_ms = per_step_ms - env_ms - infer_ms
+
+                performance_summary = {
+                    "steps/s": round(1000.0 / per_step_ms, 1),
+                    "env_ms": round(env_ms, 3),
+                    "infer_ms": round(infer_ms, 3),
+                    "over_ms": round(over_ms, 3),
+                }
+
+                print("Performance summary:", performance_summary)
+            else:
+                performance_summary = {}
+            complete_summary.append(performance_summary)
+
+
+        # print complete summary
+        for i in complete_summary:
+            print(i)
+
         # Log final statistics
         self.logger.info(
             "Simulation completed",
@@ -494,7 +540,8 @@ class JobSchedulingSim:
             avg_job_score=np.mean(self.simulator_stats['job_scores']) if self.simulator_stats['job_scores'] else 0,
             avg_episode_return=np.mean(self.simulator_stats['episode_returns']) if self.simulator_stats['episode_returns'] else 0,
             avg_sjf_score=np.mean(self.simulator_stats['sjf_scores']) if self.simulator_stats['sjf_scores'] else 0,
-            avg_f1_score=np.mean(self.simulator_stats['f1_scores']) if self.simulator_stats['f1_scores'] else 0
+            avg_f1_score=np.mean(self.simulator_stats['f1_scores']) if self.simulator_stats['f1_scores'] else 0,
+            **performance_summary
         )
 
     def build_observation(self, obs) -> torch.Tensor:
@@ -530,11 +577,11 @@ if __name__ == '__main__':
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=10000,
+    parser.add_argument('--number-of-iterations', type=int, default=100,
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
-    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf',
+    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf', # ./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf
                         help='path to the workload file (SWF format)')
     parser.add_argument('--client-id', type=str, default="job_schedualing_old",
                         help='unique client id for the job scheduling simulation')
@@ -559,7 +606,14 @@ if __name__ == '__main__':
         performance_metric=args.performance_metric
     )
 
+    # profile memory usage
+    from rl4sys.utils.mem_prof import MemoryProfiler
+    memory_profiler = MemoryProfiler("job_main 10 traj send", log_interval=0.5)
+    memory_profiler.start_background_profiling()
+
     job_scheduling_sim.run_application(
         num_iterations=args.number_of_iterations, 
         max_scheduling_steps=args.number_of_steps
     )
+
+    memory_profiler.stop_background_profiling()

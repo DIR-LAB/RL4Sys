@@ -117,3 +117,6 @@ dkms.conf
 
 # Logs
 **/logs/
+**/log/
+**/memtest/
+**/memtrajtest/
