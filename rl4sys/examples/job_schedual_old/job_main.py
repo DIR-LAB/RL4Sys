@@ -611,9 +611,15 @@ if __name__ == '__main__':
     memory_profiler = MemoryProfiler("job_main 10 traj send", log_interval=0.5)
     memory_profiler.start_background_profiling()
 
+    # profile cpu usage
+    from rl4sys.utils.cpu_prof import CPUProfiler
+    cpu_profiler = CPUProfiler("job_main 10 traj send", log_interval=0.5)
+    cpu_profiler.start_background_profiling()
+
     job_scheduling_sim.run_application(
         num_iterations=args.number_of_iterations, 
         max_scheduling_steps=args.number_of_steps
     )
 
     memory_profiler.stop_background_profiling()
+    cpu_profiler.stop_background_profiling()
