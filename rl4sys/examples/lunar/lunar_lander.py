@@ -89,12 +89,20 @@ class LunarLanderSim():
             action_limit=self.act_limit
         )
 
-    def run_application(self, num_iterations, max_moves):
+    def run_application(self, num_iterations: int, max_moves: int) -> None:
         self.logger.info(
             "Starting simulation",
             num_iterations=num_iterations,
             max_moves=max_moves
         )
+
+        # -----------------------------------------------------------------
+        # Performance profiling accumulators (match job_main)
+        # -----------------------------------------------------------------
+        env_time_acc: float = 0.0  # Seconds spent in environment steps
+        infer_time_acc: float = 0.0  # Seconds spent in inference (policy)
+        total_step_count: int = 0  # Total environment steps across all iterations
+        t0_total: float = time.perf_counter()
 
         profiling = []
 
@@ -205,6 +213,12 @@ class LunarLanderSim():
             env_ms   = env_ns/1e6/moves
             infer_ms = infer_ns/1e6/moves
             over_ms  = total_ms - env_ms - infer_ms
+
+            # Accumulate global profiling stats
+            env_time_acc += env_ns * 1e-9  # Convert ns → s
+            infer_time_acc += infer_ns * 1e-9
+            total_step_count += moves
+
             profiling.append({"steps/s": round(1000/total_ms,1),
                 "env_ms": round(env_ms,3),
                 "infer_ms": round(infer_ms,3),
@@ -217,6 +231,27 @@ class LunarLanderSim():
             if self._render_game:
                 self.env.close()
         
+        # --------------------------------------------------------------
+        # Final aggregated performance metrics (steps/s, ms breakdown)
+        # --------------------------------------------------------------
+
+        performance_summary = {}
+        total_elapsed = time.perf_counter() - t0_total
+        if total_step_count > 0:
+            per_step_ms: float = (total_elapsed * 1000.0) / total_step_count
+            env_ms: float = (env_time_acc * 1000.0) / total_step_count
+            infer_ms: float = (infer_time_acc * 1000.0) / total_step_count
+            over_ms: float = per_step_ms - env_ms - infer_ms
+
+            performance_summary = {
+                "steps/s": round(1000.0 / per_step_ms, 1),
+                "env_ms": round(env_ms, 3),
+                "infer_ms": round(infer_ms, 3),
+                "over_ms": round(over_ms, 3),
+            }
+
+            print("Performance summary:", performance_summary)
+
         # Log final statistics
         self.logger.info(
             "Simulation completed",
@@ -226,26 +261,9 @@ class LunarLanderSim():
             death_count=self.simulator_stats['death_count'],
             avg_time_to_goal=np.mean(self.simulator_stats['time_to_goal']) if self.simulator_stats['time_to_goal'] else 0,
             avg_time_to_death=np.mean(self.simulator_stats['time_to_death']) if self.simulator_stats['time_to_death'] else 0,
-            avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0
+            avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0,
+            **performance_summary
         )
-
-        """
-        avg_step_per_second = 0
-        avg_env_ms = 0
-        avg_infer_ms = 0
-        avg_over_ms = 0
-        for i in range(len(profiling)):
-            print(f"iteration {i}: {profiling[i]}")
-            avg_step_per_second += profiling[i]["steps/s"]
-            avg_env_ms += profiling[i]["env_ms"]
-            avg_infer_ms += profiling[i]["infer_ms"]
-            avg_over_ms += profiling[i]["over_ms"]
-
-        print(f"avg_step_per_second: {round(avg_step_per_second/len(profiling), 1)}")
-        print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
-        print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
-        print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
-        """
         
 
     def build_observation(self, obs):

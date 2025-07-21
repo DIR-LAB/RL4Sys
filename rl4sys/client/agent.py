@@ -34,7 +34,7 @@ from rl4sys.proto import (
     ParameterValue
 )
 from rl4sys.client.config_loader import AgentConfigLoader
-from rl4sys.utils.traj_buffer_log import TrajectoryBufferLogger
+#from rl4sys.utils.traj_buffer_log import TrajectoryBufferLogger
 MODEL_CLASSES = {
     'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
     #'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
@@ -81,7 +81,7 @@ class RL4SysAgent:
             compression="Gzip"
         )
 
-        self.traj_logger = TrajectoryBufferLogger("traj_buffer_log", base_dir="memtrajtest")
+        #self.traj_logger = TrajectoryBufferLogger("traj_buffer_log", base_dir="memtrajtest")
 
         # Initialize model and version tracking
         self._model = None
@@ -233,31 +233,39 @@ class RL4SysAgent:
         Returns:
             tuple: (traj, action) where traj is the trajectory and action is the generated RL4SysAction
         """
-        # Get current version safely before creating trajectory
+        # Quickly grab a snapshot of the current model & version to keep the critical
+        # section (protected by self._lock) as short as possible.  This minimises
+        # contention with the background send-thread which also needs the same lock
+        # when a new model arrives from the server.
         with self._lock:
             current_version = self.local_version
-            
+            model_ref = self._model  # local reference so we can release the lock early
+
+        if model_ref is None:
+            raise RuntimeError("No model available yet!")
+        
         if traj is None or traj.is_completed():
             traj = RL4SysTrajectory(version=current_version)
             with self._trajectory_lock:
                 self._trajectory_buffer.append(traj)
                 self._trajectory_buffer_size += 1
-                self.logger.debug(
-                    "Created new trajectory",
-                    version=traj.version,
-                    buffer_size=self._trajectory_buffer_size
-                )
+                if self.logger.is_debug_enabled():
+                    self.logger.debug(
+                        "Created new trajectory",
+                        version=traj.version,
+                        buffer_size=self._trajectory_buffer_size
+                    )
                 #TODO use traj loger to log traj size and it's actual size
                 #self.traj_logger.log(self._trajectory_buffer)
 
         if obs is None:
             raise ValueError("Observation is required")
 
-        with self._lock:
-            if self._model is None:
-                raise RuntimeError("No model available yet!")
+        # Inference happens *outside* the lock so the background thread can still
+        # update the model concurrently when required.
+        action_nd, data_dict = model_ref.step(obs, mask)
 
-            action_nd, data_dict = self._model.step(obs, mask)
+        if self.logger.is_debug_enabled():
             self.logger.debug(
                 "Generated action",
                 action_shape=action_nd.shape,
@@ -273,11 +281,12 @@ class RL4SysAgent:
         Add an action to the current trajectory
         """
         traj.add_action(action)
-        self.logger.debug(
-            "Added action to trajectory",
-            trajectory_version=traj.version,
-            action_count=len(traj.actions)
-        )
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Added action to trajectory",
+                trajectory_version=traj.version,
+                action_count=len(traj.actions)
+            )
 
     def mark_end_of_trajectory(self, traj: RL4SysTrajectory, action: RL4SysAction):
         """
@@ -287,13 +296,14 @@ class RL4SysAgent:
         traj.mark_completed()
 
         # TODO log traj size and it's actual size
-        self.traj_logger.log(self._trajectory_buffer)
+        #self.traj_logger.log(self._trajectory_buffer)
 
-        self.logger.debug(
-            "Marked trajectory as completed",
-            version=traj.version,
-            action_count=len(traj.actions)
-        )
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Marked trajectory as completed",
+                version=traj.version,
+                action_count=len(traj.actions)
+            )
         # Check if we need to send trajectories after marking completion
         self._check_and_send_trajectories()
 
@@ -302,11 +312,12 @@ class RL4SysAgent:
         Update the reward of the current action
         """
         action.reward = reward
-        self.logger.debug(
-            "Updated action reward",
-            reward=reward,
-            version=action.version
-        )
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Updated action reward",
+                reward=reward,
+                version=action.version
+            )
 
     def _send_trajectories(self, trajectories) -> int:
         """

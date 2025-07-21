@@ -46,6 +46,8 @@ JOB_FEATURES = 8
 MAX_QUEUE_SIZE = 128
 JOB_SEQUENCE_SIZE = 256
 
+from rl4sys.utils.step_statistic import compute_field_statistics
+
 class JobSchedulingSim:
     """
     Job Scheduling Simulation using HPCSim environment with RL4Sys agent.
@@ -529,6 +531,8 @@ class JobSchedulingSim:
         for i in complete_summary:
             print(i)
 
+        print(compute_field_statistics(complete_summary))
+
         # Log final statistics
         self.logger.info(
             "Simulation completed",
@@ -577,7 +581,7 @@ if __name__ == '__main__':
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=100,
+    parser.add_argument('--number-of-iterations', type=int, default=200,
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
@@ -607,19 +611,19 @@ if __name__ == '__main__':
     )
 
     # profile memory usage
-    from rl4sys.utils.mem_prof import MemoryProfiler
-    memory_profiler = MemoryProfiler("job_main 10 traj send", log_interval=0.5)
-    memory_profiler.start_background_profiling()
+    #from rl4sys.utils.mem_prof import MemoryProfiler
+    #memory_profiler = MemoryProfiler("job_main 10 traj send", log_interval=0.5)
+    #memory_profiler.start_background_profiling()
 
     # profile cpu usage
-    from rl4sys.utils.cpu_prof import CPUProfiler
-    cpu_profiler = CPUProfiler("job_main 10 traj send", log_interval=0.5)
-    cpu_profiler.start_background_profiling()
+    #from rl4sys.utils.cpu_prof import CPUProfiler
+    #cpu_profiler = CPUProfiler("job_main 10 traj send", log_interval=0.5)
+    #cpu_profiler.start_background_profiling()
 
     job_scheduling_sim.run_application(
         num_iterations=args.number_of_iterations, 
         max_scheduling_steps=args.number_of_steps
     )
 
-    memory_profiler.stop_background_profiling()
-    cpu_profiler.stop_background_profiling()
+    #memory_profiler.stop_background_profiling()
+    #cpu_profiler.stop_background_profiling()
