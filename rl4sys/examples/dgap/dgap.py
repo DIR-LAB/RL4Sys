@@ -27,6 +27,12 @@ Training server parameters:
     buf_size    | MOVE_SEQUENCE_SIZE * 100 = 50000
 """
 
+class Vertex:
+    def __init__(self, index, degree):
+        self.index = np.int64(index)
+        self.degree = np.int32(degree)
+
+
 class DgapSim():
     # Height-based (as opposed to depth-based) tree thresholds
     # Upper density thresholds
