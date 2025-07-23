@@ -28,6 +28,7 @@ from rl4sys.algorithms.DQN.DQN import DQN
 from rl4sys.utils.util import deserialize_action, StructuredLogger
 from rl4sys.server.model_diff_manager import ModelDiffManager
 from rl4sys.utils.system_monitor import SystemMonitor, log_memory_usage
+from rl4sys.utils.packet_logger import PacketLogger
 
 # Algorithm class mapping
 ALGORITHM_CLASSES = {
@@ -237,6 +238,16 @@ class MyRLServiceServicer(RLServiceServicer):
         )
         self.system_monitor.start_monitoring()
         
+        # ------------------------------------------------------------------
+        # Packet logger – records the number of trajectories ("packets")
+        # received by the server.  Logging interval set to 5 seconds.
+        # ------------------------------------------------------------------
+        self.packet_logger: PacketLogger = PacketLogger(
+            project_name="rl4sys_server_21_client", # TODO change the name to the number of clients
+            log_interval=0.5,
+            debug=debug
+        )
+        
         self.logger.info(
             "Initializing multi-client server",
             num_workers=num_workers
@@ -413,6 +424,9 @@ class MyRLServiceServicer(RLServiceServicer):
         algorithm, _ = self.client_manager.get_algorithm(client_id)
         
         traj_count = len(request.trajectories)
+
+        # Increment packet logger with the number of trajectories received
+        self.packet_logger.increment(traj_count)
         
         self.logger.debug(
             "SendTrajectories request",
@@ -463,6 +477,10 @@ class MyRLServiceServicer(RLServiceServicer):
         
         # Wait for all worker threads to complete
         self._dispatcher_thread.join()
+        
+        # Stop packet logger to flush remaining logs
+        if hasattr(self, "packet_logger"):
+            self.packet_logger.stop()
             
         self.logger.info("Server shutdown complete")
 

@@ -33,9 +33,6 @@ class Vertex:
         self.degree: int = degree
         self.index: int = index
 
-    def __int__(self) -> int:
-        """Return the integer representation of the vertex (using index)."""
-        return self.index
 
 
 class DgapSim():
@@ -468,11 +465,13 @@ class DgapSim():
 
         # allocate gaps based on degree
 
+        # obs = [ver1_degree, ver1_index, ver2_degree, ver2_index, ..., which_vertex]
     def build_observation(self, which_vertex: int) -> torch.Tensor:
+            # TODO: do two segments at a time
             # vertex array self.vertices_[i]
             # return a tensor of self.vertices_[i]
             obs_lst = []
-            for vertex in self.vertices_:
+            for vertex in self.vertices_: # TODO might be large depend on the number of vertices
                 obs_lst.append(vertex.degree)
                 obs_lst.append(vertex.index)
             obs_lst.append(which_vertex)
@@ -484,6 +483,7 @@ class DgapSim():
     
 
     def calculate_positions(self, start_vertex, end_vertex, gaps, total_degree):
+        
         size = end_vertex - start_vertex
         new_index = [np.int64(0)] * size
         total_degree += size
@@ -498,7 +498,24 @@ class DgapSim():
         for vertex_id in range(start_vertex, end_vertex):
             self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, self.build_observation(vertex_id))
             self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
-            self.rl4sys_action.update_reward(0)
+            # self.rl4sys_action.update_reward(0) # TODO
+
+            """
+            obs = [ver1_degree, ver1_index, ver2_degree, ver2_index, ..., 1] # large length
+            Action = num
+            reward = NONE
+
+            obs = [ver1_degree, ver1_index, ver2_degree, ver2_index, ..., 2]
+            Action = num
+            reward = NONE
+
+            obs = [ver1_degree, ver1_index, ver2_degree, ver2_index, ..., 3]
+            Action = num
+            reward = NONE
+
+
+            """
+
             # for single vertex, this will give a scalar value 
             rl_weights.append(self.rl4sys_action.act)
         total_rl_weight = sum(rl_weights)

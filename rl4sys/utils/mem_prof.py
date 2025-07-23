@@ -14,6 +14,7 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional, Union, Any, Callable
 from pathlib import Path
+import matplotlib.pyplot as plt  # type: ignore
 
 
 class MemoryProfiler:
@@ -459,36 +460,45 @@ def profile_for_duration(proj_name: str, duration: float,
         return profiler.save_to_csv(filename_suffix=f"duration_{duration}s")
 
 
+def plot_memory_profiles(csv_files: List[str], output_path: str) -> None:
+    """
+    Plot process_rss over time from one or more CSV files and save to output_path.
+
+    Args:
+        csv_files: List of CSV file paths to plot.
+        output_path: Path to save the output plot image.
+    """
+    for csv_file in csv_files:
+        rss_values = []
+        import csv
+        with open(csv_file, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if not row.get("process_rss"):
+                    continue
+                try:
+                    rss = float(row["process_rss"])
+                except Exception:
+                    continue
+                rss_values.append(rss / (1024 * 1024))  # Convert to MB
+        label = Path(csv_file).stem
+        plt.plot(range(len(rss_values)), rss_values, label=label)
+    plt.xlabel("Sample")
+    plt.ylabel("Process RSS (MB)")
+    plt.title("Process RSS over Time")
+    plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
 if __name__ == "__main__":
-    # Example usage
-    def print_callback(data):
-        """Example callback function."""
-        if 'process' in data:
-            rss_mb = data['process']['rss'] / (1024 * 1024)
-            print(f"Memory usage: {rss_mb:.2f} MB")
-    
-    # Example 1: Basic background profiling
-    profiler = MemoryProfiler("example_project", log_interval=2.0)
-    
-    print("Starting background profiling...")
-    profiler.start_background_profiling(callback=print_callback)
-    
-    # Let it run for 10 seconds
-    time.sleep(10)
-    
-    print("Stopping profiling...")
-    profiler.stop_background_profiling()
-    
-    exit()
-    # Save results
-    csv_file = profiler.save_to_csv()
-    print(f"Data saved to: {csv_file}")
-    
-    # Print summary
-    summary = profiler.get_memory_summary()
-    print(f"Collected {summary['total_measurements']} measurements")
-    
-    # Example 2: Using context manager and duration helper
-    print("\nTesting duration-based profiling...")
-    duration_file = profile_for_duration("test_duration", duration=5, log_interval=1)
-    print(f"Duration test saved to: {duration_file}")
+    import argparse
+    parser = argparse.ArgumentParser(description="Plot process RSS from one or more memory profiler CSV files.")
+    parser.add_argument("--csv_files", nargs='+', default=['memtest/20250721_110052/job_main_rand 100 traj send_memory_profile_20250721_110052.csv',
+                                                           'memtest/20250721_110112/job_main_infer 100 traj send_memory_profile_20250721_110112.csv',
+                                                           'memtest/20250721_110136/job_main 1 traj send_memory_profile_20250721_110136.csv',
+                                                           'memtest/20250721_110807/rllib_client_job_remote_memory_profile_20250721_110807.csv',
+                                                           'memtest/20250721_111152/rllib_client_job_local_memory_profile_20250721_111152.csv',
+                                                           ], help="List of CSV files to plot")
+    parser.add_argument("--output", "-o", default='memtest/20250721_111152/rllib_client_job_local_memory_profile_20250721_111152.png', help="Output image file path")
+    args = parser.parse_args()
+    plot_memory_profiles(args.csv_files, args.output)

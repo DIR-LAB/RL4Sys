@@ -19,6 +19,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from rl4sys.utils.mem_prof import MemoryProfiler
 from rl4sys.utils.step_statistic import compute_field_statistics
+from rl4sys.utils.cpu_prof import CPUProfiler
+from rl4sys.utils.step_per_sec_log import StepPerSecLogger
 
 # Set up logging with debug enabled if requested
 # setup_rl4sys_logging(debug=True)
@@ -310,6 +312,7 @@ class JobSchedulingSim:
         t0_total: float = time.perf_counter()
 
         complete_summary = []
+        step_logger = StepPerSecLogger("job_main_rand")
 
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
@@ -511,6 +514,7 @@ class JobSchedulingSim:
                     "infer_ms": round(infer_ms, 3),
                     "over_ms": round(over_ms, 3),
                 }
+                step_logger.log(performance_summary["steps/s"])
 
                 print("Performance summary:", performance_summary)
             else:
@@ -521,6 +525,7 @@ class JobSchedulingSim:
         for i in complete_summary:
             print(i)
         print(compute_field_statistics(complete_summary))
+        step_logger.close()
 
         # Log final statistics
         self.logger.info(
@@ -599,8 +604,10 @@ if __name__ == '__main__':
     )
 
     # profile memory usage
-    memory_profiler = MemoryProfiler("job_main_rand 100 traj send", log_interval=1)
+    memory_profiler = MemoryProfiler("job_main_rand", log_interval=1)
     memory_profiler.start_background_profiling()
+    cpu_profiler = CPUProfiler("job_main_rand 100 traj send", log_interval=1)
+    cpu_profiler.start_background_profiling()
 
     job_scheduling_sim.run_application(
         num_iterations=args.number_of_iterations, 
@@ -608,3 +615,4 @@ if __name__ == '__main__':
     )
 
     memory_profiler.stop_background_profiling()
+    cpu_profiler.stop_background_profiling()

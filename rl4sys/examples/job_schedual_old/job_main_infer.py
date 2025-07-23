@@ -16,6 +16,8 @@ from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
 from torch.utils.tensorboard import SummaryWriter
+from rl4sys.utils.cpu_prof import CPUProfiler
+from rl4sys.utils.step_per_sec_log import StepPerSecLogger
 
 # Set up logging with debug enabled if requested
 # setup_rl4sys_logging(debug=True)
@@ -312,6 +314,7 @@ class JobSchedulingSim:
         t0_total: float = time.perf_counter()
 
         complete_summary = []
+        step_logger = StepPerSecLogger("job_main_infer")
         for iteration in range(num_iterations):
             self.simulator_stats['total_iterations'] += 1
             self.logger.info(
@@ -520,6 +523,7 @@ class JobSchedulingSim:
                     "infer_ms": round(infer_ms, 3),
                     "over_ms": round(over_ms, 3),
                 }
+                step_logger.log(performance_summary["steps/s"])
 
                 print("Performance summary:", performance_summary)
             else:
@@ -544,6 +548,7 @@ class JobSchedulingSim:
             avg_sjf_score=np.mean(self.simulator_stats['sjf_scores']) if self.simulator_stats['sjf_scores'] else 0,
             avg_f1_score=np.mean(self.simulator_stats['f1_scores']) if self.simulator_stats['f1_scores'] else 0,
         )
+        step_logger.close()
 
     def build_observation(self, obs) -> torch.Tensor:
         """
@@ -578,7 +583,7 @@ if __name__ == '__main__':
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=200,
+    parser.add_argument('--number-of-iterations', type=int, default=100,
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
@@ -608,8 +613,10 @@ if __name__ == '__main__':
     )
 
     # profile memory usage
-    memory_profiler = MemoryProfiler("job_main_infer 100 traj send", log_interval=0.5)
+    memory_profiler = MemoryProfiler("job_main_infer", log_interval=0.5)
     memory_profiler.start_background_profiling()
+    cpu_profiler = CPUProfiler("job_main_infer 100 traj send", log_interval=0.5)
+    cpu_profiler.start_background_profiling()
 
     job_scheduling_sim.run_application(
         num_iterations=args.number_of_iterations, 
@@ -617,3 +624,4 @@ if __name__ == '__main__':
     )
 
     memory_profiler.stop_background_profiling()
+    cpu_profiler.stop_background_profiling()

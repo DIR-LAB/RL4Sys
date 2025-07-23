@@ -512,16 +512,129 @@ def plot_cpu_profile(csv_path: str, output_path: Optional[str] = None, *, includ
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
+
+def compare_cpu_profiles(
+    csv_path1: str,
+    csv_path2: str,
+    csv_path3: str,
+    output_path: Optional[str] = None,
+    *,
+    include_system: bool = True,
+) -> None:
+    """Compare CPU utilisation over time from three streamed CSV files.
+
+    Parameters
+    ----------
+    csv_path1, csv_path2, csv_path3
+        Paths to the CSV files produced by :class:`CPUProfiler`.
+    output_path
+        Path where the resulting PNG file will be stored. If *None*, the plot
+        is saved alongside *csv_path1* with a ``_compare_plot.png`` suffix.
+    include_system
+        When *True* (default) the system-wide CPU utilisation curve is also
+        plotted (if available in the CSVs). Currently, only process curves are compared.
+    """
+    import csv
+    from datetime import datetime
+    import matplotlib.pyplot as plt  # type: ignore
+    import numpy as np  # type: ignore
+    from pathlib import Path
+
+    def load_cpu_data(csv_path: str) -> tuple[list[datetime], list[float], list[float]]:
+        timestamps: list[datetime] = []
+        process_cpu_raw: list[float] = []
+        process_cpu_per_core: list[float] = []
+        with open(csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if not row.get("process_cpu_percent"):
+                    continue
+                try:
+                    ts_str = row["process_timestamp"] or row.get("timestamp", "")
+                    ts = datetime.fromisoformat(ts_str) if ts_str else None
+                except (ValueError, KeyError):
+                    ts = None
+                timestamps.append(ts or datetime.now())
+                process_cpu_raw.append(float(row["process_cpu_percent"]))
+                if row.get("process_cpu_percent_per_core"):
+                    process_cpu_per_core.append(float(row["process_cpu_percent_per_core"]))
+                else:
+                    process_cpu_per_core.append(float("nan"))
+        return timestamps, process_cpu_raw, process_cpu_per_core
+
+    # Load data from all three CSVs
+    data1 = load_cpu_data(csv_path1)
+    data2 = load_cpu_data(csv_path2)
+    data3 = load_cpu_data(csv_path3)
+
+    # Use sample index for x-axis
+    x1 = list(range(len(data1[0])))
+    x2 = list(range(len(data2[0])))
+    x3 = list(range(len(data3[0])))
+
+    # Labels for legend (use file name)
+    label1 = Path(csv_path1).stem
+    label2 = Path(csv_path2).stem
+    label3 = Path(csv_path3).stem
+
+    # Create figure with two line subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), sharex=True)
+
+    # Subplot 1 – raw process CPU percent (can exceed 100%)
+    ax1.plot(x1, data1[1], label=f"{label1}", color="crimson", linewidth=1.8)
+    ax1.plot(x2, data2[1], label=f"{label2}", color="seagreen", linewidth=1.8)
+    ax1.plot(x3, data3[1], label=f"{label3}", color="darkorange", linewidth=1.8)
+    ax1.set_ylabel("CPU % (raw)")
+    ax1.set_title("Process CPU utilisation (raw) – Comparison")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(loc="upper right")
+
+    # Subplot 2 – per-core normalised process CPU percent (0–100)
+    ax2.plot(x1, data1[2], label=f"{label1}", color="crimson", linewidth=1.8)
+    ax2.plot(x2, data2[2], label=f"{label2}", color="seagreen", linewidth=1.8)
+    ax2.plot(x3, data3[2], label=f"{label3}", color="darkorange", linewidth=1.8)
+    ax2.set_xlabel("Sample")
+    ax2.set_ylabel("CPU % per core")
+    ax2.set_title("Process CPU utilisation (normalised per logical CPU) – Comparison")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(loc="upper right")
+
+    plt.tight_layout()
+
+    if output_path is None:
+        output_path = str(Path(csv_path1).with_suffix("_compare_plot.png"))
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
 # ======================================================================
 # CLI wrapper
 # ======================================================================
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Plot a CPU profile CSV produced by CPUProfiler.")
+    parser = argparse.ArgumentParser(description="Plot or compare CPU profile CSVs produced by CPUProfiler.")
     parser.add_argument("--csv_file", default="cputest/20250718_170955/job_main 10 traj send_cpu_profile_20250718_170955.csv", help="Path to CPU profile CSV file")
-    parser.add_argument("--output", "-o", dest="output", default="cputest/20250718_170955/job_main 10 traj send_cpu_profile_20250718_170955_plot.png", help="Where to save the PNG plot")
+    parser.add_argument("--output", "-o", dest="output", default="cputest/20250721_100700/rllib_client_job_remote_cpu_profile_20250721_100700.png", help="Where to save the PNG plot")
     parser.add_argument("--no-system", action="store_false", help="Do not include system-wide CPU curve")
+    parser.add_argument(
+        "--compare",
+        nargs=3,
+        default=['cputest/20250721_100700/rllib_client_job_remote_cpu_profile_20250721_100700.csv', 
+                 'cputest/20250721_100321/rllib_client_job_cpu_profile_20250721_100321.csv', 
+                 'cputest/20250721_091912/job_main 10 traj send_cpu_profile_20250721_091912.csv'],
+        metavar=("CSV1", "CSV2", "CSV3"),
+        help="Compare three CPU profile CSV files on the same plot. Overrides --csv_file.",
+    )
     args = parser.parse_args()
 
-    plot_cpu_profile(args.csv_file, output_path=args.output, include_system=not args.no_system)
+    if args.compare:
+        compare_output = args.output or "cpu_profile_compare_plot.png"
+        compare_cpu_profiles(
+            args.compare[0],
+            args.compare[1],
+            args.compare[2],
+            output_path=compare_output,
+            include_system=not args.no_system,
+        )
+    else:
+        plot_cpu_profile(args.csv_file, output_path=args.output, include_system=not args.no_system)

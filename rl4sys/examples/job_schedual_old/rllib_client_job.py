@@ -1,22 +1,9 @@
-import time
-from typing import Dict, Union
-from ray.rllib.env.policy_client import PolicyClient
-import gymnasium as gym
 import os
 import sys
-import numpy as np
-from ray.rllib.models import ModelCatalog
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
-import torch.nn as nn
-import torch
-import datetime
-from torch.utils.tensorboard import SummaryWriter
-
 
 # ------------------------------------------------------------------
 #  Ensure rl4sys package & HPCSim module resolvable before further imports
 # ------------------------------------------------------------------
-
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
@@ -25,6 +12,22 @@ hpcsim_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'HPCSim'))
 if hpcsim_path not in sys.path:
     sys.path.insert(0, hpcsim_path)
 
+import time
+from typing import Dict, Union
+from ray.rllib.env.policy_client import PolicyClient
+import gymnasium as gym
+import numpy as np
+from ray.rllib.models import ModelCatalog
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+import torch.nn as nn
+import torch
+import datetime
+from torch.utils.tensorboard import SummaryWriter
+from rl4sys.utils.mem_prof import MemoryProfiler
+from rl4sys.utils.cpu_prof import CPUProfiler
+from rl4sys.utils.step_per_sec_log import StepPerSecLogger
+
+
 # HPCSim job scheduling environment and constants
 from rl4sys.examples.job_schedual_old.HPCSim.HPCSimPickJobs import HPCEnv, JOB_FEATURES, MAX_QUEUE_SIZE
 from rl4sys.utils.step_statistic import compute_field_statistics
@@ -32,7 +35,8 @@ from rl4sys.utils.step_statistic import compute_field_statistics
 # -------------------------------------------------------------
 #  Utility: build binary action mask from HPCSim observation
 # -------------------------------------------------------------
-
+global mode
+mode = "local"
 
 def compute_action_mask(obs: np.ndarray) -> np.ndarray:
     """Compute binary mask over job slots.
@@ -131,8 +135,9 @@ def run_rllib_client(num_steps: int = 4000) -> Dict[str, Union[float, int]]:
     env.my_init(workload_file=workload_path, sched_file='')
     env.seed(0)
     # Use remote inference mode to rely on the server-side custom model.
-    #client = PolicyClient("http://127.0.0.1:1337", inference_mode="remote")
-    client = PolicyClient("http://127.0.0.1:1337", inference_mode="local")
+    #mode = "remote"
+    
+    client = PolicyClient("http://127.0.0.1:1337", inference_mode=mode)
     
     # ------------------------------------------------------
     # TensorBoard logger setup
@@ -158,8 +163,9 @@ def run_rllib_client(num_steps: int = 4000) -> Dict[str, Union[float, int]]:
     episode_count = 0
 
     metric_lst = []
+    step_logger = StepPerSecLogger("rllib_client_job_" + mode)
     
-    while episode_count < 40000:
+    while episode_count < 100:
         # Update action mask & build obs dict
         action_mask = compute_action_mask(obs)
         obs_dict = {"obs": obs, "action_mask": action_mask}
@@ -221,18 +227,28 @@ def run_rllib_client(num_steps: int = 4000) -> Dict[str, Union[float, int]]:
             print(metrics)
 
             metric_lst.append(metrics) # append metrics to list
+            step_logger.log(metrics["steps/s"])
 
     for i in metric_lst:
         print(i)
     # Flush and close TensorBoard writer
     writer.flush()
     writer.close()
+    step_logger.close()
 
     print(compute_field_statistics(metric_lst)) 
     return metric_lst
 
 
 if __name__ == "__main__":
+    memory_profiler = MemoryProfiler("rllib_client_job_" + mode, log_interval=0.5)
+    memory_profiler.start_background_profiling()
+    cpu_profiler = CPUProfiler("rllib_client_job_" + mode, log_interval=0.5)
+    cpu_profiler.start_background_profiling()
+
     metric_lst = []
     for i in range(1):
         metric_lst.append(run_rllib_client())
+        
+    memory_profiler.stop_background_profiling()
+    cpu_profiler.stop_background_profiling()
