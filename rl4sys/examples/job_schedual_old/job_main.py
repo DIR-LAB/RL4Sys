@@ -585,7 +585,7 @@ if __name__ == '__main__':
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=100,
+    parser.add_argument('--number-of-iterations', type=int, default=500,
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')

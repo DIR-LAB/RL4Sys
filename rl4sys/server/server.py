@@ -30,6 +30,8 @@ from rl4sys.server.model_diff_manager import ModelDiffManager
 from rl4sys.utils.system_monitor import SystemMonitor, log_memory_usage
 from rl4sys.utils.packet_logger import PacketLogger
 
+import csv
+
 # Algorithm class mapping
 ALGORITHM_CLASSES = {
     'PPO': PPO,
@@ -403,6 +405,24 @@ class MyRLServiceServicer(RLServiceServicer):
             return ModelResponse(version=expected_version, is_diff=False, model_state=b"")
         
         model_state, version = model_data
+
+        """
+        diff_bytes  = len(model_state)
+        full_state  = diff_manager._compress_state_dict(model.state_dict())
+        full_bytes  = len(full_state)
+        saved_bytes = full_bytes - diff_bytes
+        save_ratio  = saved_bytes / full_bytes if full_bytes else 0.0
+
+        # append one line to a CSV file
+        with open("model_size_log.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                time.time(), client_id, current_version,
+                diff_bytes, full_bytes, saved_bytes, save_ratio
+            ])
+        """        
+
+
         self.logger.info(
             "Sending model update to client",
             client_id=client_id,
