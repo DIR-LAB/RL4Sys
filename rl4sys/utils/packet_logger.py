@@ -35,13 +35,16 @@ only two integers are held for counting.
 """
 from __future__ import annotations
 
+# Standard library imports
 import threading
 import time
-import psutil
+from queue import Queue
 from datetime import datetime
 from pathlib import Path
-from typing import Final, TextIO, List
+from typing import Final, TextIO, List, Optional
 
+# Third-party imports
+import psutil
 import csv
 import matplotlib.pyplot as plt
 import argparse
@@ -85,6 +88,18 @@ class PacketLogger:
         self._debug: Final[bool] = debug
 
         # ------------------------------------------------------------------
+        # Queue monitoring – will be attached later via ``attach_queue``.
+        # ------------------------------------------------------------------
+        # Optional queue monitoring – record size only on explicit update
+        self._queue: Optional[Queue] = None  # Keep for backward compatibility
+        self._curr_queue_size: int = 0  # Most recent queue length (instantaneous)
+        self._max_queue_size: int = 0   # Peak length since start
+
+        # Statistics for *average* queue size during current interval
+        self._queue_sum: int = 0
+        self._queue_samples: int = 0
+
+        # ------------------------------------------------------------------
         # Prepare filesystem layout – packet_log/<timestamp>/<project_name>.log
         # ------------------------------------------------------------------
         timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -98,10 +113,23 @@ class PacketLogger:
         # flushed immediately (buffering=1 works for text mode).
         self._file: TextIO = self._log_file_path.open("a", buffering=1, encoding="utf-8")
 
+        # ------------------------------------------------------------------
+        # Queue-size CSV (high-frequency) – one line per update_queue_size call
+        # ------------------------------------------------------------------
+        self._queue_file_path: Path = self._run_dir / "queue_size.csv"
+        self._queue_file: TextIO = self._queue_file_path.open("a", buffering=1, encoding="utf-8")
+
         # Write CSV header *once* when the file is empty.
         if self._file.tell() == 0:
-            self._file.write("timestamp,interval_count,total_count,cpu_percent\n")
+            header = (
+                "timestamp,interval_count,total_count,queue_size,max_queue_size,cpu_percent\n"
+            )
+            self._file.write(header)
             self._file.flush()
+
+        if self._queue_file.tell() == 0:
+            self._queue_file.write("timestamp,queue_size\n")
+            self._queue_file.flush()
 
         # Prime psutil's internal counters to get accurate non-blocking values
         psutil.cpu_percent(interval=None)
@@ -158,8 +186,46 @@ class PacketLogger:
         # Ensure a final flush takes place.
         self._flush(final_flush=True)
         self._file.close()
+        # Close high-frequency queue file as well
+        self._queue_file.close()
         if self._debug:
             print("[PacketLogger] Stopped.")
+
+    # ------------------------------------------------------------------
+    # Queue attachment
+    # ------------------------------------------------------------------
+    def attach_queue(self, queue: Queue) -> None:
+        """Attach a *Queue* whose size will be logged on every flush.
+
+        This allows on-the-fly instrumentation of producer/consumer
+        back-pressure without needing to recreate the *PacketLogger*.
+        """
+
+        self._queue = queue
+
+    # ------------------------------------------------------------------
+    # Queue size updates – call this immediately after ``queue.put``.
+    # ------------------------------------------------------------------
+    def update_queue_size(self, size: int) -> None:
+        """Record the current size of the monitored queue.
+
+        The call is *thread-safe* and extremely lightweight (just an integer
+        assignment under lock).  Calling it right after every ``Queue.put``
+        guarantees accurate knowledge of the queue length at each enqueue
+        event without expensive sampling.
+        """
+        with self._lock:
+            self._curr_queue_size = size
+            if size > self._max_queue_size:
+                self._max_queue_size = size
+            # Accumulate for interval average
+            self._queue_sum += size
+            self._queue_samples += 1
+
+            # Write immediate queue-size sample to the dedicated CSV
+            timestamp_iso = datetime.now().isoformat()
+            self._queue_file.write(f"{timestamp_iso},{size}\n")
+            self._queue_file.flush()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -175,13 +241,34 @@ class PacketLogger:
             interval_count: int = self._interval_count
             self._interval_count = 0
             total_count: int = self._total_count
-        if interval_count == 0 and not final_flush:
+
+        # --------------------------------------------------------------
+        # Queue size metrics – rely on cached value updated via
+        # ``update_queue_size`` for accuracy.
+        # --------------------------------------------------------------
+        with self._lock:
+            # Compute average queue size for the interval
+            if self._queue_samples:
+                avg_queue_size: float = self._queue_sum / self._queue_samples
+            else:
+                avg_queue_size = float(self._curr_queue_size)
+
+            max_queue_size: int = self._max_queue_size
+
+            # Reset interval accumulators
+            self._queue_sum = 0
+            self._queue_samples = 0
+            # Leave _curr_queue_size and _max_queue_size untouched
+
+        if interval_count == 0 and avg_queue_size == 0 and not final_flush:
             # Avoid writing empty lines when nothing happened in the interval –
             # except for the final flush where we want to record the end state.
             return
         cpu_pct = psutil.cpu_percent(interval=None)
         timestamp_iso = datetime.now().isoformat()
-        log_line = f"{timestamp_iso},{interval_count},{total_count},{cpu_pct}\n"
+        log_line = (
+            f"{timestamp_iso},{interval_count},{total_count},{avg_queue_size},{max_queue_size},{cpu_pct}\n"
+        )
         self._file.write(log_line)
         # ``buffering=1`` already flushes each line, but call flush() explicitly
         # to be 100 % certain.

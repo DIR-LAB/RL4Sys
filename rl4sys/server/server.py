@@ -261,9 +261,13 @@ class MyRLServiceServicer(RLServiceServicer):
         # Initialize client algorithm manager
         self.client_manager = ClientAlgorithmManager()
         
-        # Initialize trajectory processing queue and dispatcher thread
-        self.trajectory_queue = Queue()
+        # Initialize dispatcher control event
         self._stop_event = threading.Event()
+        
+        # Initialize trajectory processing queue and attach to packet logger for monitoring
+        self.trajectory_queue = Queue()
+        # PacketLogger monitors queue size and throughput
+        self.packet_logger.attach_queue(self.trajectory_queue)
         
         # Create dispatcher thread
         self._dispatcher_thread = threading.Thread(
@@ -472,6 +476,8 @@ class MyRLServiceServicer(RLServiceServicer):
             
             # Add trajectory to processing queue
             self.trajectory_queue.put((traj, traj_proto.version, client_id))
+            # Record queue size right after the put for precise backlog tracking
+            self.packet_logger.update_queue_size(self.trajectory_queue.qsize())
 
         # Check if we need to update the model
         max_client_version = max(traj.version for traj in request.trajectories)
