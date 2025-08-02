@@ -127,7 +127,7 @@ config = (
         }
     )
     .offline_data(input_=lambda ioctx: PolicyServerInput(ioctx, "127.0.0.1", 1337))
-    .env_runners(num_env_runners=0, enable_connectors=False)
+    .env_runners(num_env_runners=0, enable_connectors=False, rollout_fragment_length=100)
     .debugging(log_level="DEBUG")
 )
 

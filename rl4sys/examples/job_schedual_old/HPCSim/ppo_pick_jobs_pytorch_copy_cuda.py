@@ -539,7 +539,7 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--seed", "-s", type=int, default=0)
     parser.add_argument("--trajs", type=int, default=100)
-    parser.add_argument("--epochs", type=int, default=4) # used to be 4000
+    parser.add_argument("--epochs", type=int, default=4000) # used to be 4000
     parser.add_argument("--exp_name", type=str, default="ppo_pt")
     parser.add_argument("--attn", type=int, default=0)
     parser.add_argument("--shuffle", type=int, default=0)

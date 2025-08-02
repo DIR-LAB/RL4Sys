@@ -71,7 +71,7 @@ class PPO():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Create normal PPO model
-        self._model_train = RLActorCritic(input_size, act_dim, actor_type='kernel').to(self.device) # TODO manually control actor type
+        self._model_train = RLActorCritic(input_size, act_dim, actor_type='mlp').to(self.device) # TODO manually control actor type
 
         self.models = {}
         # Initialize lock for thread-safe model updates
@@ -197,7 +197,7 @@ class PPO():
             self.writer.add_scalar('charts/VVals', obs_value, self.global_step)
 
             if r4a.done:
-                self.writer.add_scalar("charts/reward", self.ep_rewards, self.global_step)
+                self.writer.add_scalar("charts/reward", self.ep_rewards, self.epoch)
                 self.ep_rewards = 0
             
         # Once we have enough trajectories, do an update

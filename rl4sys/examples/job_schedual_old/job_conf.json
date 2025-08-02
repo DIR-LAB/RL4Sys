@@ -4,7 +4,7 @@
     "algorithm_parameters": {
         "batch_size": 25600,
         "act_dim": 128,
-        "seed": 0,
+        "seed": 1,
         "traj_per_epoch": 25600,
         "clip_ratio": 0.2,
         "gamma": 1.0,
@@ -21,6 +21,6 @@
     "act_limit": 1.0,
     "max_traj_length": 25600,
     "type": "onpolicy",
-    "train_server_address": "10.10.1.3:50051",
-    "send_frequency": 1
+    "train_server_address": "localhost:50051",
+    "send_frequency": 10
 }

@@ -302,7 +302,7 @@ class JobSchedulingSim:
         )
 
         profiling = []
-        traj_per_epoch = 1  # Number of episodes per epoch (aligned with reference PPO implementation)
+        traj_per_epoch = 100  # Number of episodes per epoch (aligned with reference PPO implementation)
 
         # -----------------------------------------------------------------
         # Performance profiling accumulators (match baseline scripts)
@@ -580,16 +580,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(prog="RL4Sys Job Scheduling Simulator",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--seed', type=int, default=0,
+    parser.add_argument('--seed', type=int, default=1,
                         help='seed for random number generation in environment')
     parser.add_argument('--performance-metric', type=int, default=0,
                         help='0: Average bounded slowdown, 1: Average waiting time,\n' +
                              '2: Average turnaround time, 3: Resource utilization, 4: Average slowdown')
-    parser.add_argument('--number-of-iterations', type=int, default=100,
+    parser.add_argument('--number-of-iterations', type=int, default=20000,
                         help='number of epochs to run the job scheduling simulation')
     parser.add_argument('--number-of-steps', type=int, default=256,
                         help='maximum number of scheduling steps per episode (unused, episodes terminate naturally)')
-    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/lublin_256.swf', # ./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf
+    parser.add_argument('--workload-file', type=str, default='./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf', # ./rl4sys/examples/job_schedual_old/HPCSim/data/SDSC-SP2-1998-4.2-cln.swf
                         help='path to the workload file (SWF format)')
     parser.add_argument('--client-id', type=str, default="job_schedualing_old",
                         help='unique client id for the job scheduling simulation')

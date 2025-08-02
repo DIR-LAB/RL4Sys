@@ -183,6 +183,7 @@ class LunarLanderSim():
                     )
 
                     # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
+                    self.rl4sys_action.done = True
                     self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
                     if reward >= 200:  # Successful landing threshold

@@ -494,7 +494,7 @@ class RL4SysAgent:
                     )
                 elif self.algorithm_name == 'PPO':
                     # For PPO, use normal RLActorCritic with standard parameters
-                    self._model = model_class(model_input_size, model_act_dim, actor_type='kernel') # manually control actor type
+                    self._model = model_class(model_input_size, model_act_dim, actor_type='mlp') # manually control actor type
                     
                     self.logger.info(
                         "Created RLActorCritic model",
