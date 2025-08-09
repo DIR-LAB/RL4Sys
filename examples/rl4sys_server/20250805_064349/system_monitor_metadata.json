@@ -1,0 +1,14 @@
+{
+  "monitor_name": "RL4SysServer",
+  "project_name": "rl4sys_server",
+  "start_time": "2025-08-05T06:43:49.923803",
+  "log_interval": 30.0,
+  "memory_threshold": 85.0,
+  "cpu_threshold": 90.0,
+  "max_history": 100,
+  "system_info": {
+    "platform": "linux",
+    "cpu_count": 40,
+    "total_memory_gb": 187.56
+  }
+}

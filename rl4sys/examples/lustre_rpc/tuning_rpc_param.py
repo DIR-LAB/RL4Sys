@@ -909,6 +909,11 @@ def tune_params(result_folder_path, wld_name, cur_snap, prev_snap, record_dur):
     # must be called after all tuning decision has applied
     cur_snap.store_params_to_csv(result_folder_path, wld_name, record_dur)
 
+
+
+# python rl4sys/examples/lustre_rpc/tuning_rpc_param.py ./rpc_log test 1
+
+
 if __name__ == "__main__":
     # relative path from the script
     result_folder_path = sys.argv[1]

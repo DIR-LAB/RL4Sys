@@ -25,7 +25,7 @@ def load_memory_data() -> Dict[str, pd.DataFrame]:
     # Define file paths and corresponding condition names
     file_mapping = {
         "memtest/exp_1 copy/job_main_rand_memory_profile_20250728_171221.csv": "Random",
-        "memtest/exp_1 copy/job_main_infer_memory_profile_20250728_171307.csv": "NN Infer", 
+        "memtest/exp_1 copy/job_main_infer_memory_profile_20250728_171307.csv": "Infer-Only", 
         "memtest/exp_1 copy/job_main_memory_profile_20250728_170410 10 SF.csv": "RL4Sys SF=10",
         "memtest/exp_1 copy/job_main_memory_profile_20250728_170502_5SF.csv": "RL4Sys SF=5",
         "memtest/exp_1 copy/job_main_memory_profile_20250728_170608_3SF.csv": "RL4Sys SF=3",
@@ -78,13 +78,15 @@ def create_memory_plot(data_dict: Dict[str, pd.DataFrame],
     # Set style for better visualization
     plt.style.use('seaborn-v0_8')
     
-    # Create the figure and axis
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure/axes with transparent background
+    fig, ax = plt.subplots(figsize=figsize, facecolor="none")
+    fig.patch.set_alpha(0.0)
+    ax.set_facecolor("none")
     
-    # Define colors for different conditions with better contrast
+    # Define colors and markers for different conditions with better contrast
     colors = {
         "Random": "#1f77b4",      # Blue
-        "NN Infer": "#ff7f0e",    # Orange
+        "Infer-Only": "#ff7f0e",    # Orange
         "RL4Sys SF=10": "#2ca02c", # Green
         "RL4Sys SF=5": "#d62728",  # Red
         "RL4Sys SF=3": "#9467bd",  # Purple
@@ -92,16 +94,45 @@ def create_memory_plot(data_dict: Dict[str, pd.DataFrame],
         "RLlib Remote": "#e377c2", # Pink
         "RLlib Local": "#7f7f7f"   # Gray
     }
+
+    markers = {
+        "Random": "o",
+        "Infer-Only": "s",
+        "RL4Sys SF=10": "^",
+        "RL4Sys SF=5": "v",
+        "RL4Sys SF=3": "D",
+        "RL4Sys SF=1": "P",
+        "RLlib Remote": "X",
+        "RLlib Local": "*",
+    }
     
     # Plot each condition
+    MAX_TIME_SECONDS = 20
+
     for condition_name, df in data_dict.items():
         if len(df) > 0:
+            # Filter to the first MAX_TIME_SECONDS seconds
+            df_subset = df[df["normalized_time"] <= MAX_TIME_SECONDS]
+            if df_subset.empty:
+                continue
+
             color = colors.get(condition_name, "gray")
-            ax.plot(df['normalized_time'], df['rss_mb'], 
-                   label=condition_name, color=color, linewidth=3, alpha=0.9)
+            marker = markers.get(condition_name, None)
+
+            ax.plot(
+                df_subset["normalized_time"],
+                df_subset["rss_mb"],
+                label=condition_name,
+                color=color,
+                linewidth=2.0,
+                alpha=0.9,
+                marker=marker,
+                markersize=6,
+                markevery=max(len(df_subset) // 20, 1),  # spread markers
+            )
     
     # Customize the plot
-    ax.set_title('Memory Usage Comparison\n(RSS over Time)', 
+    ax.set_title('Memory Usage Comparison (First 20 s)',
                  fontsize=18, fontweight='bold', pad=20)
     ax.set_xlabel('Time (seconds)', fontsize=16, fontweight='bold')
     ax.set_ylabel('Memory Usage (MB)', fontsize=16, fontweight='bold')
@@ -111,6 +142,11 @@ def create_memory_plot(data_dict: Dict[str, pd.DataFrame],
     
     # Add grid with better visibility
     ax.grid(True, alpha=0.4, linestyle='-', linewidth=0.8)
+
+    # Ensure all spines (frame) are visible
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(1.2)
     
     # Add legend with better positioning
     ax.legend(fontsize=14, loc='upper left', framealpha=0.95, 
@@ -148,7 +184,7 @@ def create_detailed_memory_plot(data_dict: Dict[str, pd.DataFrame],
     # Define colors with better contrast
     colors = {
         "Random": "#1f77b4",      # Blue
-        "NN Infer": "#ff7f0e",    # Orange
+        "Infer-Only": "#ff7f0e",    # Orange
         "RL4Sys SF=10": "#2ca02c", # Green
         "RL4Sys SF=5": "#d62728",  # Red
         "RL4Sys SF=3": "#9467bd",  # Purple
@@ -224,8 +260,14 @@ def main() -> None:
     
     # Save the plot as PNG with white background for better readability
     output_path = os.path.join("paper_plot", "memory.png")
-    fig.savefig(output_path, dpi=300, bbox_inches='tight', 
-                facecolor='white', edgecolor='none', transparent=False)
+    fig.savefig(
+        output_path,
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="none",
+        edgecolor="none",
+        transparent=True,
+    )
     print(f"Memory plot saved to: {output_path}")
     
     # Close the figure to free memory

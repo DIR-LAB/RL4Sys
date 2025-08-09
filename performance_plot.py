@@ -21,13 +21,13 @@ def create_performance_data() -> Dict[str, float]:
     """
     data = {
         "Random": 2490.2,
-        "NN Infer": 1976.7,
-        "NN Inf+Traj\n(SF=10)": 1863.7,
-        "NN Inf+Traj\n(SF=5)": 1853.7,
-        "NN Inf+Traj\n(SF=3)": 1865.8,
-        "NN Inf+Traj\n(SF=1)": 1860.6,
-        "Rllib local": 615.2,
-        "Rllib remote": 232.6
+        "Infer-Only": 1976.7,
+        "RL4Sys\n(SF=10)": 1863.7,
+        "RL4Sys\n(SF=5)": 1853.7,
+        "RL4Sys\n(SF=3)": 1865.8,
+        "RL4Sys\n(SF=1)": 1860.6,
+        "RLlib Local": 615.2,
+        "RLlib Remote": 232.6
     }
     return data
 
@@ -42,15 +42,15 @@ def create_color_mapping() -> Dict[str, str]:
     color_mapping = {
         # Light blue background conditions
         "Random": "lightblue",
-        "NN Infer": "lightblue",
+        "Infer-Only": "lightblue",
         # Light green background conditions
-        "NN Inf+Traj\n(SF=10)": "lightgreen",
-        "NN Inf+Traj\n(SF=5)": "lightgreen",
-        "NN Inf+Traj\n(SF=3)": "lightgreen",
-        "NN Inf+Traj\n(SF=1)": "lightgreen",
+        "RL4Sys\n(SF=10)": "lightgreen",
+        "RL4Sys\n(SF=5)": "lightgreen",
+        "RL4Sys\n(SF=3)": "lightgreen",
+        "RL4Sys\n(SF=1)": "lightgreen",
         # Light yellow background conditions
-        "Rllib local": "lightyellow",
-        "Rllib remote": "lightyellow"
+        "RLlib Local": "lightyellow",
+        "RLlib Remote": "lightyellow"
     }
     return color_mapping
 

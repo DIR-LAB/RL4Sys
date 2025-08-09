@@ -25,7 +25,7 @@ import seaborn as sns
 # --------------------------------------------------------------------------------------
 CSV_MAPPING: Dict[str, str] = {
     "cputest/exp_1/job_main_rand 100 traj send_cpu_profile_20250728_171221.csv": "Random",
-    "cputest/exp_1/job_main_infer 100 traj send_cpu_profile_20250728_171307.csv": "NN Infer",
+    "cputest/exp_1/job_main_infer 100 traj send_cpu_profile_20250728_171307.csv": "Infer-Only",
     "cputest/exp_1/job_main 10 traj send_cpu_profile_20250728_170502_10SF.csv": "RL4Sys SF=10",
     "cputest/exp_1/job_main 10 traj send_cpu_profile_20250728_170543_5SF.csv": "RL4Sys SF=5",
     "cputest/exp_1/job_main 10 traj send_cpu_profile_20250728_170608_3SF.csv": "RL4Sys SF=3",
@@ -36,7 +36,7 @@ CSV_MAPPING: Dict[str, str] = {
 
 COLOR_MAPPING: Dict[str, str] = {
     "Random": "lightblue",
-    "NN Infer": "lightblue",
+    "Infer-Only": "lightblue",
     "RL4Sys SF=10": "lightgreen",
     "RL4Sys SF=5": "lightgreen",
     "RL4Sys SF=3": "lightgreen",
