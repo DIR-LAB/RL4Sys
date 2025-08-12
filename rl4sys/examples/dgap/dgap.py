@@ -17,6 +17,8 @@ from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
 
+from collections import deque, namedtuple
+
 
 """
 Environment script: DGAP Simulator
@@ -32,6 +34,8 @@ class Vertex:
         self.index = np.int64(index)
         self.degree = np.int32(degree)
 
+# Define the structure for queue items
+QueueItem = namedtuple("QueueItem", ["num_edge", "rl4sys_action", "timer"])
 
 class DgapSim():
     # Height-based (as opposed to depth-based) tree thresholds
@@ -115,6 +119,9 @@ class DgapSim():
         self.rebalance_counter = [np.int64(0)] * (self.segment_count * 2)
         self.rebalance_reads = [np.int64(0)] * (self.segment_count * 2)
         self.rebalance_writes = [np.int64(0)] * (self.segment_count * 2)
+        self.rl_time_tracker = deque()
+        self.rl_feedback_threshold = 1000
+        self.pma_root = 1  # root of the pma tree
 
     def run_application(self, num_iterations, max_moves):
         pass
@@ -230,9 +237,16 @@ class DgapSim():
 
 
         # def load_dynamicgraph(self, input_file, output_file):
+
     def load_dynamicgraph(self, input_file):
         with open(input_file) as file:
             for line in file:
+                # check if self.rl_time_tracker.top().edge_id - num_edges > self.rl_feedback_threshold:
+                # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
+                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                    self.rl_time_tracker[0].rl4sys_action.update_reward(time.time() - self.rl_time_tracker[0].timer)
+                    self.rl_time_tracker.popleft()
+
                 u, v = line.split()
 
                 # type casting to int
@@ -412,12 +426,14 @@ class DgapSim():
             # do degree-based distribution of gaps
             num_write_rebal_prev = self.num_write_rebal
             num_read_rebal_prev = self.num_read_rebal
-            self.rebalance_weighted(left_index, right_index, window)
+            # self.rebalance_weighted(left_index, right_index, window)
+            self.rebalance_rl(left_index, right_index, window)
             self.update_rebalance_metadata(height, 1, (self.num_read_rebal - num_read_rebal_prev), (self.num_write_rebal - num_write_rebal_prev))
+            # self.rl_time_tracker.push({num_edges, current time()});
         else:
             # Rebalance not possible without increasing the underlying array size.
             # need to resize the size of "edges_" array
-            self.resize()
+            self.resize_rl()
 
     def resize(self):
         self.num_resize += 1
@@ -426,6 +442,26 @@ class DgapSim():
 
         gaps = self.elem_capacity - self.num_edges
         new_indices = self.calculate_positions(0, self.num_vertices, gaps, self.num_edges)
+
+        # update the vertex metadata
+        # in the original VCSR implementation, we actually move edges here
+        for curr_vertex in range(self.num_vertices - 1, -1, -1):
+            self.vertices_[curr_vertex].index = np.int64(new_indices[curr_vertex])
+
+        self.num_read_resize += (self.num_vertices + self.num_edges)
+        self.num_write_resize += (self.num_vertices + self.num_edges)
+
+        self.recount_segment_total_full()
+        # self.segment_sanity_check()
+        # self.edge_list_boundary_sanity_checker()
+
+    def resize_rl(self):
+        self.num_resize += 1
+        print("elem_capacity: {}".format(self.elem_capacity))
+        self.elem_capacity *= np.int64(2)
+
+        gaps = self.elem_capacity - self.num_edges
+        new_indices = self.calculate_positions_rl(0, self.num_vertices, self.pma_root)
 
         # update the vertex metadata
         # in the original VCSR implementation, we actually move edges here
@@ -468,7 +504,6 @@ class DgapSim():
             # return a tensor of self.vertices_[i]
             obs = self.vertices_ + [which_vertex] # concat the vertex array and a scalar value
             return torch.tensor(obs, dtype=torch.int64) # <--- 
-    
 
     def calculate_positions(self, start_vertex, end_vertex, gaps, total_degree):
         size = end_vertex - start_vertex
@@ -516,6 +551,165 @@ class DgapSim():
             print("[rebalance_weighted] total-edges: {}, actual-edges: {}".format(self.segment_edges_total[1], self.segment_edges_actual[1]))
 
         new_index = self.calculate_positions(start_vertex, end_vertex, gaps, self.segment_edges_actual[pma_idx])
+        if end_vertex >= self.num_vertices:
+            index_boundary = self.elem_capacity
+        else:
+            index_boundary = self.vertices_[end_vertex].index
+
+        assert (new_index[size - 1] + self.vertices_[end_vertex - 1].degree <= index_boundary), f"Rebalance (weighted) index calculation is wrong! new_index[size - 1]: {new_index[size - 1]}, index_boundary: {index_boundary}, calculated: {new_index[size - 1] + self.vertices_[end_vertex - 1].degree}, total-edges: {self.segment_edges_total[pma_idx]}, actual-edges: {self.segment_edges_actual[pma_idx]}, start-vertex: {start_vertex}, end-vertex: {end_vertex}"
+
+        ii = 0
+        jj = 0
+        curr_vertex = start_vertex + 1
+        next_to_start = 0
+        read_index = 0
+        last_read_index = 0
+        write_index = 0
+
+        while curr_vertex < end_vertex:
+            for ii in range(curr_vertex, end_vertex):
+                if new_index[ii-start_vertex] <= self.vertices_[ii].index:
+                    break
+            if ii == end_vertex:
+                ii -= 1
+            next_to_start = ii + 1
+            if new_index[ii-start_vertex] <= self.vertices_[ii].index:
+                # now it is guaranteed that, ii's new-starting index is less than or equal to it's old-starting index
+                jj = ii
+                read_index = self.vertices_[jj].index
+                last_read_index = read_index + self.vertices_[jj].degree
+                write_index = new_index[jj - start_vertex]
+                self.num_read_rebal += 2
+
+                self.num_write_rebal += (last_read_index - read_index)
+                self.num_read_rebal += (last_read_index - read_index)
+                # update the index to the new position
+                # in the original VCSR implementation, we actually move edges here
+                # while read_index < last_read_index:
+                self.vertices_[jj].index = np.int64(new_index[jj - start_vertex])
+                self.num_write_rebal += 1
+                ii -= 1
+
+            # from current_vertex to ii, the new-starting index is greater than to it's old-starting index
+            for jj in range(ii, curr_vertex-1, -1):
+                read_index = self.vertices_[jj].index + self.vertices_[jj].degree - 1
+                last_read_index = self.vertices_[jj].index
+                write_index = new_index[jj-start_vertex] + self.vertices_[jj].degree - 1
+                self.num_read_rebal += 2
+
+                self.num_write_rebal += (read_index - last_read_index + 1)
+                self.num_read_rebal += (read_index - last_read_index + 1)
+                # update the index to the new position
+                # in the original VCSR implementation, we actually move edges here
+                # while read_index >= last_read_index:
+                self.vertices_[jj].index = np.int64(new_index[jj-start_vertex])
+                self.num_write_rebal += 1
+
+            # move current_vertex to the next position of ii
+            curr_vertex = next_to_start
+
+        # free(new_index)
+        # new_index = nullptr
+        self.recount_segment_total_in_range(start_vertex, end_vertex)
+        # self.segment_sanity_check()
+        # self.edge_list_boundary_sanity_checker()
+
+    def calculate_positions_rl(self, start_vertex, end_vertex, pma_idx):
+        size = end_vertex - start_vertex
+        new_index = [np.int64(0)] * size
+        total_degree = self.segment_edges_actual[pma_idx]
+        gaps = self.segment_edges_total[pma_idx] - self.segment_edges_actual[pma_idx]
+
+        if gaps <= 0:
+            print("Gaps: {}, size: {}, start-vertex: {}, end-vertex: {}".format(gaps, size, start_vertex, end_vertex))
+            # print("actual-edge: {}, total-edge: {}")
+
+        seg_gaps = {}           # gap assigment to segments by rl
+        seg_queue = deque()
+        seg_queue.append(pma_idx)
+        seg_gaps[pma_idx] = gaps
+
+        while seg_queue:
+            seg_id = seg_queue.popleft()
+            parent_gaps = seg_gaps[seg_id]
+
+            if seg_id >= self.segment_count:
+                break
+
+            left_child = seg_id * 2
+            right_child = seg_id * 2 + 1
+            # call rl agent here:
+            left_child_degree = self.segment_edges_actual[left_child]
+            left_child_gaps = self.segment_edges_total[left_child] - left_child_degree
+            right_child_degree = self.segment_edges_actual[right_child]
+            right_child_gaps = self.segment_edges_total[right_child] - right_child_degree
+
+            self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, torch.tensor(left_child_degree, left_child_gaps, right_child_degree, right_child_gaps))
+            self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+            self.rl4sys_action.update_reward(0)
+            # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
+            self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            if left_child < self.segment_count:
+                seg_queue.append(left_child)
+                seg_gaps[left_child] = parent_gaps * self.rl4sys_action.act
+                seg_queue.append(right_child)
+                seg_gaps[right_child] = parent_gaps - seg_gaps[left_child]
+
+        start_seg = self.get_segment_id(start_vertex)
+        end_seg = self.get_segment_id(end_vertex)
+
+        num_segs = end_seg - start_seg
+        new_seg_index = [np.int64(0)] * num_segs
+        seg_index_d = self.vertices_[start_vertex].index
+        # calculate the start of each segment based on seg_gaps and segment_edges_actual[]
+        for seg_id in range(start_seg, end_seg):
+            new_seg_index[seg_id - start_seg] = np.int64(seg_index_d)
+            seg_index_d += (self.segment_edges_actual[seg_id] + seg_gaps[seg_id])
+
+        # loop over all segments in this vertex range
+        for seg_id in range(start_seg, end_seg):
+            current_seg_start_vertex = self.get_segment_start_vertex(seg_id)
+            current_seg_end_vertex = min(current_seg_start_vertex + self.segment_size, self.num_vertices)
+
+            # assign gaps to each vertex based on its degree and the gaps assigned to the segment it belongs to
+            index_d = new_seg_index[seg_id - start_seg]
+            # step = np.float64(gaps) / total_degree # gaps possible per-edge
+            step = np.float64(seg_gaps[seg_id]) / self.segment_edges_actual[seg_id]
+
+            for i in range(current_seg_start_vertex, current_seg_end_vertex):
+                new_index[i-start_vertex] = int(index_d)
+                if i > start_vertex:
+                    # printf("v[%d] with degree %d gets actual space %ld\n", i-1, vertices_[i-1].degree, (new_index[i-start_vertex]-new_index[i-start_vertex-1]));
+                    assert new_index[i-start_vertex] >= new_index[(i-1)-start_vertex] + self.vertices_[i-1].degree, f"Edge-list can not be overlapped with the neighboring vertex! Gaps: {gaps}, total-degree: {total_degree}, step-size: {step}"
+
+                index_d += (self.vertices_[i].degree + (step * self.vertices_[i].degree))
+
+        return new_index
+
+    def rebalance_rl(self, start_vertex, end_vertex, pma_idx):
+        start_vertex = int(start_vertex)
+        end_vertex = int(end_vertex)
+        pma_idx = int(pma_idx)
+
+        from_idx = self.vertices_[start_vertex].index
+        if end_vertex >= self.num_vertices:
+            to_idx = self.elem_capacity
+        else:
+            to_idx = self.vertices_[end_vertex].index
+
+        assert (to_idx > from_idx), f"Invalid range found while doing weighted rebalance"
+        capacity = to_idx - from_idx
+
+        # assert (self.segment_edges_total[pma_idx] == capacity), f"Segment capacity: {capacity} is not matched with segment_edges_total: {self.segment_edges_total[pma_idx]}, to-idx: {to_idx}, from-idx: {from_idx}."
+        # gaps = self.segment_edges_total[pma_idx] - self.segment_edges_actual[pma_idx]
+
+        # calculate the future positions of the vertices_[i].index
+        size = end_vertex - start_vertex
+
+        if pma_idx == 1:
+            print("[rebalance_weighted] total-edges: {}, actual-edges: {}".format(self.segment_edges_total[1], self.segment_edges_actual[1]))
+
+        new_index = self.calculate_positions_rl(start_vertex, end_vertex, pma_idx)
         if end_vertex >= self.num_vertices:
             index_boundary = self.elem_capacity
         else:
@@ -647,6 +841,9 @@ class DgapSim():
 
     def get_segment_id(self, vid):
         return int((vid // self.segment_size) + self.segment_count)
+
+    def get_segment_start_vertex(self, seg_id):
+        return int((seg_id - self.segment_count) * self.segment_size)
 
     @staticmethod
     def clzll(x):
