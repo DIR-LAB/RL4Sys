@@ -479,27 +479,8 @@ class DgapSim():
             print("Gaps: {}, size: {}, start-vertex: {}, end-vertex: {}".format(gaps, size, start_vertex, end_vertex))
             # print("actual-edge: {}, total-edge: {}")
 
-
-        # todo: this is the place where rl-agent should be called
-        rl_weights = []
-        for vertex_id in range(start_vertex, end_vertex):
-            self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, self.build_observation(vertex_id))
-            self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
-            self.rl4sys_action.update_reward(0)
-            # for single vertex, this will give a scalar value 
-            rl_weights.append(self.rl4sys_action.act)
-        total_rl_weight = sum(rl_weights)
-        
-
-        # [0, 1, 2, 1, 4, 1, 6, 7, 8, 9, 2] # TODO see if action is a list of weights for each vertex
-        # total_weight = 0.0
-        # rl_weight = self.rlagent.get_weight(start_vertex, end_vertex, gaps, total_degree)
-        # for i in range(start_vertex, end_vertex):
-        #     total_weight += rl_weight[i-start_vertex]
-
         index_d = np.float64(self.vertices_[start_vertex].index)
-        # step = np.float64(gaps) / total_degree # gaps possible per-edge
-        step = np.float64(gaps) / total_rl_weight
+        step = np.float64(gaps) / total_degree # gaps possible per-edge
         for i in range(start_vertex, end_vertex):
             new_index[i-start_vertex] = int(index_d)
             if i > start_vertex:
@@ -507,9 +488,7 @@ class DgapSim():
                 assert new_index[i-start_vertex] >= new_index[(i-1)-start_vertex] + self.vertices_[i-1].degree, f"Edge-list can not be overlapped with the neighboring vertex! Gaps: {gaps}, total-degree: {total_degree}, step-size: {step}"
 
             # index_d += (vertices_[i].degree + (step * vertices_[i].degree))
-            # todo: more specificly, rl-agent should be called here to determine the gap for this vertex
-            # index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1)))
-            index_d += (self.vertices_[i].degree + (step * rl_weights[i-start_vertex]))
+            index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1)))
 
         return new_index
 
