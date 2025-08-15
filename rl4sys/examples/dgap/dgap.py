@@ -696,7 +696,10 @@ class DgapSim():
             #seg_gap_value = seg_gaps.get(seg_id, self.segment_edges_total[seg_id] - self.segment_edges_actual[seg_id]) # <-
             #denom = self.segment_edges_actual[seg_id] # <-
             #step = np.float64(seg_gap_value) / (denom if denom > 0 else 1) #<-
-            step = np.float64(seg_gaps[seg_id]) / self.segment_edges_actual[seg_id]
+            if self.segment_edges_actual[seg_id] > 0:
+                step = np.float64(seg_gaps[seg_id]) / self.segment_edges_actual[seg_id]
+            else:
+                step = 0.0  # No edges in this segment, so no gaps to distribute
 
             for i in range(current_seg_start_vertex, current_seg_end_vertex):
                 new_index[i-start_vertex] = int(index_d)
@@ -925,8 +928,8 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     # Add the command-line arguments
-    parser.add_argument("--nv", default=23970, type=int, help="Number of vertices")
-    parser.add_argument("--ne", default=375972, type=int, help="Number of edges")
+    parser.add_argument("--nv", default=88581, type=int, help="Number of vertices")
+    parser.add_argument("--ne", default=37598, type=int, help="Number of edges")
     parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.base.el", type=str, help="Base file")
     parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.dynamic.el", type=str, help="Dynamic file")
     # Additional optional arguments required later in the script
