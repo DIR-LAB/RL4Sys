@@ -47,8 +47,8 @@ class DgapSim():
     low_h = np.float64(0.50) # root
     low_0 = np.float64(0.25) # leaves
 
-    max_sparseness = np.int8(1.0 / low_0)
-    largest_empty_segment = np.int8(1.0 * max_sparseness)
+    max_sparseness = np.int64(1.0 / low_0)
+    largest_empty_segment = np.int64(1.0 * max_sparseness)
 
     def __init__(self, seed, client_id, n_vertices, n_edges, performance_metric=0, debug=False):
         ### part of RL4SysAgent
@@ -925,10 +925,10 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     # Add the command-line arguments
-    parser.add_argument("--nv", default=20, type=int, help="Number of vertices")
-    parser.add_argument("--ne", default=12, type=int, help="Number of edges")
-    parser.add_argument("--base_file", default="rl4sys/examples/dgap/base_file.txt", type=str, help="Base file")
-    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/dynamic_file.txt", type=str, help="Dynamic file")
+    parser.add_argument("--nv", default=23970, type=int, help="Number of vertices")
+    parser.add_argument("--ne", default=375972, type=int, help="Number of edges")
+    parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.base.el", type=str, help="Base file")
+    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.dynamic.el", type=str, help="Dynamic file")
     # Additional optional arguments required later in the script
     parser.add_argument('--number-of-moves', type=int, default=1000,
                         help='Maximum moves per simulation episode')
