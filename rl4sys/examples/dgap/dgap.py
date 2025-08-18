@@ -36,7 +36,7 @@ class Vertex:
         self.degree = np.int32(degree)
 
 # Define the structure for queue items
-QueueItem = namedtuple("QueueItem", ["num_edge", "rl4sys_action", "timer"])
+QueueItem = namedtuple("QueueItem", ["num_edge", "rl4sys_action", "reward_counter"])
 
 class DgapSim():
     # Height-based (as opposed to depth-based) tree thresholds
@@ -248,9 +248,14 @@ class DgapSim():
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
                 while True:
                     if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
-                        self.rl_time_tracker[0].rl4sys_action.update_reward(-(time.time() - self.rl_time_tracker[0].timer))
+                        # time-based reward
+                        # reward = -(time.time() - self.rl_time_tracker[0].reward_counter)
+                        # memory access based reward
+                        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+                        reward = -(total_writes - self.rl_time_tracker[0].reward_counter)
+                        self.rl_time_tracker[0].rl4sys_action.update_reward(reward)
                         traj_step = self.rl_time_tracker.popleft()
-                        #traj_step.rl4sys_action.update_reward(time.time() - traj_step.timer)
+                        #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
                         self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
                         
 
@@ -479,7 +484,7 @@ class DgapSim():
         self.elem_capacity *= np.int64(2)
 
         gaps = self.elem_capacity - self.num_edges
-        new_indices = self.calculate_positions_rl(0, self.num_vertices, self.pma_root)
+        new_indices, rl_actions_to_queue = self.calculate_positions_rl(0, self.num_vertices, self.pma_root)
 
         # update the vertex metadata
         # in the original VCSR implementation, we actually move edges here
@@ -492,6 +497,12 @@ class DgapSim():
         self.recount_segment_total_full()
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
+        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        for rl_action in rl_actions_to_queue:
+            # note: time-based
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # memory-access based
+            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
 
     def spread_weighted(self, start_vertex, end_vertex):
         assert start_vertex == 0, f"start-vertex is expected to be 0, got: {start_vertex}"
@@ -635,6 +646,7 @@ class DgapSim():
     def calculate_positions_rl(self, start_vertex, end_vertex, pma_idx):
         size = end_vertex - start_vertex
         new_index = [np.int64(0)] * size
+        rl_actions_to_queue = []
         total_degree = self.segment_edges_actual[pma_idx]
         gaps = self.segment_edges_total[pma_idx] - self.segment_edges_actual[pma_idx]
 
@@ -679,7 +691,8 @@ class DgapSim():
             #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
             #self.rl4sys_action.update_reward(0)
             # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
-            self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            rl_actions_to_queue.append(self.rl4sys_action)
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
             """
             [(obs,action,reward=0), (..), (..), ....]
 
@@ -734,7 +747,7 @@ class DgapSim():
 
                 index_d += (self.vertices_[i].degree + (step * self.vertices_[i].degree))
 
-        return new_index
+        return new_index, rl_actions_to_queue
 
     def rebalance_rl(self, start_vertex, end_vertex, pma_idx):
         start_vertex = int(start_vertex)
@@ -759,7 +772,7 @@ class DgapSim():
         if pma_idx == 1:
             print("[rebalance_weighted] total-edges: {}, actual-edges: {}".format(self.segment_edges_total[1], self.segment_edges_actual[1]))
 
-        new_index = self.calculate_positions_rl(start_vertex, end_vertex, pma_idx)
+        new_index, rl_actions_to_queue = self.calculate_positions_rl(start_vertex, end_vertex, pma_idx)
         if end_vertex >= self.num_vertices:
             index_boundary = self.elem_capacity
         else:
@@ -822,6 +835,12 @@ class DgapSim():
         self.recount_segment_total_in_range(start_vertex, end_vertex)
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
+        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        for rl_action in rl_actions_to_queue:
+            # note: time-based
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # memory-access based
+            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
 
     def update_segment_edge_total(self, vid, count):
         sid = self.get_segment_id(vid)
