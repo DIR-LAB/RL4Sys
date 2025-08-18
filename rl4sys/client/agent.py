@@ -292,7 +292,7 @@ class RL4SysAgent:
         """
         Mark the end of the current trajectory
         """
-        # action.done = True
+        action.done = True
         traj.mark_completed()
 
         # TODO log traj size and it's actual size

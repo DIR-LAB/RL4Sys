@@ -120,3 +120,6 @@ dkms.conf
 **/log/
 **/memtest/
 **/memtrajtest/
+
+# dgap dateset
+*.el

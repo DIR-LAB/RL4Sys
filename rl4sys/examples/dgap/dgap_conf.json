@@ -2,7 +2,7 @@
     "client_id": "dgap",
     "algorithm_name": "PPO",
     "algorithm_parameters": {
-        "batch_size": 512,
+        "batch_size": 32,
         "act_dim": 101,
         "seed": 0,
         "traj_per_epoch": 32,

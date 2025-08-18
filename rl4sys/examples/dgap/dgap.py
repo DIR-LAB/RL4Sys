@@ -122,6 +122,8 @@ class DgapSim():
         self.rebalance_writes = [np.int64(0)] * (self.segment_count * 2)
         self.rl_time_tracker = deque()
         self.rl_feedback_threshold = 1000
+        self.rl_traj_threshold = 10
+        self.rl_poped_edge_count = 0
         self.pma_root = 1  # root of the pma tree
 
     def run_application(self, num_iterations, max_moves):
@@ -244,9 +246,24 @@ class DgapSim():
             for line in file:
                 # check if self.rl_time_tracker.top().edge_id - num_edges > self.rl_feedback_threshold:
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
-                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
-                    self.rl_time_tracker[0].rl4sys_action.update_reward(time.time() - self.rl_time_tracker[0].timer)
-                    self.rl_time_tracker.popleft()
+                while True:
+                    if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                        self.rl_time_tracker[0].rl4sys_action.update_reward(-(time.time() - self.rl_time_tracker[0].timer))
+                        traj_step = self.rl_time_tracker.popleft()
+                        #traj_step.rl4sys_action.update_reward(time.time() - traj_step.timer)
+                        self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
+                        
+
+                        self.rl_poped_edge_count += 1
+                        if self.rl_poped_edge_count % self.rl_traj_threshold == 0:
+                            self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, traj_step.rl4sys_action) 
+                            """
+                            [1,2,3,4]
+                            ppo is look the last traj step very critical
+                            """
+                    else:
+                        break
+                        
 
                 u, v = line.split()
 
@@ -659,10 +676,18 @@ class DgapSim():
 
             self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_vec) # <-
             #----------------------------------------------------
-            self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
-            self.rl4sys_action.update_reward(0)
+            #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
+            #self.rl4sys_action.update_reward(0)
             # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
             self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            """
+            [(obs,action,reward=0), (..), (..), ....]
+
+            does not have to be fix length
+            [(obs,action,reward=0), (obs,action,reward=0), (obs,action,reward=0),....., (obs,action,reward=1000)]
+
+            
+            """
             # put this out of if
             act_value = self.rl4sys_action.act # action: 0-100
             act_value = act_value/100.0
@@ -928,10 +953,10 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     # Add the command-line arguments
-    parser.add_argument("--nv", default=88581, type=int, help="Number of vertices")
-    parser.add_argument("--ne", default=37598, type=int, help="Number of edges")
-    parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.base.el", type=str, help="Base file")
-    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.dynamic.el", type=str, help="Dynamic file")
+    parser.add_argument("--nv", default=6024271, type=int, help="Number of vertices")
+    parser.add_argument("--ne", default=5772481, type=int, help="Number of edges")
+    parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-unique-undir.base.el", type=str, help="Base file")
+    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-unique-undir.dynamic.el", type=str, help="Dynamic file")
     # Additional optional arguments required later in the script
     parser.add_argument('--number-of-moves', type=int, default=1000,
                         help='Maximum moves per simulation episode')
@@ -990,7 +1015,7 @@ if __name__ == '__main__':
     dgap.print_pma_meta()
     dgap.print_pma_counter()
 
-
+    
     # base_file
     # 0 1
     # 1 0
