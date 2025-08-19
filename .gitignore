@@ -133,6 +133,7 @@ dkms.conf
 **/memtrajtest/
 **/multiclinetest/
 **/grpc_test/
+**/speedlog/
 
 
 
