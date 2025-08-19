@@ -12,7 +12,7 @@ def run_rllib_client(num_steps: int = 4000) -> None:
     Args:
         num_steps: Number of environment steps to run for profiling
     """
-    env = gym.make("LunarLander-v3")
+    env = gym.make("LunarLander-v2")
     #client = PolicyClient("http://127.0.0.1:1337", inference_mode="remote")
     client = PolicyClient("http://127.0.0.1:1337", inference_mode="local")
     

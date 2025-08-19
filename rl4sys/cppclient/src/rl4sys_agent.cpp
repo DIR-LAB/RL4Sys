@@ -203,7 +203,8 @@ bool RL4SysAgent::getModelFromServer(int32_t expectedVersion) {
 
 std::optional<std::pair<std::shared_ptr<RL4SysTrajectory>, RL4SysAction>>
 RL4SysAgent::requestForAction(std::shared_ptr<RL4SysTrajectory> trajectory, 
-                              const std::vector<float>& observation) {
+                              const std::vector<float>& observation,
+                              const std::vector<float>& mask) {
     if (!initialized_) {
         logger_->error("Agent not initialized");
         return std::nullopt;
@@ -218,6 +219,12 @@ RL4SysAgent::requestForAction(std::shared_ptr<RL4SysTrajectory> trajectory,
     // Generate action using local model
     RL4SysAction action = model_manager_->generateAction(observation, trajectory->getVersion());
     
+    // Set mask if provided
+    if (!mask.empty()) {
+        std::vector<uint8_t> mask_bytes = utils::serializeFloatVector(mask);
+        action.setMask(mask_bytes);
+    }
+    
     if (action.getObservation().empty()) {
         logger_->error("Failed to generate action");
         return std::nullopt;
@@ -226,7 +233,8 @@ RL4SysAgent::requestForAction(std::shared_ptr<RL4SysTrajectory> trajectory,
     logger_->debug("Generated action for trajectory", 
                    "trajectory_version", trajectory->getVersion(),
                    "action_size", action.getAction().size(),
-                   "obs_size", observation.size());
+                   "obs_size", observation.size(),
+                   "mask_size", mask.size());
     
     return std::make_pair(trajectory, action);
 }
@@ -433,6 +441,11 @@ void RL4SysAgent::convertToProtoAction(const RL4SysAction& action, rl4sys::Actio
     protoAction->set_reward(rewardData.data(), rewardData.size());
     
     protoAction->set_done(action.isDone());
+    
+    // Serialize mask if available
+    if (!action.getMask().empty()) {
+        protoAction->set_mask(action.getMask().data(), action.getMask().size());
+    }
     
     // Add extra data
     for (const auto& [key, data] : action.getExtraData()) {

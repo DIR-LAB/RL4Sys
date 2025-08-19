@@ -1,0 +1,141 @@
+"""Memory profile CSV plotting utility.
+
+This module provides a convenience function and CLI to visualise memory
+statistics captured by ``MemoryProfiler``.  It expects the CSV format produced
+by the streaming profiler (column prefixes ``process_`` and ``system_``).
+
+Usage (as a script)::
+
+    python -m rl4sys.utils.mem_prof_plot memtest/ppo_training_seed_0_*.csv \
+        --output plots/memory.png
+
+If ``--output`` is omitted the plot is simply displayed on screen.
+"""
+
+from __future__ import annotations
+
+import argparse
+import pathlib
+import sys
+from datetime import datetime
+from typing import List, Optional
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# ---------------------------------------------------------------------------
+# Core API
+# ---------------------------------------------------------------------------
+
+def plot_memory_profile(csv_path: str | pathlib.Path, output_path: Optional[str | pathlib.Path] = None) -> None:
+    """Load *csv_path* produced by :class:`MemoryProfiler` and plot key metrics.
+
+    Generates two subplots: (1) RSS vs USS vs PSS, (2) VMS alone (MB).
+    """
+    path = pathlib.Path(csv_path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"CSV file not found: {path}")
+
+    df = pd.read_csv(path)
+
+    # Ensure expected columns exist
+    required_cols: List[str] = [
+        "process_timestamp",
+        "process_rss",
+        "process_vms",
+        "process_uss",
+        "process_pss",
+    ]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"CSV missing required columns: {', '.join(missing)}")
+
+    # Convert timestamp to datetime for nicer x-axis
+    df["process_timestamp"] = pd.to_datetime(df["process_timestamp"])
+
+    # Convert bytes → MiB for readability
+    df_mb = df.copy()
+    for col in required_cols[1:]:
+        df_mb[col] = df[col] / (1024 * 1024)
+
+    # ------------------------------------------------------------------
+    # Plotting – combined RSS/USS/PSS and separate VMS
+    # ------------------------------------------------------------------
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+    # First subplot: RSS, USS, PSS
+    ax0 = axes[0]
+    ax0.plot(df_mb["process_timestamp"], df_mb["process_rss"], label="RSS", color="tab:blue")
+    ax0.plot(df_mb["process_timestamp"], df_mb["process_uss"], label="USS", color="tab:green")
+    ax0.plot(df_mb["process_timestamp"], df_mb["process_pss"], label="PSS", color="tab:orange")
+    ax0.set_ylabel("MB")
+    ax0.set_title("RSS / USS / PSS")
+    ax0.legend()
+    ax0.grid(True, linestyle="--", alpha=0.4)
+
+    # Second subplot: VMS
+    ax1 = axes[1]
+    ax1.plot(df_mb["process_timestamp"], df_mb["process_vms"], label="VMS", color="tab:red")
+    ax1.set_ylabel("MB")
+    ax1.set_title("VMS")
+    ax1.grid(True, linestyle="--", alpha=0.4)
+    ax1.set_xlabel("Timestamp")
+
+    fig.suptitle(f"Memory usage over time – {path.stem}")
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    if output_path:
+        out = pathlib.Path(output_path).expanduser().resolve()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out, dpi=150)
+        print(f"Plot saved to {out}")
+        stats_out = out.with_name(out.stem + "_stats.csv")
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # Statistical summary table
+    # ------------------------------------------------------------------
+    summary_rows = []
+    for col in ["process_rss", "process_uss", "process_pss", "process_vms"]:
+        series_mb = df_mb[col]
+        summary_rows.append({
+            "metric": col.replace("process_", "").upper(),
+            "min": series_mb.min(),
+            "max": series_mb.max(),
+            "mean": series_mb.mean(),
+            "median": series_mb.median(),
+            "std": series_mb.std(),
+            "p95": series_mb.quantile(0.95),
+            "p99": series_mb.quantile(0.99),
+        })
+
+    summary_df = pd.DataFrame(summary_rows).set_index("metric")
+
+    # Pretty-print to console
+    print("\nMemory statistics (MB):")
+    print(summary_df.to_string(float_format=lambda x: f"{x:,.2f}"))
+
+    # Save alongside the plot if output given
+    if output_path:
+        summary_df.to_csv(stats_out, float_format="%.2f")
+        print(f"Stats table saved to {stats_out}")
+
+# ---------------------------------------------------------------------------
+# CLI entry-point
+# ---------------------------------------------------------------------------
+
+def _main(argv: List[str] | None = None) -> None:  # pragma: no cover
+    """Command-line front-end."""
+    parser = argparse.ArgumentParser(description="Plot MemoryProfiler CSV output.")
+    parser.add_argument("--csv", default="memtest/20250716_101531/job_main 10 traj send_memory_profile_20250716_101531.csv", help="Path to CSV generated by MemoryProfiler")
+    parser.add_argument("--output", "-o", default="memtest/20250716_101531/job_main 10 traj send_memory_profile_20250716_101531.png", help="Optional path to save PNG/PDF etc.")
+    args = parser.parse_args(argv)
+
+    plot_memory_profile(args.csv, args.output)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _main()

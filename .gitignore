@@ -117,3 +117,25 @@ dkms.conf
 
 # Logs
 **/logs/
+**/log/
+**/memtest/
+**/memtrajtest/
+**/rpc_log/
+**/paper_plot/
+**/packet_plot/
+**/lustre_log/
+**/cpu_plot/
+**/memory_plot/
+**/dgap_plot/
+**/rllib_log/
+**/memtest/
+**/cputest/
+**/memtrajtest/
+**/multiclinetest/
+**/grpc_test/
+**/speedlog/
+
+
+
+# dgap dateset
+*.el

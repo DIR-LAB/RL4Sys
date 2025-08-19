@@ -17,6 +17,8 @@ class RL4SysAction():
             fact the previous in the trajectory.
         done (bool): True for last action in trajectory, in which case all fields 
             should be None except for reward.
+        mask (torch.Tensor): optional mask tensor that can be the same length as obs or None.
+            Used to mask certain actions or observations.
         data (dict): extra values from model.step() which the selected algorithm 
             requires, such as log probability or state value.
         version (int): version of the model that generated this action
@@ -26,6 +28,7 @@ class RL4SysAction():
                  action: Optional['torch.Tensor'] = None, 
                  reward: Optional['torch.Tensor'] = None, 
                  done: bool = None,
+                 mask: Optional['torch.Tensor'] = None,
                  data: Optional[dict] = {},
                  version: int = 0):
         super().__init__()
@@ -33,6 +36,7 @@ class RL4SysAction():
         self.act = action
         self.rew = reward
         self.done = done
+        self.mask = mask
         self.data = data
         self.version = version
 

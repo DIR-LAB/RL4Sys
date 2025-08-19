@@ -12,7 +12,8 @@ import hashlib
 import zlib
 from typing import Dict, Tuple, Optional, List, Any
 import os
-
+import numpy as np
+import random
 from rl4sys.proto import (
     ModelResponse,
     SendTrajectoriesResponse,
@@ -27,6 +28,9 @@ from rl4sys.algorithms.DQN.DQN import DQN
 from rl4sys.utils.util import deserialize_action, StructuredLogger
 from rl4sys.server.model_diff_manager import ModelDiffManager
 from rl4sys.utils.system_monitor import SystemMonitor, log_memory_usage
+from rl4sys.utils.packet_logger import PacketLogger
+
+import csv
 
 # Algorithm class mapping
 ALGORITHM_CLASSES = {
@@ -135,6 +139,15 @@ class ClientAlgorithmManager:
                     continue
                 
                 traj, version = traj_data
+
+                """
+                print(f"traj: {traj[-1].obs.tolist()}")
+                print(f"traj: {traj[-1].mask.tolist()}")
+                print(f"traj: {traj[-1].act}")
+                print(f"traj: {traj[-1].rew}")
+                print(f"traj: {traj[-1].done}")
+                """
+
                 
                 # Get the algorithm instance for this client
                 algorithm, diff_manager = self.get_algorithm(client_id)
@@ -151,7 +164,7 @@ class ClientAlgorithmManager:
                 # Process trajectory and update model
                 if algorithm.type == 'onpolicy':
                     if version == algorithm.version:
-                        algorithm.receive_trajectory(traj)
+                        algorithm.receive_trajectory(traj, version)
                         # Add new model version to history after update
                         model, new_version = algorithm.get_current_model()
                         diff_manager.add_model_version(new_version, model)
@@ -219,8 +232,23 @@ class MyRLServiceServicer(RLServiceServicer):
         self.logger = StructuredLogger("RL4SysServer", debug)
         
         # Initialize system monitoring
-        self.system_monitor = SystemMonitor("RL4SysServer", debug=debug)
+        self.system_monitor = SystemMonitor(
+            "RL4SysServer", 
+            debug=debug,
+            save_to_file=True,
+            project_name="rl4sys_server"
+        )
         self.system_monitor.start_monitoring()
+        
+        # ------------------------------------------------------------------
+        # Packet logger – records the number of trajectories ("packets")
+        # received by the server.  Logging interval set to 5 seconds.
+        # ------------------------------------------------------------------
+        self.packet_logger: PacketLogger = PacketLogger(
+            project_name="rl4sys_server_21_client", # TODO change the name to the number of clients
+            log_interval=0.5,
+            debug=debug
+        )
         
         self.logger.info(
             "Initializing multi-client server",
@@ -233,9 +261,13 @@ class MyRLServiceServicer(RLServiceServicer):
         # Initialize client algorithm manager
         self.client_manager = ClientAlgorithmManager()
         
-        # Initialize trajectory processing queue and dispatcher thread
-        self.trajectory_queue = Queue()
+        # Initialize dispatcher control event
         self._stop_event = threading.Event()
+        
+        # Initialize trajectory processing queue and attach to packet logger for monitoring
+        self.trajectory_queue = Queue()
+        # PacketLogger monitors queue size and throughput
+        self.packet_logger.attach_queue(self.trajectory_queue)
         
         # Create dispatcher thread
         self._dispatcher_thread = threading.Thread(
@@ -307,6 +339,11 @@ class MyRLServiceServicer(RLServiceServicer):
                 value = None  # null value
             
             algorithm_parameters[key] = value
+
+        # set numpy, random torch seed
+        np.random.seed(algorithm_parameters['seed'])
+        random.seed(algorithm_parameters['seed'])
+        torch.manual_seed(algorithm_parameters['seed'])
         
         # Check if client already exists
         if self.client_manager.is_client_exists(client_id):
@@ -344,6 +381,8 @@ class MyRLServiceServicer(RLServiceServicer):
         algorithm, diff_manager = self.client_manager.get_algorithm(client_id)
         
         model, current_version = algorithm.get_current_model()
+
+        #print(f"model before send: {model.state_dict()}")
         
         # Add current model to history if not already there
         diff_manager.add_model_version(current_version, model)
@@ -370,6 +409,24 @@ class MyRLServiceServicer(RLServiceServicer):
             return ModelResponse(version=expected_version, is_diff=False, model_state=b"")
         
         model_state, version = model_data
+
+        """
+        diff_bytes  = len(model_state)
+        full_state  = diff_manager._compress_state_dict(model.state_dict())
+        full_bytes  = len(full_state)
+        saved_bytes = full_bytes - diff_bytes
+        save_ratio  = saved_bytes / full_bytes if full_bytes else 0.0
+
+        # append one line to a CSV file
+        with open("model_size_log.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                time.time(), client_id, current_version,
+                diff_bytes, full_bytes, saved_bytes, save_ratio
+            ])
+        """        
+
+
         self.logger.info(
             "Sending model update to client",
             client_id=client_id,
@@ -391,6 +448,9 @@ class MyRLServiceServicer(RLServiceServicer):
         algorithm, _ = self.client_manager.get_algorithm(client_id)
         
         traj_count = len(request.trajectories)
+
+        # Increment packet logger with the number of trajectories received
+        self.packet_logger.increment(traj_count)
         
         self.logger.debug(
             "SendTrajectories request",
@@ -416,6 +476,8 @@ class MyRLServiceServicer(RLServiceServicer):
             
             # Add trajectory to processing queue
             self.trajectory_queue.put((traj, traj_proto.version, client_id))
+            # Record queue size right after the put for precise backlog tracking
+            self.packet_logger.update_queue_size(self.trajectory_queue.qsize())
 
         # Check if we need to update the model
         max_client_version = max(traj.version for traj in request.trajectories)
@@ -441,6 +503,10 @@ class MyRLServiceServicer(RLServiceServicer):
         
         # Wait for all worker threads to complete
         self._dispatcher_thread.join()
+        
+        # Stop packet logger to flush remaining logs
+        if hasattr(self, "packet_logger"):
+            self.packet_logger.stop()
             
         self.logger.info("Server shutdown complete")
 
@@ -451,11 +517,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=50051, help='Server port')
     args = parser.parse_args()
     
-    # Configure server options with compression
+    # Configure server options with compression and 32MB message size
     options = [
         ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
         ('grpc.compression_level', 6),  # High compression level (0-9)
         ('grpc.so_reuseport', 1),
+        ('grpc.max_send_message_length', 32 * 1024 * 1024),  # 32MB
+        ('grpc.max_receive_message_length', 32 * 1024 * 1024),  # 32MB
     ]
     
     # Create server with compression options

@@ -16,6 +16,7 @@ import threading
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
+from torch.utils.tensorboard import SummaryWriter
 
 
 
@@ -40,6 +41,7 @@ class LunarLanderSim():
         self._performance_metric = performance_metric
         self._render_game = render_game
         self.logger = StructuredLogger("LunarLanderSim", debug=debug)
+        self.tensorboard_writer = SummaryWriter(log_dir='./logs/lunar_lander')
 
         # Initialize the Gym environment
         self.env = gym.make('LunarLander-v3', continuous=False)
@@ -87,12 +89,20 @@ class LunarLanderSim():
             action_limit=self.act_limit
         )
 
-    def run_application(self, num_iterations, max_moves):
+    def run_application(self, num_iterations: int, max_moves: int) -> None:
         self.logger.info(
             "Starting simulation",
             num_iterations=num_iterations,
             max_moves=max_moves
         )
+
+        # -----------------------------------------------------------------
+        # Performance profiling accumulators (match job_main)
+        # -----------------------------------------------------------------
+        env_time_acc: float = 0.0  # Seconds spent in environment steps
+        infer_time_acc: float = 0.0  # Seconds spent in inference (policy)
+        total_step_count: int = 0  # Total environment steps across all iterations
+        t0_total: float = time.perf_counter()
 
         profiling = []
 
@@ -119,6 +129,7 @@ class LunarLanderSim():
             env_ns = 0
             infer_ns = 0
 
+            
             while not done or moves < max_moves:
                 if self._render_game:
                     self.env.render()
@@ -172,6 +183,7 @@ class LunarLanderSim():
                     )
 
                     # If step exceeds MOVE_SEQUENCE_SIZE or done, set done to True
+                    self.rl4sys_action.done = True
                     self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, self.rl4sys_action)
 
                     if reward >= 200:  # Successful landing threshold
@@ -202,16 +214,45 @@ class LunarLanderSim():
             env_ms   = env_ns/1e6/moves
             infer_ms = infer_ns/1e6/moves
             over_ms  = total_ms - env_ms - infer_ms
+
+            # Accumulate global profiling stats
+            env_time_acc += env_ns * 1e-9  # Convert ns → s
+            infer_time_acc += infer_ns * 1e-9
+            total_step_count += moves
+
             profiling.append({"steps/s": round(1000/total_ms,1),
                 "env_ms": round(env_ms,3),
                 "infer_ms": round(infer_ms,3),
                 "over_ms": round(over_ms,3)})
             
             
+            self.tensorboard_writer.add_scalar('reward', cumulative_reward, iteration)
+
 
             if self._render_game:
                 self.env.close()
         
+        # --------------------------------------------------------------
+        # Final aggregated performance metrics (steps/s, ms breakdown)
+        # --------------------------------------------------------------
+
+        performance_summary = {}
+        total_elapsed = time.perf_counter() - t0_total
+        if total_step_count > 0:
+            per_step_ms: float = (total_elapsed * 1000.0) / total_step_count
+            env_ms: float = (env_time_acc * 1000.0) / total_step_count
+            infer_ms: float = (infer_time_acc * 1000.0) / total_step_count
+            over_ms: float = per_step_ms - env_ms - infer_ms
+
+            performance_summary = {
+                "steps/s": round(1000.0 / per_step_ms, 1),
+                "env_ms": round(env_ms, 3),
+                "infer_ms": round(infer_ms, 3),
+                "over_ms": round(over_ms, 3),
+            }
+
+            print("Performance summary:", performance_summary)
+
         # Log final statistics
         self.logger.info(
             "Simulation completed",
@@ -221,26 +262,9 @@ class LunarLanderSim():
             death_count=self.simulator_stats['death_count'],
             avg_time_to_goal=np.mean(self.simulator_stats['time_to_goal']) if self.simulator_stats['time_to_goal'] else 0,
             avg_time_to_death=np.mean(self.simulator_stats['time_to_death']) if self.simulator_stats['time_to_death'] else 0,
-            avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0
+            avg_reward=np.mean(self.simulator_stats['action_rewards']) if self.simulator_stats['action_rewards'] else 0,
+            **performance_summary
         )
-
-        """
-        avg_step_per_second = 0
-        avg_env_ms = 0
-        avg_infer_ms = 0
-        avg_over_ms = 0
-        for i in range(len(profiling)):
-            print(f"iteration {i}: {profiling[i]}")
-            avg_step_per_second += profiling[i]["steps/s"]
-            avg_env_ms += profiling[i]["env_ms"]
-            avg_infer_ms += profiling[i]["infer_ms"]
-            avg_over_ms += profiling[i]["over_ms"]
-
-        print(f"avg_step_per_second: {round(avg_step_per_second/len(profiling), 1)}")
-        print(f"avg_env_ms: {round(avg_env_ms/len(profiling), 3)}")
-        print(f"avg_infer_ms: {round(avg_infer_ms/len(profiling), 3)}")
-        print(f"avg_over_ms: {round(avg_over_ms/len(profiling), 3)}")
-        """
         
 
     def build_observation(self, obs):
@@ -276,7 +300,7 @@ if __name__ == '__main__':
     parser.add_argument('--score-type', type=int, default=0,
                         help='0. avg action reward per reward, 1. avg action reward per success, 2. avg action reward per death,\n' +
                              '3. avg action reward per collision, 4. avg action reward per failure, 5. Time-to-Goal, 6. Time-to-Death')
-    parser.add_argument('--number-of-iterations', type=int, default=10000,
+    parser.add_argument('--number-of-iterations', type=int, default=200000,
                         help='number of iterations to train the agent')
     parser.add_argument('--number-of-moves', type=int, default=200,
                         help='maximum number of moves allowed per iteration')

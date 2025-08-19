@@ -13,9 +13,10 @@ RL4SysAction::RL4SysAction(const std::vector<uint8_t>& obs_data,
                            const std::vector<uint8_t>& action_data,
                            double reward_value,
                            bool is_done,
+                           const std::vector<uint8_t>& mask_data,
                            int32_t version)
     : obs_bytes_(obs_data), action_bytes_(action_data), 
-      reward_(reward_value), done_(is_done), version_(version) {}
+      reward_(reward_value), done_(is_done), mask_bytes_(mask_data), version_(version) {}
 
 void RL4SysAction::addExtraData(const std::string& key, const std::vector<uint8_t>& data) {
     extra_data_[key] = data;
@@ -24,6 +25,7 @@ void RL4SysAction::addExtraData(const std::string& key, const std::vector<uint8_
 void RL4SysAction::clear() {
     obs_bytes_.clear();
     action_bytes_.clear();
+    mask_bytes_.clear();
     extra_data_.clear();
     reward_ = 0.0;
     done_ = false;

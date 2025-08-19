@@ -43,8 +43,15 @@ def start_server(port=50051, max_workers=10, debug=False):
         logger.debug("Debug mode enabled - verbose logging is active")
     
     try:
-        # Create gRPC server
-        server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+        # Create gRPC server with 32MB message size limit
+        server_options = [
+            ('grpc.max_send_message_length', 200 * 1024 * 1024),  # 200MB
+            ('grpc.max_receive_message_length', 200 * 1024 * 1024),  # 200MB
+        ]
+        server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=max_workers),
+            options=server_options
+        )
         
         # Add RLServiceServicer to the server with debug flag
         servicer = MyRLServiceServicer(debug=debug)
@@ -55,7 +62,11 @@ def start_server(port=50051, max_workers=10, debug=False):
         
         # Start server
         server.start()
-        logger.info(f"RL4Sys server started on port {port}", port=port)
+        logger.info(f"RL4Sys server started on port {port}", 
+                   port=port,
+                   max_send_message_length="200MB",
+                   max_receive_message_length="200MB",
+                   compression="Gzip")
         
         # Keep server running
         server.wait_for_termination()

@@ -358,16 +358,14 @@ class BatchSchedSim(ApplicationAbstract):
 
         if self.batch_job_slice == 0: #if the user does not specify a slice, use the entire workload
             self.start = self.np_random.integers(
-            low=self.sequence_length,
-            high=(self.loads.size() - self.sequence_length - 1) + 1,
-            endpoint=True
+            self.sequence_length,
+            (self.loads.size() - self.sequence_length - 1) + 1
         ) #ensures the we can fit the sequence length
         else:
             assert batch_job_slice > self.sequence_length, "Slice must be larger than sequence length"
             self.start = self.np_random.integers(
-            low=self.sequence_length,
-            high=(self.batch_job_slice - self.sequence_length - 1) + 1,
-            endpoint=True
+            self.sequence_length,
+            (self.batch_job_slice - self.sequence_length - 1) + 1
         ) #ensures the slice can fit the sequence length
 
         self.next_arriving_job_idx = self.start + 1
@@ -463,16 +461,14 @@ class BatchSchedSim(ApplicationAbstract):
 
         if self.batch_job_slice == 0: #if the user does not specify a slice, use the entire workload
             self.start = self.np_random.integers(
-            low=self.sequence_length,
-            high=(self.loads.size() - self.sequence_length - 1) + 1,
-            endpoint=True
+            self.sequence_length,
+            (self.loads.size() - self.sequence_length - 1) + 1
         ) #ensures the we can fit the sequence length
         else:
             assert self.batch_job_slice > self.sequence_length, "Slice must be larger than sequence length"
             self.start = self.np_random.integers(
-            low=self.sequence_length,
-            high=(self.batch_job_slice - self.sequence_length - 1) + 1,
-            endpoint=True
+            self.sequence_length,
+            (self.batch_job_slice - self.sequence_length - 1) + 1
         ) #ensures the slice can fit the sequence length
 
         self.next_arriving_job_idx = self.start + 1

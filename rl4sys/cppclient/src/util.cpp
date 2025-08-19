@@ -91,6 +91,14 @@ rl4sys::Action serialize_action(const RL4SysAction& action) {
     // Set done flag
     action_proto.set_done(action.is_done());
     
+    // Serialize mask
+    if (!action.getMask().empty()) {
+        // Convert double vector to float vector
+        std::vector<float> mask_float(action.getMask().begin(), action.getMask().end());
+        auto mask_bytes = serialize_tensor(mask_float);
+        action_proto.set_mask(mask_bytes.data(), mask_bytes.size());
+    }
+    
     // Serialize extra data
     auto data = action.getData();
     for (const auto& [key, value] : data) {
@@ -131,6 +139,12 @@ RL4SysAction deserialize_action(const rl4sys::Action& action_proto) {
         }
     }
     
+    // Deserialize mask
+    std::vector<uint8_t> mask_bytes;
+    if (!action_proto.mask().empty()) {
+        mask_bytes.assign(action_proto.mask().begin(), action_proto.mask().end());
+    }
+    
     // Deserialize extra data
     std::map<std::string, std::string> data;
     for (const auto& [key, value] : action_proto.extra_data()) {
@@ -142,7 +156,7 @@ RL4SysAction deserialize_action(const rl4sys::Action& action_proto) {
     }
     
     // Create and return RL4SysAction
-    RL4SysAction result(obs, action_value, reward.value_or(0.0), action_proto.done(), data, 0);
+    RL4SysAction result(obs, action_value, reward.value_or(0.0), action_proto.done(), mask_bytes, 0);
     return result;
 }
 

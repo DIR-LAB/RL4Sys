@@ -20,6 +20,7 @@ namespace cppclient {
  * - action: serialized action tensor  
  * - reward: serialized reward tensor
  * - done: episode termination flag
+ * - mask: serialized mask tensor (optional)
  * - extra_data: additional algorithm-specific data
  */
 class RL4SysAction {
@@ -32,12 +33,14 @@ public:
      * @param action_data Serialized action tensor bytes
      * @param reward_value Reward value (default: 0.0)
      * @param is_done Episode termination flag (default: false)
+     * @param mask_data Serialized mask tensor bytes (optional, default: empty)
      * @param version Model version used for this action (default: 0)
      */
     RL4SysAction(const std::vector<uint8_t>& obs_data,
                  const std::vector<uint8_t>& action_data,
                  double reward_value = 0.0,
                  bool is_done = false,
+                 const std::vector<uint8_t>& mask_data = std::vector<uint8_t>(),
                  int32_t version = 0);
     
     // Getters
@@ -45,6 +48,7 @@ public:
     const std::vector<uint8_t>& getAction() const { return action_bytes_; }
     double getReward() const { return reward_; }
     bool isDone() const { return done_; }
+    const std::vector<uint8_t>& getMask() const { return mask_bytes_; }
     int32_t getVersion() const { return version_; }
     const std::map<std::string, std::vector<uint8_t>>& getExtraData() const { return extra_data_; }
     
@@ -53,6 +57,7 @@ public:
     void setAction(const std::vector<uint8_t>& action_data) { action_bytes_ = action_data; }
     void setReward(double reward) { reward_ = reward; }
     void setDone(bool done) { done_ = done; }
+    void setMask(const std::vector<uint8_t>& mask_data) { mask_bytes_ = mask_data; }
     void setVersion(int32_t version) { version_ = version; }
     
     /**
@@ -72,6 +77,7 @@ private:
     std::vector<uint8_t> action_bytes_;
     double reward_;
     bool done_;
+    std::vector<uint8_t> mask_bytes_;
     int32_t version_;
     std::map<std::string, std::vector<uint8_t>> extra_data_;
 };

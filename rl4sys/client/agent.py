@@ -8,6 +8,7 @@ import datetime
 from pathlib import Path
 from queue import Empty, Queue
 import zlib
+from typing import Optional
 
 import torch
 from numpy import ndarray
@@ -20,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
+#from rl4sys.algorithms.PPO.job_kernel import JobRLActorCritic
 from rl4sys.common.action import RL4SysAction
 from rl4sys.common.trajectory import RL4SysTrajectory
 from rl4sys.utils.util import serialize_action, StructuredLogger
@@ -32,9 +34,10 @@ from rl4sys.proto import (
     ParameterValue
 )
 from rl4sys.client.config_loader import AgentConfigLoader
-
+#from rl4sys.utils.traj_buffer_log import TrajectoryBufferLogger
 MODEL_CLASSES = {
-    'PPO': RLActorCritic,
+    'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
+    #'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
     'DQN': DeepQNetwork,
 }
 
@@ -59,14 +62,26 @@ class RL4SysAgent:
         # get server address
         self.server_address = self.agent_config_loader.get_train_server_address()
 
-        # Configure channel options with compression
+        # Configure channel options with compression and 32MB message size
         channel_options = [
             ('grpc.default_compression_algorithm', grpc.Compression.Gzip),
             ('grpc.compression_level', 6),  # High compression level (0-9)
+            ('grpc.max_send_message_length', 200 * 1024 * 1024),  # 200MB
+            ('grpc.max_receive_message_length', 200 * 1024 * 1024),  # 200MB
         ]
         
         self.channel = grpc.insecure_channel(self.server_address, options=channel_options)
         self.stub = RLServiceStub(self.channel)
+
+        self.logger.info(
+            "gRPC channel configured",
+            server_address=self.server_address,
+            max_send_message_length="32MB",
+            max_receive_message_length="32MB",
+            compression="Gzip"
+        )
+
+        #self.traj_logger = TrajectoryBufferLogger("traj_buffer_log", base_dir="memtrajtest")
 
         # Initialize model and version tracking
         self._model = None
@@ -92,8 +107,7 @@ class RL4SysAgent:
 
         # Get initial model from server
         self.logger.info("Getting initial model from server")
-        with self._lock:
-            self._model, self.local_version = self._get_model_unsafe(expected_version=-1)
+        self._model, self.local_version = self._get_model(expected_version=-1)
         assert self._model is not None, "Model should be loaded from server at this point"
 
         self.logger.info(
@@ -160,6 +174,7 @@ class RL4SysAgent:
                 # Block with timeout until there are trajectories to send or shutdown is requested
                 try:
                     trajectories = self._send_queue.get(timeout=1.0)  # 1 second timeout
+
                     if trajectories:
                         self._send_trajectories(trajectories)
                         # Clear trajectories after sending to free memory
@@ -203,40 +218,61 @@ class RL4SysAgent:
     def request_for_action(self, 
                           traj: RL4SysTrajectory = None, 
                           obs: torch.Tensor = None, 
+                          mask: Optional[torch.Tensor] = None,
                           *args, **kwargs):
         """
         Produce an action from the current model. Stores the action in our local trajectory buffer.
+        
+        Args:
+            traj (RL4SysTrajectory, optional): Existing trajectory or None to start new one
+            obs (torch.Tensor): Observation tensor for the current environment state
+            mask (torch.Tensor, optional): Optional mask tensor that can be the same length as obs or None
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            tuple: (traj, action) where traj is the trajectory and action is the generated RL4SysAction
         """
-        # Get current version safely before creating trajectory
+        # Quickly grab a snapshot of the current model & version to keep the critical
+        # section (protected by self._lock) as short as possible.  This minimises
+        # contention with the background send-thread which also needs the same lock
+        # when a new model arrives from the server.
         with self._lock:
             current_version = self.local_version
-            
+            model_ref = self._model  # local reference so we can release the lock early
+
+        if model_ref is None:
+            raise RuntimeError("No model available yet!")
+        
         if traj is None or traj.is_completed():
             traj = RL4SysTrajectory(version=current_version)
             with self._trajectory_lock:
                 self._trajectory_buffer.append(traj)
                 self._trajectory_buffer_size += 1
-                self.logger.debug(
-                    "Created new trajectory",
-                    version=traj.version,
-                    buffer_size=self._trajectory_buffer_size
-                )
+                if self.logger.is_debug_enabled():
+                    self.logger.debug(
+                        "Created new trajectory",
+                        version=traj.version,
+                        buffer_size=self._trajectory_buffer_size
+                    )
+                #TODO use traj loger to log traj size and it's actual size
+                #self.traj_logger.log(self._trajectory_buffer)
 
         if obs is None:
             raise ValueError("Observation is required")
 
-        with self._lock:
-            if self._model is None:
-                raise RuntimeError("No model available yet!")
+        # Inference happens *outside* the lock so the background thread can still
+        # update the model concurrently when required.
+        action_nd, data_dict = model_ref.step(obs, mask)
 
-            action_nd, data_dict = self._model.step(obs)
+        if self.logger.is_debug_enabled():
             self.logger.debug(
                 "Generated action",
                 action_shape=action_nd.shape,
                 data_keys=list(data_dict.keys())
             )
 
-        action = RL4SysAction(obs, action_nd, reward=-1, done=False, data=data_dict, version=traj.version)
+        action = RL4SysAction(obs, action_nd, reward=-1, done=False, mask=mask, data=data_dict, version=traj.version)
         
         return traj, action
 
@@ -245,11 +281,12 @@ class RL4SysAgent:
         Add an action to the current trajectory
         """
         traj.add_action(action)
-        self.logger.debug(
-            "Added action to trajectory",
-            trajectory_version=traj.version,
-            action_count=len(traj.actions)
-        )
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Added action to trajectory",
+                trajectory_version=traj.version,
+                action_count=len(traj.actions)
+            )
 
     def mark_end_of_trajectory(self, traj: RL4SysTrajectory, action: RL4SysAction):
         """
@@ -257,11 +294,16 @@ class RL4SysAgent:
         """
         action.done = True
         traj.mark_completed()
-        self.logger.debug(
-            "Marked trajectory as completed",
-            version=traj.version,
-            action_count=len(traj.actions)
-        )
+
+        # TODO log traj size and it's actual size
+        #self.traj_logger.log(self._trajectory_buffer)
+
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Marked trajectory as completed",
+                version=traj.version,
+                action_count=len(traj.actions)
+            )
         # Check if we need to send trajectories after marking completion
         self._check_and_send_trajectories()
 
@@ -270,11 +312,12 @@ class RL4SysAgent:
         Update the reward of the current action
         """
         action.reward = reward
-        self.logger.debug(
-            "Updated action reward",
-            reward=reward,
-            version=action.version
-        )
+        if self.logger.is_debug_enabled():
+            self.logger.debug(
+                "Updated action reward",
+                reward=reward,
+                version=action.version
+            )
 
     def _send_trajectories(self, trajectories) -> int:
         """
@@ -300,6 +343,8 @@ class RL4SysAgent:
                 # For on-policy algorithms, only send valid trajectories with matching version
                 filtered_trajectories = [t for t in trajectories if t.version == current_version and t.is_valid()]
                 ignored_count = len(trajectories) - len(filtered_trajectories)
+
+                
                 if ignored_count > 0:
                     self.logger.debug(
                         "Ignored trajectories with version mismatch",
@@ -322,13 +367,21 @@ class RL4SysAgent:
                 self.logger.debug("No valid trajectories to send after filtering")
                 return 0
 
+            """
+            print(f"trajectories: {trajectories[-1].actions[-1].obs.tolist()}")
+            print(f"trajectories: {trajectories[-1].actions[-1].mask.tolist()}")
+            print(f"trajectories: {trajectories[-1].actions[-1].act}")
+            print(f"trajectories: {trajectories[-1].actions[-1].rew}")
+            print(f"trajectories: {trajectories[-1].actions[-1].done}")
+            """
+
             # Convert trajectories to protobuf format
             trajectories_proto = []
             for traj in trajectories:
                 # Convert each action in the trajectory to protobuf format
                 actions_proto = []
                 for action in traj.actions:
-                    action_proto = serialize_action(action)
+                    action_proto = serialize_action(action) # <---------------------------------- serialize action
                     actions_proto.append(action_proto)
                 
                 # Create trajectory protobuf
@@ -350,16 +403,15 @@ class RL4SysAgent:
             if response.model_updated:
                 # Need to update model and version together under lock
                 with self._lock:
-                    old_version = self.local_version
-                self.logger.info(
-                    "Model updated",
-                        old_version=old_version,
-                    new_version=response.new_version
-                )
-                # Get new model (this also updates self._model internally)
-                self._model, _ = self._get_model_unsafe(response.new_version)
-                # update local version
-                self.local_version = response.new_version
+                    self.logger.info(
+                        "Model updated",
+                            old_version=self.local_version,
+                        new_version=response.new_version
+                    )
+                    # Get new model (this also updates self._model internally)
+                    self._model, _ = self._get_model_unsafe(response.new_version)
+                    # update local version
+                    self.local_version = response.new_version
                 return response.new_version
             else:
                 self.logger.debug("No model update needed")
@@ -371,6 +423,7 @@ class RL4SysAgent:
                 error=e.details(),
                 error_type=type(e).__name__
             )
+            print(f"Error: {e.details()}")
             return 0
 
     def _get_model(self, expected_version: int):
@@ -413,7 +466,44 @@ class RL4SysAgent:
             if self._model is None:
                 model_input_size = self.algorithm_parameters['input_size']
                 model_act_dim = self.algorithm_parameters['act_dim']
-                self._model = model_class(model_input_size, model_act_dim)
+                
+                if self.algorithm_name == 'PPO_job':
+                    # For PPO_job, use JobRLActorCritic with job-specific parameters
+                    max_queue_size = self.algorithm_parameters.get('max_queue_size', 256)
+                    job_features = self.algorithm_parameters.get('job_features', 8)
+                    use_attention = self.algorithm_parameters.get('use_attention', False)
+                    network_type = self.algorithm_parameters.get('network_type', 'rl_kernel')
+                    
+                    self._model = model_class(
+                        input_size=model_input_size,
+                        act_dim=model_act_dim,
+                        max_queue_size=max_queue_size,
+                        job_features=job_features,
+                        use_attention=use_attention,
+                        network_type=network_type
+                    )
+                    
+                    self.logger.info(
+                        "Created JobRLActorCritic model",
+                        input_size=model_input_size,
+                        act_dim=model_act_dim,
+                        max_queue_size=max_queue_size,
+                        job_features=job_features,
+                        use_attention=use_attention,
+                        network_type=network_type
+                    )
+                elif self.algorithm_name == 'PPO':
+                    # For PPO, use normal RLActorCritic with standard parameters
+                    self._model = model_class(model_input_size, model_act_dim, actor_type='mlp') # manually control actor type
+                    
+                    self.logger.info(
+                        "Created RLActorCritic model",
+                        input_size=model_input_size,
+                        act_dim=model_act_dim
+                    )
+                else:
+                    # For other algorithms (like DQN), use standard parameters
+                    self._model = model_class(model_input_size, model_act_dim)
 
             # Decompress the model state
             try:
@@ -452,7 +542,7 @@ class RL4SysAgent:
             )
 
             # TODO debug only
-            # print(f"model weights: {self._model.state_dict()}")
+            #print(f"model weights: {self._model.state_dict()}")
 
             return self._model, response.version
             
