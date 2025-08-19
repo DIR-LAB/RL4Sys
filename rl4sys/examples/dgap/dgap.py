@@ -13,7 +13,7 @@ import torch
 import gymnasium as gym
 import gymnasium.spaces
 import threading
-from typing import Tuple
+from typing import Tuple, List, Deque, Dict, Optional
 from rl4sys.client.agent import RL4SysAgent
 from rl4sys.utils.util import StructuredLogger
 from rl4sys.utils.logging_config import setup_rl4sys_logging
@@ -31,6 +31,18 @@ Training server parameters:
 """
 
 class Vertex:
+    """Represents a graph vertex with its edge-list start index and degree.
+
+    Attributes
+    ----------
+    index: np.int64
+        Start position (offset) of this vertex's adjacency list within the global edge array.
+    degree: np.int32
+        Number of edges currently incident to this vertex.
+    """
+    index: np.int64
+    degree: np.int32
+
     def __init__(self, index, degree):
         self.index = np.int64(index)
         self.degree = np.int32(degree)
@@ -217,6 +229,13 @@ class DgapSim():
 
 
     def load_basegraph(self, input_file):
+        """Load base graph and initialize vertex degrees and indices.
+
+        Parameters
+        ----------
+        input_file: str
+            Path to the base graph edge list file. Each line is "u v".
+        """
         with open(input_file) as file:
             for line in file:
                 u, v = line.split()
@@ -233,8 +252,8 @@ class DgapSim():
 
         pos = int(0)
         for i in range(self.num_vertices):
-            self.vertices_[u].index = np.int64(pos)
-            pos += self.vertices_[u].degree
+            self.vertices_[i].index = np.int64(pos)
+            pos += self.vertices_[i].degree
 
         self.spread_weighted(0, self.num_vertices)
 
@@ -529,10 +548,13 @@ class DgapSim():
         # allocate gaps based on degree
 
     def build_observation(self, which_vertex: int) -> torch.Tensor:
-            # vertex array self.vertices_[i]
-            # return a tensor of self.vertices_[i]
-            obs = self.vertices_ + [which_vertex] # concat the vertex array and a scalar value
-            return torch.tensor(obs, dtype=torch.int64) # <--- 
+        """Build a numeric observation vector for a given vertex.
+
+        Returns a 3-element int64 tensor: [degree, index, vertex_id].
+        """
+        degree_value: int = int(self.vertices_[which_vertex].degree)
+        index_value: int = int(self.vertices_[which_vertex].index)
+        return torch.tensor([degree_value, index_value, int(which_vertex)], dtype=torch.int64)
 
     def calculate_positions(self, start_vertex, end_vertex, gaps, total_degree):
         size = end_vertex - start_vertex
@@ -803,8 +825,9 @@ class DgapSim():
                 write_index = new_index[jj - start_vertex]
                 self.num_read_rebal += 2
 
-                self.num_write_rebal += (last_read_index - read_index)
-                self.num_read_rebal += (last_read_index - read_index)
+                move_delta_1: int = int(last_read_index) - int(read_index)
+                self.num_write_rebal += move_delta_1
+                self.num_read_rebal += move_delta_1
                 # update the index to the new position
                 # in the original VCSR implementation, we actually move edges here
                 # while read_index < last_read_index:
@@ -819,8 +842,9 @@ class DgapSim():
                 write_index = new_index[jj-start_vertex] + self.vertices_[jj].degree - 1
                 self.num_read_rebal += 2
 
-                self.num_write_rebal += (read_index - last_read_index + 1)
-                self.num_read_rebal += (read_index - last_read_index + 1)
+                move_delta_2: int = int(read_index) - int(last_read_index) + 1
+                self.num_write_rebal += move_delta_2
+                self.num_read_rebal += move_delta_2
                 # update the index to the new position
                 # in the original VCSR implementation, we actually move edges here
                 # while read_index >= last_read_index:
@@ -962,7 +986,7 @@ if __name__ == '__main__':
 
     # Create the argument parser
     parser = argparse.ArgumentParser(prog="RL4Sys DGAP Simulator",
-                                     formatter_class=argparse.RawTextHelpFormatter)
+                                      formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('--seed', type=int, default=1, help='seed for random number generation in environment')
     parser.add_argument('--number-of-iterations', type=int, default=10000,
@@ -972,10 +996,10 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     # Add the command-line arguments
-    parser.add_argument("--nv", default=6024271, type=int, help="Number of vertices")
-    parser.add_argument("--ne", default=5772481, type=int, help="Number of edges")
-    parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-unique-undir.base.el", type=str, help="Base file")
-    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-unique-undir.dynamic.el", type=str, help="Dynamic file")
+    parser.add_argument("--nv", default=88581, type=int, help="Number of vertices")
+    parser.add_argument("--ne", default=37598, type=int, help="Number of edges")
+    parser.add_argument("--base_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.base.el", type=str, help="Base file")
+    parser.add_argument("--dynamic_file", default="rl4sys/examples/dgap/sx-mathoverflow-unique-undir.dynamic.el", type=str, help="Dynamic file")
     # Additional optional arguments required later in the script
     parser.add_argument('--number-of-moves', type=int, default=1000,
                         help='Maximum moves per simulation episode')
