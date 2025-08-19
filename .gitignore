@@ -128,6 +128,12 @@ dkms.conf
 **/memory_plot/
 **/dgap_plot/
 **/rllib_log/
+**/memtest/
+**/cputest/
+**/memtrajtest/
+**/multiclinetest/
+**/grpc_test/
+
 
 
 # dgap dateset
