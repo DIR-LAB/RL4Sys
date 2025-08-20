@@ -134,7 +134,7 @@ dkms.conf
 **/multiclinetest/
 **/grpc_test/
 **/speedlog/
-
+./examples/
 
 
 # dgap dateset

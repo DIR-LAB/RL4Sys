@@ -1,2 +1,0 @@
-timestamp,datetime,memory_percent,memory_available_gb,memory_used_gb,cpu_percent,disk_usage_percent,process_memory_mb,process_cpu_percent,network_bytes_sent,network_bytes_recv,network_packets_sent,network_packets_recv
-1752185261.3011627,2025-07-10T18:07:41.301163,5.3,118.82962799072266,5.375701904296875,0.6,4.7,966.05078125,0.0,0,0,0,0

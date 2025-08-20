@@ -1,2 +1,0 @@
-timestamp,iteration,episode,episode_steps,reward,done,sjf_score,f1_score,episode_return,client_id,seed
-2025-07-20T15:37:33.772392,0,0,256,-1664.2574366159731,True,709.495834889125,705.3055620936067,-1664.2574366159731,job_schedualing_old,0
