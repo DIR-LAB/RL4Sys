@@ -137,7 +137,7 @@ dkms.conf
 **/speedlog/
 ./examples/
 **/runs/
-
+**/.cursor/
 
 # dgap dateset
 *.el
