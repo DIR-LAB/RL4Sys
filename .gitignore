@@ -125,6 +125,7 @@ dkms.conf
 **/packet_plot/
 **/lustre_log/
 **/cpu_plot/
+**/cputest/
 **/memory_plot/
 **/dgap_plot/
 **/rllib_log/
@@ -135,6 +136,7 @@ dkms.conf
 **/grpc_test/
 **/speedlog/
 ./examples/
+**/runs/
 
 
 # dgap dateset
