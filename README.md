@@ -1,6 +1,7 @@
 # RL4Sys: Reinforcement Learning for System Control
 
 RL4Sys is a distributed reinforcement learning framework designed for system control applications. It provides a server-client architecture that enables multiple clients to train and share models in a distributed manner.
+![alt text](./docs/workflow.png)
 
 ## Project Structure
 
@@ -68,7 +69,7 @@ RL4Sys-Dev/
 │   ├── helloworld.proto
 │   └── CMakeLists.txt
 ├── docs/                     # Documentation
-│   └── RL4Sys.png
+│   └── <doc pngs>
 ├── setup.py                  # Package setup configuration
 ├── config.json               # Global configuration
 └── README.md                 # This file
