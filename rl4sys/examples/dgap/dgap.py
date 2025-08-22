@@ -1045,7 +1045,8 @@ if __name__ == '__main__':
     start = time.time()
     # with open(unique_filename, 'a') as file:
     #   vcsr.load_dynamicgraph(dynamic_file, file)
-    dgap.load_dynamicgraph(dynamic_file)    # dgap.run_application()
+    for _i in range(5):
+        dgap.load_dynamicgraph(dynamic_file)    # dgap.run_application()
     end = time.time()
     print("D-Graph Build Time: {} seconds.".format(end - start))
     dgap.print_pma_meta()
