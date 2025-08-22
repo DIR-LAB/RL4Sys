@@ -691,10 +691,10 @@ class DgapSim():
 
             #----------------------------------------------------
             obs_vec = torch.tensor([
-                float(left_child_degree),
-                float(left_child_gaps),
-                float(right_child_degree),
-                float(right_child_gaps),
+                float(left_child_degree)/float(left_child_gaps),
+                float(right_child_degree)/float(right_child_gaps),
+                float(left_child_degree)/float(left_child_degree)+float(right_child_degree),
+                float(right_child_degree)/float(left_child_degree)+float(right_child_degree)
                 #float(parent_gaps),
                 #float(self.segment_edges_total[left_child]),
                 #float(self.segment_edges_total[right_child]),
@@ -717,7 +717,7 @@ class DgapSim():
             
             """
             # put this out of if
-            act_value = self.rl4sys_action.act # action: 0-100
+            act_value = self.rl4sys_action.act # todo: action should be in range of [0-1]
             act_value = act_value/100.0
             seg_gaps[left_child] = float(parent_gaps) * act_value
             seg_gaps[right_child] = float(parent_gaps) - float(seg_gaps[left_child])
