@@ -265,8 +265,9 @@ class DgapSim():
             for line in file:
                 # check if self.rl_time_tracker.top().edge_id - num_edges > self.rl_feedback_threshold:
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
-                while True:
-                    if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+
+                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                    while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
                         # time-based reward
                         # reward = -(time.time() - self.rl_time_tracker[0].reward_counter)
                         # memory access based reward
@@ -276,18 +277,10 @@ class DgapSim():
                         traj_step = self.rl_time_tracker.popleft()
                         #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
                         self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
-                        
 
-                        self.rl_poped_edge_count += 1
-                        if self.rl_poped_edge_count % self.rl_traj_threshold == 0:
-                            self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, traj_step.rl4sys_action) 
-                            """
-                            [1,2,3,4]
-                            ppo is look the last traj step very critical
-                            """
-                    else:
-                        break
-                        
+                    # self.rl_poped_edge_count += 1
+                    # if self.rl_poped_edge_count % self.rl_traj_threshold == 0:
+                    self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
 
                 u, v = line.split()
 
