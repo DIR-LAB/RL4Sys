@@ -229,13 +229,6 @@ class DgapSim():
 
 
     def load_basegraph(self, input_file):
-        """Load base graph and initialize vertex degrees and indices.
-
-        Parameters
-        ----------
-        input_file: str
-            Path to the base graph edge list file. Each line is "u v".
-        """
         with open(input_file) as file:
             for line in file:
                 u, v = line.split()
@@ -273,6 +266,15 @@ class DgapSim():
                         # memory access based reward
                         total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
                         reward = -(total_writes - self.rl_time_tracker[0].reward_counter)
+                        # percent of graph loaded (occupancy of PMA root)
+                        total_capacity_root = float(self.segment_edges_total[self.pma_root]) if self.segment_edges_total[self.pma_root] > 0 else 0.0
+                        percent_loaded = (float(self.segment_edges_actual[self.pma_root]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
+                        # attach to action data dict for downstream logging
+                        try:
+                            self.rl_time_tracker[0].rl4sys_action.data["graph_loaded_pct"] = float(percent_loaded)
+                        except Exception:
+                            # if action or data dict unavailable, skip attaching
+                            pass
                         self.rl_time_tracker[0].rl4sys_action.update_reward(reward)
                         traj_step = self.rl_time_tracker.popleft()
                         #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
@@ -690,11 +692,16 @@ class DgapSim():
             right_child_gaps = self.segment_edges_total[right_child] - right_child_degree
 
             #----------------------------------------------------
+            left_child_density =  float(left_child_degree)/float(left_child_gaps) if left_child_gaps > 0 else 0.0
+            right_child_density = float(right_child_degree)/float(right_child_gaps) if right_child_gaps > 0 else 0.0
+            sum_degree = float(left_child_degree) + float(right_child_degree)
+            left_degree_ratio = float(left_child_degree)/sum_degree if sum_degree > 0 else 0.0
+            right_degree_ratio = float(right_child_degree)/sum_degree if sum_degree > 0 else 0.0
             obs_vec = torch.tensor([
-                float(left_child_degree)/float(left_child_gaps),
-                float(right_child_degree)/float(right_child_gaps),
-                float(left_child_degree)/float(left_child_degree)+float(right_child_degree),
-                float(right_child_degree)/float(left_child_degree)+float(right_child_degree)
+                left_child_density,
+                right_child_density,
+                left_degree_ratio,
+                right_degree_ratio
                 #float(parent_gaps),
                 #float(self.segment_edges_total[left_child]),
                 #float(self.segment_edges_total[right_child]),
