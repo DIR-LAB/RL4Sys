@@ -709,23 +709,29 @@ class DgapSim():
             ], dtype=torch.float32) # <-
 
             self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_vec) # <-
+            # TODO increase counter of rl involved in this rebalance
+            self.rl_counter += 1
             #----------------------------------------------------
             #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
             #self.rl4sys_action.update_reward(0)
             # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
             rl_actions_to_queue.append(self.rl4sys_action)
             # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
-            """
-            [(obs,action,reward=0), (..), (..), ....]
 
-            does not have to be fix length
-            [(obs,action,reward=0), (obs,action,reward=0), (obs,action,reward=0),....., (obs,action,reward=1000)]
-
-            
-            """
             # put this out of if
             act_value = self.rl4sys_action.act # todo: action should be in range of [0-1]
+            # TODO increase extreme case counter
+            self.rl_extreme_case_counter += 1
+            rl_extreme_case_ratio = self.rl_extreme_case_counter / self.rl_counter
+            # TODO devide to get ratio and log it: % of how many times we have extreme cases
+            if act_value == 0:
+                act_value = 10
+                print(f"=====> !!!! warning: act_value: {act_value}")
+            elif act_value == 100:
+                act_value = 90
+                print(f"=====> !!!! warning: act_value: {act_value}")
             act_value = act_value/100.0
+            
             seg_gaps[left_child] = float(parent_gaps) * act_value
             seg_gaps[right_child] = float(parent_gaps) - float(seg_gaps[left_child])
             if left_child < self.segment_count:
