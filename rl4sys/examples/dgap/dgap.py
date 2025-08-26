@@ -137,6 +137,8 @@ class DgapSim():
         self.rl_traj_threshold = 10
         self.rl_poped_edge_count = 0
         self.pma_root = 1  # root of the pma tree
+        self.rl_call_counter = 0
+        self.rl_call_extreme_counter = 0
 
     def run_application(self, num_iterations, max_moves):
         pass
@@ -260,6 +262,7 @@ class DgapSim():
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
 
                 if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                    print("{}% of RL invocation takes extreme action (leaving all gaps to either child)".format(self.rl_call_extreme_counter * 100.0 / self.rl_call_counter))
                     while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
                         # time-based reward
                         # reward = -(time.time() - self.rl_time_tracker[0].reward_counter)
@@ -709,8 +712,7 @@ class DgapSim():
             ], dtype=torch.float32) # <-
 
             self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_vec) # <-
-            # TODO increase counter of rl involved in this rebalance
-            self.rl_counter += 1
+            self.rl_call_counter += 1
             #----------------------------------------------------
             #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
             #self.rl4sys_action.update_reward(0)
@@ -720,15 +722,13 @@ class DgapSim():
 
             # put this out of if
             act_value = self.rl4sys_action.act # todo: action should be in range of [0-1]
-            # TODO increase extreme case counter
-            self.rl_extreme_case_counter += 1
-            rl_extreme_case_ratio = self.rl_extreme_case_counter / self.rl_counter
-            # TODO devide to get ratio and log it: % of how many times we have extreme cases
             if act_value == 0:
                 act_value = 10
+                self.rl_call_extreme_counter += 1
                 print(f"=====> !!!! warning: act_value: {act_value}")
             elif act_value == 100:
                 act_value = 90
+                self.rl_call_extreme_counter += 1
                 print(f"=====> !!!! warning: act_value: {act_value}")
             act_value = act_value/100.0
             
