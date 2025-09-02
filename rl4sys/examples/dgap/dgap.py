@@ -74,7 +74,8 @@ class DgapSim():
         random.seed(self._seed)
         torch.manual_seed(self._seed)
 
-        self.rlagent = RL4SysAgent(conf_path='./rl4sys/examples/dgap/dgap_conf.json')
+        # Use the continuous PPO configuration for DGAP
+        self.rlagent = RL4SysAgent(conf_path='./rl4sys/examples/dgap/dgap_conf_cont.json')
         self.rl4sys_traj = None
         self.rl4sys_action = None
 
@@ -261,13 +262,13 @@ class DgapSim():
                 # check if self.rl_time_tracker.top().edge_id - num_edges > self.rl_feedback_threshold:
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
 
-                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) >= self.rl_feedback_threshold:
                     print("{}% of RL invocation takes extreme action (leaving all gaps to either child)".format(self.rl_call_extreme_counter * 100.0 / self.rl_call_counter))
-                    while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) > self.rl_feedback_threshold:
+                    while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) >= self.rl_feedback_threshold:
                         # time-based reward
                         # reward = -(time.time() - self.rl_time_tracker[0].reward_counter)
                         # memory access based reward
-                        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+                        total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize # TODO try this later
                         reward = -(total_writes - self.rl_time_tracker[0].reward_counter)
                         # percent of graph loaded (occupancy of PMA root)
                         total_capacity_root = float(self.segment_edges_total[self.pma_root]) if self.segment_edges_total[self.pma_root] > 0 else 0.0
@@ -278,13 +279,13 @@ class DgapSim():
                         except Exception:
                             # if action or data dict unavailable, skip attaching
                             pass
+                        # Assign dense per-decision reward = -delta_writes since this action
                         self.rl_time_tracker[0].rl4sys_action.update_reward(reward)
                         traj_step = self.rl_time_tracker.popleft()
                         #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
                         self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
-
-                    # self.rl_poped_edge_count += 1
-                    # if self.rl_poped_edge_count % self.rl_traj_threshold == 0:
+                    
+                    # Mark end of this trajectory with the last action as done
                     self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
 
                 u, v = line.split()
@@ -514,12 +515,7 @@ class DgapSim():
         self.recount_segment_total_full()
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
-        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
-        for rl_action in rl_actions_to_queue:
-            # note: time-based
-            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
-            # memory-access based
-            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
+        # Per-decision baselines are recorded at action time; no batching append here
 
     def spread_weighted(self, start_vertex, end_vertex):
         assert start_vertex == 0, f"start-vertex is expected to be 0, got: {start_vertex}"
@@ -564,7 +560,7 @@ class DgapSim():
             # print("actual-edge: {}, total-edge: {}")
 
         index_d = np.float64(self.vertices_[start_vertex].index)
-        step = np.float64(gaps) / total_degree # gaps possible per-edge
+        step = np.float64(gaps) / total_degree # gaps possible per-edge 
         for i in range(start_vertex, end_vertex):
             new_index[i-start_vertex] = int(index_d)
             if i > start_vertex:
@@ -572,7 +568,7 @@ class DgapSim():
                 assert new_index[i-start_vertex] >= new_index[(i-1)-start_vertex] + self.vertices_[i-1].degree, f"Edge-list can not be overlapped with the neighboring vertex! Gaps: {gaps}, total-degree: {total_degree}, step-size: {step}"
 
             # index_d += (vertices_[i].degree + (step * vertices_[i].degree))
-            index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1)))
+            index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1))) 
 
         return new_index
 
@@ -690,48 +686,61 @@ class DgapSim():
             right_child = seg_id * 2 + 1
             # call rl agent here:
             left_child_degree = self.segment_edges_actual[left_child]
-            left_child_gaps = self.segment_edges_total[left_child] - left_child_degree
+            left_child_total = self.segment_edges_total[left_child]
             right_child_degree = self.segment_edges_actual[right_child]
-            right_child_gaps = self.segment_edges_total[right_child] - right_child_degree
+            right_child_total = self.segment_edges_total[right_child]
 
             #----------------------------------------------------
-            left_child_density =  float(left_child_degree)/float(left_child_gaps) if left_child_gaps > 0 else 0.0
-            right_child_density = float(right_child_degree)/float(right_child_gaps) if right_child_gaps > 0 else 0.0
+            left_child_density =  float(left_child_degree)/float(left_child_total) if left_child_total > 0 else 0.0 
+            right_child_density = float(right_child_degree)/float(right_child_total) if right_child_total > 0 else 0.0
             sum_degree = float(left_child_degree) + float(right_child_degree)
             left_degree_ratio = float(left_child_degree)/sum_degree if sum_degree > 0 else 0.0
             right_degree_ratio = float(right_child_degree)/sum_degree if sum_degree > 0 else 0.0
-            obs_vec = torch.tensor([
-                left_child_density,
-                right_child_density,
-                left_degree_ratio,
-                right_degree_ratio
-                #float(parent_gaps),
-                #float(self.segment_edges_total[left_child]),
-                #float(self.segment_edges_total[right_child]),
-                #float(self.segment_edges_actual[seg_id]),
-            ], dtype=torch.float32) # <-
+            # Parent context
+            parent_total = float(self.segment_edges_total[seg_id]) if self.segment_edges_total[seg_id] > 0 else 0.0
+            parent_gaps_norm = float(parent_gaps) / parent_total if parent_total > 0.0 else 0.0
+            # Normalized level from root (0.0=root, 1.0=leaves)
+            level = 0
+            tmp = int(seg_id)
+            while tmp > 1:
+                tmp //= 2
+                level += 1
+            level_norm = float(level) / float(self.tree_height if self.tree_height > 0 else 1)
 
-            self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_vec) # <-
+            obs_vec = torch.tensor([
+                left_child_density, # blue and pink
+                right_child_density,# blue and pink
+                left_degree_ratio,# blue and pink
+                right_degree_ratio,# blue and pink
+                parent_gaps_norm, # <- purple
+                level_norm
+            ], dtype=torch.float32)
+
+            # Ensure batch dimension for continuous PPO model
+            obs_input = obs_vec.unsqueeze(0)
+
+            self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_input)
             self.rl_call_counter += 1
             #----------------------------------------------------
-            #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
-            #self.rl4sys_action.update_reward(0)
-            # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
-            rl_actions_to_queue.append(self.rl4sys_action)
-            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # Snapshot per-decision baseline writes and enqueue immediately for dense delta reward
+            total_writes_before = self.num_write_insert + self.num_write_rebal
+            self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, total_writes_before))
 
-            # put this out of if
-            act_value = self.rl4sys_action.act # todo: action should be in range of [0-1]
-            if act_value == 0:
-                act_value = 10
-                self.rl_call_extreme_counter += 1
-                print(f"=====> !!!! warning: act_value: {act_value}")
-            elif act_value == 100:
-                act_value = 90
-                self.rl_call_extreme_counter += 1
-                print(f"=====> !!!! warning: act_value: {act_value}")
-            act_value = act_value/100.0
+            # Map continuous action to a valid ratio in (0,1) using sigmoid
+            act_raw = self.rl4sys_action.act
+            if isinstance(act_raw, torch.Tensor):
+                act_raw = act_raw.detach().cpu().numpy()
+            act_arr = np.asarray(act_raw, dtype=np.float32).reshape(-1)
+            act_value = float(act_arr[0])
             
+            # Clamp action to a valid split ratio range [0.01, 0.99]
+            act_value = float(np.clip(act_value, 0.1, 0.9))
+            print(f"=====> act_value: {act_value}")
+            # Track extreme allocations for diagnostics
+            if act_value < 0.05 or act_value > 0.95:
+                self.rl_call_extreme_counter += 1
+                print(f"=====> warning: extreme split ratio={act_value:.3f}")
+
             seg_gaps[left_child] = float(parent_gaps) * act_value
             seg_gaps[right_child] = float(parent_gaps) - float(seg_gaps[left_child])
             if left_child < self.segment_count:
@@ -865,12 +874,7 @@ class DgapSim():
         self.recount_segment_total_in_range(start_vertex, end_vertex)
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
-        total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
-        for rl_action in rl_actions_to_queue:
-            # note: time-based
-            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
-            # memory-access based
-            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
+        # Per-decision baselines are recorded at action time; no batching append here
 
     def update_segment_edge_total(self, vid, count):
         sid = self.get_segment_id(vid)

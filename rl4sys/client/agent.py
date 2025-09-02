@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from rl4sys.algorithms.DQN.kernel import DeepQNetwork
 from rl4sys.algorithms.PPO.kernel import RLActorCritic
+from rl4sys.algorithms.PPO_Continuous.kernel import RLActorCriticCont
 #from rl4sys.algorithms.PPO.job_kernel import JobRLActorCritic
 from rl4sys.common.action import RL4SysAction
 from rl4sys.common.trajectory import RL4SysTrajectory
@@ -36,8 +37,9 @@ from rl4sys.proto import (
 from rl4sys.client.config_loader import AgentConfigLoader
 #from rl4sys.utils.traj_buffer_log import TrajectoryBufferLogger
 MODEL_CLASSES = {
-    'PPO': RLActorCritic,  # Use normal RLActorCritic for PPO
-    #'PPO_job': JobRLActorCritic,  # Use JobRLActorCritic for PPO_job
+    'PPO': RLActorCritic,  # Discrete PPO
+    'PPO_Continuous': RLActorCriticCont,  # Continuous PPO
+    #'PPO_job': JobRLActorCritic,
     'DQN': DeepQNetwork,
 }
 
@@ -493,8 +495,11 @@ class RL4SysAgent:
                         network_type=network_type
                     )
                 elif self.algorithm_name == 'PPO':
-                    # For PPO, use normal RLActorCritic with standard parameters
-                    self._model = model_class(model_input_size, model_act_dim, actor_type='mlp') # manually control actor type
+                    # Discrete PPO
+                    self._model = model_class(model_input_size, model_act_dim, actor_type='mlp')
+                elif self.algorithm_name == 'PPO_Continuous':
+                    # Continuous PPO
+                    self._model = model_class(model_input_size, model_act_dim)
                     
                     self.logger.info(
                         "Created RLActorCritic model",

@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
 from torch.distributions.independent import Independent
+from torch.distributions import TransformedDistribution
+from torch.distributions.transforms import TanhTransform, AffineTransform
 
 
 def mlp(sizes, activation, output_activation=nn.Identity):
@@ -28,9 +30,14 @@ class RLActorCont(nn.Module):
         mu = self.mu_net(obs)
         log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
         std = torch.exp(log_std)
-        base = Normal(mu, std)
-        # Treat action dims as a single event for sum log_prob/entropy
-        return Independent(base, 1)
+        base = Independent(Normal(mu, std), 1)
+        # Squash to (0.1, 0.9): tanh -> (-1,1) -> (0,1) -> (0.1,0.9)
+        transforms = [
+            TanhTransform(cache_size=1),
+            AffineTransform(loc=torch.tensor(0.5, device=mu.device), scale=torch.tensor(0.5, device=mu.device)),
+            AffineTransform(loc=torch.tensor(0.1, device=mu.device), scale=torch.tensor(0.8, device=mu.device)),
+        ]
+        return TransformedDistribution(base, transforms)
 
     def forward(self, obs: torch.Tensor, act: torch.Tensor = None):
         pi = self._distribution(obs)
@@ -55,7 +62,7 @@ class RLActorCriticCont(nn.Module):
         self.pi: RLActorCont = RLActorCont(input_size, act_dim)
         self.v: RLCritic = RLCritic(input_size)
 
-    def step(self, obs: torch.Tensor):
+    def step(self, obs: torch.Tensor, mask=None):
         with torch.no_grad():
             pi = self.pi._distribution(obs)
             action = pi.sample()
@@ -75,10 +82,11 @@ class RLActorCriticCont(nn.Module):
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
         return self.v(obs)
 
-    def get_action_and_value(self, obs: torch.Tensor, action: torch.Tensor = None):
+    def get_action_and_value(self, obs: torch.Tensor, action: torch.Tensor = None, mask=None):
         pi = self.pi._distribution(obs)
         if action is None:
             action = pi.sample()
         return action, pi.log_prob(action), pi.entropy(), self.v(obs)
+
 
 

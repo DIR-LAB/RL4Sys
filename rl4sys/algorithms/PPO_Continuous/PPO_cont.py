@@ -127,11 +127,14 @@ class PPOCont():
             self.start_time = time.time()
 
         self.storage_version.append(version)
+        #print(f"new trajectory received")
         for i, r4a in enumerate(trajectory):
             self.traj += 1
             self.global_step += 1
             self.ep_rewards += r4a.rew
             self.train_ep_rewards += r4a.rew
+
+            print(f"r4a.rew: {r4a.rew}, r4a.obs: {r4a.obs}")
 
             obs_t = torch.as_tensor(r4a.obs, dtype=torch.float32).to(self.device)
             obs_value = self._model_train.get_value(obs_t)
@@ -153,6 +156,8 @@ class PPOCont():
                     self.storage_next_obs.append(np.zeros_like(r4a.obs))
 
             self.writer.add_scalar('charts/VVals', obs_value, self.global_step)
+            self.writer.add_scalar('charts/reward_step', float(r4a.rew), self.global_step)
+            self.writer.add_scalar('charts/graph_loaded_pct', float(r4a.data['graph_loaded_pct']), self.global_step)
 
             if r4a.done:
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.epoch)
@@ -250,7 +255,17 @@ class PPOCont():
 
             surr1 = ratio * b_advantages
             surr2 = torch.clamp(ratio, 1.0 - self._clip_ratio, 1.0 + self._clip_ratio) * b_advantages
-            entropy = pi_dist.entropy()
+            # Entropy of transformed distributions isn't implemented in PyTorch.
+            # Use base Gaussian entropy as a proxy.
+            mu = self._model_train.pi.mu_net(b_obs)
+            log_std = torch.clamp(self._model_train.pi.log_std,
+                                   self._model_train.pi.log_std_min,
+                                   self._model_train.pi.log_std_max)
+            std = torch.exp(log_std).expand_as(mu)
+            from torch.distributions.independent import Independent
+            from torch.distributions.normal import Normal
+            base = Independent(Normal(mu, std), 1)
+            entropy = base.entropy()
             pg_loss = -torch.mean(torch.min(surr1, surr2)) - self._ent_coef * torch.mean(entropy)
 
             approx_kl = torch.mean(b_logprobs - new_logp).item()
@@ -265,7 +280,8 @@ class PPOCont():
             if self._target_kl is not None and approx_kl > 1.5 * self._target_kl:
                 break
 
-        entropy_loss = pi_dist.entropy().mean().item()
+        # Report the last computed base entropy
+        entropy_loss = float(entropy.mean().detach().cpu().item()) if 'entropy' in locals() else 0.0
 
         # Value update
         for _ in range(self._train_v_iters):
@@ -299,5 +315,6 @@ class PPOCont():
             self.traj = 0
 
         return pg_loss.item(), v_loss.item(), entropy_loss, approx_kl, float(np.mean(clipfracs)) if clipfracs else 0.0, explained_var
+
 
 

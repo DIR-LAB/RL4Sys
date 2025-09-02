@@ -24,6 +24,7 @@ from rl4sys.proto import (
 )
 from rl4sys.proto.rl4sys_pb2_grpc import RLServiceServicer
 from rl4sys.algorithms.PPO.PPO import PPO
+from rl4sys.algorithms.PPO_Continuous.PPO_cont import PPOCont
 from rl4sys.algorithms.DQN.DQN import DQN
 from rl4sys.utils.util import deserialize_action, StructuredLogger
 from rl4sys.server.model_diff_manager import ModelDiffManager
@@ -35,6 +36,7 @@ import csv
 # Algorithm class mapping
 ALGORITHM_CLASSES = {
     'PPO': PPO,
+    'PPO_Continuous': PPOCont,
     'DQN': DQN,
 }
 
