@@ -157,7 +157,14 @@ class PPOCont():
 
             self.writer.add_scalar('charts/VVals', obs_value, self.global_step)
             self.writer.add_scalar('charts/reward_step', float(r4a.rew), self.global_step)
-            self.writer.add_scalar('charts/graph_loaded_pct', float(r4a.data['graph_loaded_pct']), self.global_step)
+
+            try:
+                self.writer.add_scalar('charts/graph_loaded_pct', float(r4a.data['graph_loaded_pct']), self.global_step) if 'graph_loaded_pct' in r4a.data else None
+                self.writer.add_scalar('charts/total_edge_count', int(r4a.data['total_edge_count']), self.global_step) if 'total_edge_count' in r4a.data else None
+                # self.writer.add_scalar('charts/tree_level', int(r4a.data['tree_level']), self.global_step) if 'tree_level' in r4a.data else None
+            except Exception as e:
+                print(f"Error adding scalars: {e} \n please check if the graph_loaded_pct & total_edge_count are available!!!")
+                pass
 
             if r4a.done:
                 self.writer.add_scalar("charts/reward", self.ep_rewards, self.epoch)

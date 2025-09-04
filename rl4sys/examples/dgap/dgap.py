@@ -279,9 +279,18 @@ class DgapSim():
                         except Exception:
                             # if action or data dict unavailable, skip attaching
                             pass
-                        # Assign dense per-decision reward = -delta_writes since this action
-                        self.rl_time_tracker[0].rl4sys_action.update_reward(reward)
+                        # Assign dense per-decision reward with level-based weighting
+                        # Root level (0) -> divide by 1, first layer -> divide by 2, etc.
+                        try:
+                            action_ref = self.rl_time_tracker[0].rl4sys_action
+                            lvl = int(action_ref.data.get("tree_level", 0)) if hasattr(action_ref, "data") else 0
+                            div_factor = max(1, lvl + 1)
+                        except Exception:
+                            div_factor = 1
+                        adjusted_reward = reward / float(div_factor)
+                        self.rl_time_tracker[0].rl4sys_action.update_reward(adjusted_reward)
                         traj_step = self.rl_time_tracker.popleft()
+                        traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges
                         #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
                         self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
                     
@@ -724,6 +733,11 @@ class DgapSim():
             #----------------------------------------------------
             # Snapshot per-decision baseline writes and enqueue immediately for dense delta reward
             total_writes_before = self.num_write_insert + self.num_write_rebal
+            # Store tree level for reward weighting later (root=0)
+            try:
+                self.rl4sys_action.data["tree_level"] = int(level)
+            except Exception:
+                pass
             self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, total_writes_before))
 
             # Map continuous action to a valid ratio in (0,1) using sigmoid
@@ -735,9 +749,10 @@ class DgapSim():
             
             # Clamp action to a valid split ratio range [0.01, 0.99]
             act_value = float(np.clip(act_value, 0.1, 0.9))
-            print(f"=====> act_value: {act_value}")
+            
             # Track extreme allocations for diagnostics
             if act_value < 0.05 or act_value > 0.95:
+                print(f"=====> act_value: {act_value}")
                 self.rl_call_extreme_counter += 1
                 print(f"=====> warning: extreme split ratio={act_value:.3f}")
 
@@ -1062,7 +1077,7 @@ if __name__ == '__main__':
     start = time.time()
     # with open(unique_filename, 'a') as file:
     #   vcsr.load_dynamicgraph(dynamic_file, file)
-    for _i in range(5):
+    for _i in range(1):
         dgap.load_dynamicgraph(dynamic_file)    # dgap.run_application()
     end = time.time()
     print("D-Graph Build Time: {} seconds.".format(end - start))
