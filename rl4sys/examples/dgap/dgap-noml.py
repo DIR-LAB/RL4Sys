@@ -3,6 +3,10 @@ import time
 import numpy as np
 import argparse
 from torch.utils.tensorboard import SummaryWriter
+from collections import deque, namedtuple
+
+# Define the structure for queue items
+QueueItem = namedtuple("QueueItem", ["num_edge", "reward_counter"])
 
 class Vertex:
   def __init__(self, index, degree):
@@ -57,6 +61,10 @@ class VCSR:
     self._writer = SummaryWriter(log_dir=os.path.join('./logs/rl4sys-noml-info', f"{int(time.time())}"))
     self._global_step = 0
     self._last_total_writes = 0
+
+    self.pma_root = 1  # root of the pma tree
+    self.reward_tracker = deque()
+    self.feedback_threshold = 1000
 
 
   def update_rebalance_metadata(self, height, cupdate, rupdate, wupdate):
@@ -166,6 +174,22 @@ class VCSR:
   def load_dynamicgraph(self, input_file):
     with open(input_file) as file:
       for line in file:
+        if self.reward_tracker and (self.num_edges - self.reward_tracker[0].num_edge) >= self.feedback_threshold:
+          while self.reward_tracker and (self.num_edges - self.reward_tracker[0].num_edge) >= self.feedback_threshold:
+            # memory access based reward
+            total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize
+            reward = -(total_writes - self.reward_tracker[0].reward_counter)
+            # percent of graph loaded (occupancy of PMA root)
+            total_capacity_root = float(self.segment_edges_total[self.pma_root])
+            percent_loaded = (float(self.segment_edges_actual[self.pma_root]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
+
+            self.reward_tracker[0].rl4sys_action.update_reward(reward)
+            traj_step = self.reward_tracker.popleft()
+            traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges
+            self._writer.add_scalar('charts/reward_step', reward, self._global_step)
+            self._writer.add_scalar('charts/graph_loaded_pct', float(percent_loaded), self._global_step)
+            self._writer.add_scalar('charts/total_edge_count', int(self.num_edges), self._global_step)
+
         u, v = line.split()
 
         # type casting to int
@@ -372,26 +396,8 @@ class VCSR:
     # self.segment_sanity_check()
     # self.edge_list_boundary_sanity_checker()
 
-    # TODO Check if this is correct
-    # ================================================================================================
-    # Mirror RL logging on resize (treat as root-level event): reward_step, graph_loaded_pct, total_edge_count
-    try:
-      total_writes = int(self.num_write_insert + self.num_write_rebal)
-      reward = -(total_writes - int(self._last_total_writes))
-      adjusted_reward = float(reward) / 1.0
-
-      total_capacity_root = float(self.segment_edges_total[1]) if self.segment_edges_total[1] > 0 else 0.0
-      percent_loaded = (float(self.segment_edges_actual[1]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
-
-      self._writer.add_scalar('charts/reward_step', adjusted_reward, self._global_step)
-      self._writer.add_scalar('charts/graph_loaded_pct', float(percent_loaded), self._global_step)
-      self._writer.add_scalar('charts/total_edge_count', int(self.num_edges), self._global_step)
-
-      self._last_total_writes = total_writes
-      self._global_step += 1
-    except Exception:
-      pass
-    # ================================================================================================
+    total_writes = self.num_write_insert + self.num_write_rebal
+    self.reward_tracker.append(QueueItem(self.num_edges, total_writes))
 
   def spread_weighted(self, start_vertex, end_vertex):
     assert start_vertex == 0, f"start-vertex is expected to be 0, got: {start_vertex}"
@@ -526,34 +532,8 @@ class VCSR:
     # self.segment_sanity_check()
     # self.edge_list_boundary_sanity_checker()
 
-    # TODO Check if this is correct
-    # ================================================================================================
-    # Mirror RL logging: reward_step (delta writes, level-weighted), graph_loaded_pct, total_edge_count
-    try:
-      # Compute tree level from pma_idx (root=1 => level=0)
-      level = 0
-      tmp = int(pma_idx)
-      while tmp > 1:
-        tmp //= 2
-        level += 1
-      div_factor = max(1, level + 1)
-
-      total_writes = int(self.num_write_insert + self.num_write_rebal)
-      reward = -(total_writes - int(self._last_total_writes))
-      adjusted_reward = float(reward) / float(div_factor)
-
-      total_capacity_root = float(self.segment_edges_total[1]) if self.segment_edges_total[1] > 0 else 0.0
-      percent_loaded = (float(self.segment_edges_actual[1]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
-
-      self._writer.add_scalar('charts/reward_step', adjusted_reward, self._global_step)
-      self._writer.add_scalar('charts/graph_loaded_pct', float(percent_loaded), self._global_step)
-      self._writer.add_scalar('charts/total_edge_count', int(self.num_edges), self._global_step)
-
-      self._last_total_writes = total_writes
-      self._global_step += 1
-    except Exception:
-      pass
-    # ================================================================================================
+    total_writes = self.num_write_insert + self.num_write_rebal
+    self.reward_tracker.append(QueueItem(self.num_edges, total_writes))
 
   def update_segment_edge_total(self, vid, count):
     sid = self.get_segment_id(vid)
