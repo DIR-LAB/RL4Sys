@@ -271,7 +271,7 @@ class DgapSim():
                         total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize # TODO try this later
                         reward = -(total_writes - self.rl_time_tracker[0].reward_counter)
                         # percent of graph loaded (occupancy of PMA root)
-                        total_capacity_root = float(self.segment_edges_total[self.pma_root]) if self.segment_edges_total[self.pma_root] > 0 else 0.0
+                        total_capacity_root = float(self.segment_edges_total[self.pma_root])
                         percent_loaded = (float(self.segment_edges_actual[self.pma_root]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
                         # attach to action data dict for downstream logging
                         try:
@@ -524,7 +524,13 @@ class DgapSim():
         self.recount_segment_total_full()
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
-        # Per-decision baselines are recorded at action time; no batching append here
+        # total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        total_writes = self.num_write_insert + self.num_write_rebal
+        for rl_action in rl_actions_to_queue:
+            # note: time-based
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # memory-access based
+            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
 
     def spread_weighted(self, start_vertex, end_vertex):
         assert start_vertex == 0, f"start-vertex is expected to be 0, got: {start_vertex}"
@@ -732,13 +738,14 @@ class DgapSim():
             self.rl_call_counter += 1
             #----------------------------------------------------
             # Snapshot per-decision baseline writes and enqueue immediately for dense delta reward
-            total_writes_before = self.num_write_insert + self.num_write_rebal
+            # total_writes_before = self.num_write_insert + self.num_write_rebal
             # Store tree level for reward weighting later (root=0)
             try:
                 self.rl4sys_action.data["tree_level"] = int(level)
             except Exception:
                 pass
-            self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, total_writes_before))
+            rl_actions_to_queue.append(self.rl4sys_action)
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, total_writes_before))
 
             # Map continuous action to a valid ratio in (0,1) using sigmoid
             act_raw = self.rl4sys_action.act
@@ -889,7 +896,13 @@ class DgapSim():
         self.recount_segment_total_in_range(start_vertex, end_vertex)
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
-        # Per-decision baselines are recorded at action time; no batching append here
+        # total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        total_writes = self.num_write_insert + self.num_write_rebal
+        for rl_action in rl_actions_to_queue:
+            # note: time-based
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # memory-access based
+            self.rl_time_tracker.append(QueueItem(self.num_edges, rl_action, total_writes))
 
     def update_segment_edge_total(self, vid, count):
         sid = self.get_segment_id(vid)
