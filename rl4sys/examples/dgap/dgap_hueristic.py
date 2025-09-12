@@ -140,6 +140,58 @@ class DgapSim():
         self.pma_root = 1  # root of the pma tree
         self.rl_call_counter = 0
         self.rl_call_extreme_counter = 0
+        
+        # Shadow state for heuristic comparison
+        self._init_shadow_state()
+
+    def _init_shadow_state(self):
+        """Initialize shadow state for heuristic comparison"""
+        # Shadow vertex array for heuristic comparison
+        self.shadow_vertices_ = []
+        for i in range(self.num_vertices):
+            vt = Vertex(0, 0)
+            self.shadow_vertices_.append(vt)
+        
+        # Shadow counters for heuristic approach
+        self.shadow_segment_edges_actual = [np.int64(0)] * (self.segment_count * 2)
+        self.shadow_segment_edges_total = [np.int64(0)] * (self.segment_count * 2)
+        
+        # Shadow read/write counters for cost comparison
+        self.shadow_num_write_rebal = 0
+        self.shadow_num_read_rebal = 0
+
+    def _sync_shadow_state(self):
+        """Sync shadow state with main state before comparison"""
+        # Copy vertex state
+        for i in range(self.num_vertices):
+            self.shadow_vertices_[i].index = self.vertices_[i].index
+            self.shadow_vertices_[i].degree = self.vertices_[i].degree
+        
+        # Copy segment state
+        for i in range(self.segment_count * 2):
+            self.shadow_segment_edges_actual[i] = self.segment_edges_actual[i]
+            self.shadow_segment_edges_total[i] = self.segment_edges_total[i]
+        
+        # Reset shadow counters for this comparison
+        self.shadow_num_write_rebal = 0
+        self.shadow_num_read_rebal = 0
+
+    def _update_differential_rewards(self, differential_reward):
+        """Update pending RL actions with differential reward"""
+        # Update recent actions in the tracker with differential reward
+        if self.rl_time_tracker:
+            # Apply differential reward to the most recent actions
+            for item in list(self.rl_time_tracker):
+                if hasattr(item, 'rl4sys_action') and item.rl4sys_action:
+                    try:
+                        # Store the differential component
+                        item.rl4sys_action.data["differential_reward"] = differential_reward
+                        # Add to existing reward (which may be set later in the feedback loop)
+                        current_reward = getattr(item.rl4sys_action, 'rew', 0.0)
+                        item.rl4sys_action.rew = current_reward + differential_reward
+                    except Exception as e:
+                        print(f"Warning: Could not update differential reward: {e}")
+                        pass
 
     def run_application(self, num_iterations, max_moves):
         pass
@@ -262,16 +314,16 @@ class DgapSim():
                 # check if self.rl_time_tracker.top().edge_id - num_edges > self.rl_feedback_threshold:
                 # calculate reward and send it to rl_agent and self.rl_time_tracker.pop()
 
-                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) == self.rl_feedback_threshold:
+                if self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) >= self.rl_feedback_threshold:
                     print("{}% of RL invocation takes extreme action (leaving all gaps to either child)".format(self.rl_call_extreme_counter * 100.0 / self.rl_call_counter))
-                    while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) == self.rl_feedback_threshold:
+                    while self.rl_time_tracker and (self.num_edges - self.rl_time_tracker[0].num_edge) >= self.rl_feedback_threshold:
                         # time-based reward
                         # reward = -(time.time() - self.rl_time_tracker[0].reward_counter)
                         # memory access based reward
                         total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize # TODO try this later
                         reward = -(total_writes - self.rl_time_tracker[0].reward_counter)
                         # percent of graph loaded (occupancy of PMA root)
-                        total_capacity_root = float(self.segment_edges_total[self.pma_root]) if self.segment_edges_total[self.pma_root] > 0 else 0.0
+                        total_capacity_root = float(self.segment_edges_total[self.pma_root])
                         percent_loaded = (float(self.segment_edges_actual[self.pma_root]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
                         # attach to action data dict for downstream logging
                         try:
@@ -279,15 +331,32 @@ class DgapSim():
                         except Exception:
                             # if action or data dict unavailable, skip attaching
                             pass
-                        #self.rl_time_tracker[0].rl4sys_action.update_reward(reward)
-                        self.rl_time_tracker[0].rl4sys_action.update_reward(0)
+                        # Assign dense per-decision reward with level-based weighting
+                        # Root level (0) -> divide by 1, first layer -> divide by 2, etc.
+                        try:
+                            action_ref = self.rl_time_tracker[0].rl4sys_action
+                            lvl = int(action_ref.data.get("tree_level", 0)) if hasattr(action_ref, "data") else 0
+                            div_factor = max(1, lvl + 1)
+                        except Exception:
+                            div_factor = 1
+                        adjusted_reward = reward / float(div_factor)
+                        # Attach total memory access (reads + writes including resize) for PPO logging
+                        try:
+                            total_reads_all = int(self.num_read_insert + self.num_read_rebal + self.num_read_resize)
+                            total_writes_all = int(self.num_write_insert + self.num_write_rebal + self.num_write_resize)
+                            total_mem_access = float(total_reads_all + total_writes_all)
+                            action_ref.data["memory_acess_log"] = total_mem_access
+                            action_ref.data["memory_reads"] = float(total_reads_all)
+                            action_ref.data["memory_writes"] = float(total_writes_all)
+                        except Exception:
+                            pass
+                        self.rl_time_tracker[0].rl4sys_action.update_reward(adjusted_reward)
                         traj_step = self.rl_time_tracker.popleft()
+                        traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges
                         #traj_step.rl4sys_action.update_reward(time.time() - traj_step.reward_counter)
                         self.rlagent.add_to_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
                     
-                    traj_step.rl4sys_action.update_reward(reward)
-                    # self.rl_poped_edge_count += 1
-                    # if self.rl_poped_edge_count % self.rl_traj_threshold == 0:
+                    # Mark end of this trajectory with the last action as done
                     self.rlagent.mark_end_of_trajectory(self.rl4sys_traj, traj_step.rl4sys_action)
 
                 u, v = line.split()
@@ -466,13 +535,30 @@ class DgapSim():
             left_index = (src // window_size) * window_size
             right_index = min(left_index + window_size, self.num_vertices)
 
-            # do degree-based distribution of gaps
+            # Hybrid approach: run both RL and heuristic for comparison
             num_write_rebal_prev = self.num_write_rebal
             num_read_rebal_prev = self.num_read_rebal
-            # self.rebalance_weighted(left_index, right_index, window)
+            
+            # Sync shadow state before comparison
+            self._sync_shadow_state()
+            
+            # Run heuristic approach on shadow state
+            shadow_write_prev = self.shadow_num_write_rebal
+            shadow_read_prev = self.shadow_num_read_rebal
+            self.shadow_rebalance_heuristic(left_index, right_index, window)
+            heuristic_cost = (self.shadow_num_write_rebal - shadow_write_prev) + (self.shadow_num_read_rebal - shadow_read_prev)
+            
+            # Run RL approach on main state (maintains correctness)
             self.rebalance_rl(left_index, right_index, window)
+            rl_cost = (self.num_write_rebal - num_write_rebal_prev) + (self.num_read_rebal - num_read_rebal_prev)
+            
+            # Calculate differential reward: positive if RL is better (lower cost)
+            differential_reward = float(heuristic_cost - rl_cost)
+            
+            # Update action rewards with differential feedback
+            self._update_differential_rewards(differential_reward)
+            
             self.update_rebalance_metadata(height, 1, (self.num_read_rebal - num_read_rebal_prev), (self.num_write_rebal - num_write_rebal_prev))
-            # self.rl_time_tracker.push({num_edges, current time()});
         else:
             # Rebalance not possible without increasing the underlying array size.
             # need to resize the size of "edges_" array
@@ -501,9 +587,16 @@ class DgapSim():
     def resize_rl(self):
         self.num_resize += 1
         print("elem_capacity: {}".format(self.elem_capacity))
+        
+        # Store cost counters before resize for comparison
+        resize_read_prev = self.num_read_resize
+        resize_write_prev = self.num_write_resize
+        
         self.elem_capacity *= np.int64(2)
 
         gaps = self.elem_capacity - self.num_edges
+        
+        # RL approach: use learned gap allocation
         new_indices, rl_actions_to_queue = self.calculate_positions_rl(0, self.num_vertices, self.pma_root)
 
         # update the vertex metadata
@@ -515,9 +608,28 @@ class DgapSim():
         self.num_write_resize += (self.num_vertices + self.num_edges)
 
         self.recount_segment_total_full()
-        # self.segment_sanity_check()
-        # self.edge_list_boundary_sanity_checker()
-        total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize # TODO remove resize later
+        
+        # Calculate RL resize cost
+        rl_resize_cost = (self.num_read_resize - resize_read_prev) + (self.num_write_resize - resize_write_prev)
+        
+        # For resize, heuristic cost is the simple uniform allocation cost (baseline)
+        # This is a reasonable baseline since resize operations are less frequent
+        heuristic_resize_cost = (self.num_vertices + self.num_edges) * 2  # Simple baseline
+        
+        # Calculate differential reward for resize operations
+        resize_differential_reward = float(heuristic_resize_cost - rl_resize_cost)
+        
+        # Update actions with differential reward
+        for rl_action in rl_actions_to_queue:
+            try:
+                rl_action.data["resize_differential_reward"] = resize_differential_reward
+                current_reward = getattr(rl_action, 'rew', 0.0)
+                rl_action.rew = current_reward + resize_differential_reward
+            except Exception:
+                pass
+        
+        # total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        total_writes = self.num_write_insert + self.num_write_rebal
         for rl_action in rl_actions_to_queue:
             # note: time-based
             # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
@@ -578,6 +690,116 @@ class DgapSim():
             index_d += (self.vertices_[i].degree + (step * (self.vertices_[i].degree + 1))) 
 
         return new_index
+
+    def shadow_rebalance_heuristic(self, start_vertex, end_vertex, pma_idx):
+        """Heuristic rebalance on shadow state for cost comparison"""
+        start_vertex = int(start_vertex)
+        end_vertex = int(end_vertex)
+        pma_idx = int(pma_idx)
+
+        from_idx = self.shadow_vertices_[start_vertex].index
+        if end_vertex >= self.num_vertices:
+            to_idx = self.elem_capacity
+        else:
+            to_idx = self.shadow_vertices_[end_vertex].index
+
+        assert (to_idx > from_idx), f"Invalid range found while doing heuristic rebalance"
+        
+        gaps = self.shadow_segment_edges_total[pma_idx] - self.shadow_segment_edges_actual[pma_idx]
+        size = end_vertex - start_vertex
+
+        # Use simple degree-based allocation (heuristic approach)
+        new_index = self.calculate_positions_heuristic(start_vertex, end_vertex, gaps, self.shadow_segment_edges_actual[pma_idx])
+        if end_vertex >= self.num_vertices:
+            index_boundary = self.elem_capacity
+        else:
+            index_boundary = self.shadow_vertices_[end_vertex].index
+
+        # Simulate the rebalancing cost on shadow state
+        ii = 0
+        jj = 0
+        curr_vertex = start_vertex + 1
+        next_to_start = 0
+
+        while curr_vertex < end_vertex:
+            for ii in range(curr_vertex, end_vertex):
+                if new_index[ii-start_vertex] <= self.shadow_vertices_[ii].index:
+                    break
+            if ii == end_vertex:
+                ii -= 1
+            next_to_start = ii + 1
+            if new_index[ii-start_vertex] <= self.shadow_vertices_[ii].index:
+                jj = ii
+                read_index = self.shadow_vertices_[jj].index
+                last_read_index = read_index + self.shadow_vertices_[jj].degree
+                self.shadow_num_read_rebal += 2
+
+                move_delta = int(last_read_index) - int(read_index)
+                self.shadow_num_write_rebal += move_delta
+                self.shadow_num_read_rebal += move_delta
+                
+                # Update shadow state
+                self.shadow_vertices_[jj].index = np.int64(new_index[jj - start_vertex])
+                self.shadow_num_write_rebal += 1
+                ii -= 1
+
+            # Handle vertices moving to higher indices
+            for jj in range(ii, curr_vertex-1, -1):
+                read_index = self.shadow_vertices_[jj].index + self.shadow_vertices_[jj].degree - 1
+                last_read_index = self.shadow_vertices_[jj].index
+                self.shadow_num_read_rebal += 2
+
+                move_delta = int(read_index) - int(last_read_index) + 1
+                self.shadow_num_write_rebal += move_delta
+                self.shadow_num_read_rebal += move_delta
+                
+                # Update shadow state
+                self.shadow_vertices_[jj].index = np.int64(new_index[jj-start_vertex])
+                self.shadow_num_write_rebal += 1
+
+            curr_vertex = next_to_start
+
+        # Update shadow segment totals
+        self.recount_shadow_segment_total_in_range(start_vertex, end_vertex)
+
+    def calculate_positions_heuristic(self, start_vertex, end_vertex, gaps, total_degree):
+        """Simple degree-based gap allocation (heuristic approach)"""
+        size = end_vertex - start_vertex
+        new_index = [np.int64(0)] * size
+        total_degree += size
+
+        if gaps <= 0:
+            print("Heuristic Gaps: {}, size: {}, start-vertex: {}, end-vertex: {}".format(gaps, size, start_vertex, end_vertex))
+
+        index_d = np.float64(self.shadow_vertices_[start_vertex].index)
+        step = np.float64(gaps) / total_degree if total_degree > 0 else 0.0
+        
+        for i in range(start_vertex, end_vertex):
+            new_index[i-start_vertex] = int(index_d)
+            if i > start_vertex:
+                assert new_index[i-start_vertex] >= new_index[(i-1)-start_vertex] + self.shadow_vertices_[i-1].degree, f"Shadow edge-list overlap!"
+
+            # Simple degree-proportional allocation
+            index_d += (self.shadow_vertices_[i].degree + (step * (self.shadow_vertices_[i].degree + 1)))
+
+        return new_index
+
+    def recount_shadow_segment_total_in_range(self, start_vertex, end_vertex):
+        """Update shadow segment totals after rebalancing"""
+        start_seg = self.get_segment_id(start_vertex) - self.segment_count
+        end_seg = self.get_segment_id(end_vertex) - self.segment_count
+        for i in range(start_seg, end_seg):
+            if i == self.segment_count - 1:
+                next_starter = self.elem_capacity
+            else:
+                next_starter = self.shadow_vertices_[(i+1) * self.segment_size].index
+
+            segment_total_p = next_starter - self.shadow_vertices_[i*self.segment_size].index
+            j = i + self.segment_count
+            segment_total_p -= self.shadow_segment_edges_total[j]
+            while j > 0:
+                self.shadow_segment_edges_total[j] += np.int64(segment_total_p)
+                j //= 2
 
     def rebalance_weighted(self, start_vertex, end_vertex, pma_idx):
         start_vertex = int(start_vertex)
@@ -703,12 +925,24 @@ class DgapSim():
             sum_degree = float(left_child_degree) + float(right_child_degree)
             left_degree_ratio = float(left_child_degree)/sum_degree if sum_degree > 0 else 0.0
             right_degree_ratio = float(right_child_degree)/sum_degree if sum_degree > 0 else 0.0
+            # Parent context
+            parent_total = float(self.segment_edges_total[seg_id]) if self.segment_edges_total[seg_id] > 0 else 0.0
+            parent_gaps_norm = float(parent_gaps) / parent_total if parent_total > 0.0 else 0.0
+            # Normalized level from root (0.0=root, 1.0=leaves)
+            level = 0
+            tmp = int(seg_id)
+            while tmp > 1:
+                tmp //= 2
+                level += 1
+            level_norm = float(level) / float(self.tree_height if self.tree_height > 0 else 1)
+
             obs_vec = torch.tensor([
-                left_child_density,
-                right_child_density,
-                left_degree_ratio,
-                right_degree_ratio
-                #total_density
+                left_child_density, # blue and pink
+                right_child_density,# blue and pink
+                left_degree_ratio,# blue and pink
+                right_degree_ratio,# blue and pink
+                parent_gaps_norm, # <- purple
+                level_norm
             ], dtype=torch.float32)
 
             # Ensure batch dimension for continuous PPO model
@@ -717,11 +951,15 @@ class DgapSim():
             self.rl4sys_traj, self.rl4sys_action = self.rlagent.request_for_action(self.rl4sys_traj, obs_input)
             self.rl_call_counter += 1
             #----------------------------------------------------
-            #self.rlagent.add_to_trajectory(self.rl4sys_traj, self.rl4sys_action)
-            #self.rl4sys_action.update_reward(0)
-            # todo: may be we will need to push this action to the queue at the end of the ongoing rebalance
+            # Snapshot per-decision baseline writes and enqueue immediately for dense delta reward
+            # total_writes_before = self.num_write_insert + self.num_write_rebal
+            # Store tree level for reward weighting later (root=0)
+            try:
+                self.rl4sys_action.data["tree_level"] = int(level)
+            except Exception:
+                pass
             rl_actions_to_queue.append(self.rl4sys_action)
-            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
+            # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, total_writes_before))
 
             # Map continuous action to a valid ratio in (0,1) using sigmoid
             act_raw = self.rl4sys_action.act
@@ -732,9 +970,10 @@ class DgapSim():
             
             # Clamp action to a valid split ratio range [0.01, 0.99]
             act_value = float(np.clip(act_value, 0.1, 0.9))
-            print(f"=====> act_value: {act_value}")
+            
             # Track extreme allocations for diagnostics
             if act_value < 0.05 or act_value > 0.95:
+                print(f"=====> act_value: {act_value}")
                 self.rl_call_extreme_counter += 1
                 print(f"=====> warning: extreme split ratio={act_value:.3f}")
 
@@ -871,7 +1110,8 @@ class DgapSim():
         self.recount_segment_total_in_range(start_vertex, end_vertex)
         # self.segment_sanity_check()
         # self.edge_list_boundary_sanity_checker()
-        total_writes = self.num_write_insert + self.num_write_rebal #+ self.num_write_resize # TODO remove this later
+        # total_writes = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+        total_writes = self.num_write_insert + self.num_write_rebal
         for rl_action in rl_actions_to_queue:
             # note: time-based
             # self.rl_time_tracker.append(QueueItem(self.num_edges, self.rl4sys_action, time.time()))
@@ -1064,7 +1304,7 @@ if __name__ == '__main__':
     start = time.time()
     # with open(unique_filename, 'a') as file:
     #   vcsr.load_dynamicgraph(dynamic_file, file)
-    for _i in range(5):
+    for _i in range(1):
         dgap.load_dynamicgraph(dynamic_file)    # dgap.run_application()
     end = time.time()
     print("D-Graph Build Time: {} seconds.".format(end - start))
