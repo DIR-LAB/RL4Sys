@@ -164,8 +164,8 @@ class VCSR:
 
     pos = int(0)
     for i in range(self.num_vertices):
-      self.vertices_[u].index = np.int64(pos)
-      pos += self.vertices_[u].degree
+      self.vertices_[i].index = np.int64(pos)
+      pos += self.vertices_[i].degree
 
     self.spread_weighted(0, self.num_vertices)
 
