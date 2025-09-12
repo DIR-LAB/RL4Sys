@@ -1,0 +1,14 @@
+{
+  "monitor_name": "RL4SysServer",
+  "project_name": "rl4sys_server",
+  "start_time": "2025-09-12T12:41:53.008249",
+  "log_interval": 30.0,
+  "memory_threshold": 85.0,
+  "cpu_threshold": 90.0,
+  "max_history": 100,
+  "system_info": {
+    "platform": "darwin",
+    "cpu_count": 8,
+    "total_memory_gb": 8.0
+  }
+}

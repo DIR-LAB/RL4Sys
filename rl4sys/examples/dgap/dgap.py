@@ -288,6 +288,16 @@ class DgapSim():
                         except Exception:
                             div_factor = 1
                         adjusted_reward = reward / float(div_factor)
+                        # Attach total memory access (reads + writes including resize) for PPO logging
+                        try:
+                            total_reads_all = int(self.num_read_insert + self.num_read_rebal + self.num_read_resize)
+                            total_writes_all = int(self.num_write_insert + self.num_write_rebal + self.num_write_resize)
+                            total_mem_access = float(total_reads_all + total_writes_all)
+                            action_ref.data["memory_acess_log"] = total_mem_access
+                            action_ref.data["memory_reads"] = float(total_reads_all)
+                            action_ref.data["memory_writes"] = float(total_writes_all)
+                        except Exception:
+                            pass
                         self.rl_time_tracker[0].rl4sys_action.update_reward(adjusted_reward)
                         traj_step = self.rl_time_tracker.popleft()
                         traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges

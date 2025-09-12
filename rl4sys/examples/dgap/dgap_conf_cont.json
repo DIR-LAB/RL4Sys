@@ -2,10 +2,10 @@
   "client_id": "dgap",
   "algorithm_name": "PPO_Continuous",
   "algorithm_parameters": {
-    "batch_size": 512,
+    "batch_size": 1024,
     "act_dim": 1,
     "seed": 0,
-    "traj_per_epoch": 512,
+    "traj_per_epoch": 1024,
     "clip_ratio": 0.2,
     "gamma": 0.99,
     "lam": 0.95,

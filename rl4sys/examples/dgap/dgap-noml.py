@@ -183,12 +183,19 @@ class VCSR:
             total_capacity_root = float(self.segment_edges_total[self.pma_root])
             percent_loaded = (float(self.segment_edges_actual[self.pma_root]) / total_capacity_root) if total_capacity_root > 0.0 else 0.0
 
-            self.reward_tracker[0].rl4sys_action.update_reward(reward)
+            #self.reward_tracker[0].rl4sys_action.update_reward(reward)
             traj_step = self.reward_tracker.popleft()
-            traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges
+            #traj_step.rl4sys_action.data["total_edge_count"] = self.num_edges
             self._writer.add_scalar('charts/reward_step', reward, self._global_step)
             self._writer.add_scalar('charts/graph_loaded_pct', float(percent_loaded), self._global_step)
             self._writer.add_scalar('charts/total_edge_count', int(self.num_edges), self._global_step)
+            # Log total memory access (reads + writes, including resize)
+            total_reads_all = self.num_read_insert + self.num_read_rebal + self.num_read_resize
+            total_writes_all = self.num_write_insert + self.num_write_rebal + self.num_write_resize
+            self._writer.add_scalar('charts/memory_acess_log', float(total_reads_all + total_writes_all), self._global_step)
+            self._writer.add_scalar('charts/memory_reads', float(total_reads_all), self._global_step)
+            self._writer.add_scalar('charts/memory_writes', float(total_writes_all), self._global_step)
+            self._global_step += 1
 
         u, v = line.split()
 

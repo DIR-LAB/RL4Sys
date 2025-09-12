@@ -161,6 +161,10 @@ class PPOCont():
             try:
                 self.writer.add_scalar('charts/graph_loaded_pct', float(r4a.data['graph_loaded_pct']), self.global_step) if 'graph_loaded_pct' in r4a.data else None
                 self.writer.add_scalar('charts/total_edge_count', int(r4a.data['total_edge_count']), self.global_step) if 'total_edge_count' in r4a.data else None
+                # Log total memory access if provided by the environment (dgap-rl)
+                self.writer.add_scalar('charts/memory_acess_log', float(r4a.data['memory_acess_log']), self.global_step) if 'memory_acess_log' in r4a.data else None
+                self.writer.add_scalar('charts/memory_reads', float(r4a.data['memory_reads']), self.global_step) if 'memory_reads' in r4a.data else None
+                self.writer.add_scalar('charts/memory_writes', float(r4a.data['memory_writes']), self.global_step) if 'memory_writes' in r4a.data else None
                 # self.writer.add_scalar('charts/tree_level', int(r4a.data['tree_level']), self.global_step) if 'tree_level' in r4a.data else None
             except Exception as e:
                 print(f"Error adding scalars: {e} \n please check if the graph_loaded_pct & total_edge_count are available!!!")
